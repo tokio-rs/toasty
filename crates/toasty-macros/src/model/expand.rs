@@ -259,6 +259,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let field_struct_ident = &embedded_enum.field_struct_ident;
     let field_list_struct_ident = &embedded_enum.field_list_struct_ident;
     let enum_field_struct = e.expand_enum_field_struct();
+    let create_builders = e.expand_enum_create_builders();
     let enum_field_list_struct = e.expand_field_list_struct();
     let field_register_calls = e.expand_field_register_calls();
     let storage_compat_checks = e.expand_storage_compat_checks();
@@ -283,6 +284,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     wrap_in_const(quote! {
         #enum_field_struct
         #enum_field_list_struct
+        #create_builders
 
         #storage_compat_checks
         #column_type_requirement_checks
@@ -391,6 +393,50 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 // === Shared token-generation helpers ===
 
 impl Expand<'_> {
+    /// Expression target for create/update setters. Via relations cannot be
+    /// assigned directly because they require an intermediate record.
+    fn expand_setter_target(&self, field: &FieldTy) -> Option<TokenStream> {
+        let toasty = &self.toasty;
+        Some(match field {
+            // Field decides the target for scalars, collections, and embeds,
+            // including fields stored as documents.
+            FieldTy::Primitive(ty) => quote!(FieldExprTarget<#ty>),
+            FieldTy::BelongsTo(rel) => {
+                let ty = &rel.ty;
+                quote!(<#ty as #toasty::RelationOneField>::Expr)
+            }
+            FieldTy::HasOne(rel) if rel.via.is_none() => {
+                let ty = &rel.ty;
+                quote!(<#ty as #toasty::RelationOneField>::Expr)
+            }
+            FieldTy::HasMany(rel) if rel.via.is_none() => {
+                let ty = &rel.ty;
+                quote!(#toasty::List<<#ty as #toasty::RelationManyField>::Target>)
+            }
+            _ => return None,
+        })
+    }
+
+    /// Retains the schema identity of records whose relations the engine resolves.
+    fn expand_embedded_record(&self, record: TokenStream) -> TokenStream {
+        if !self
+            .model
+            .fields
+            .iter()
+            .any(|f| matches!(f.ty, FieldTy::BelongsTo(_)))
+        {
+            return record;
+        }
+        let toasty = &self.toasty;
+        let model = &self.model.ident;
+        quote! {
+            #toasty::core::stmt::Expr::cast(
+                #record,
+                #toasty::core::stmt::Type::Model(<#model as #toasty::Embed>::id()),
+            )
+        }
+    }
+
     /// For relation fields in embedded types, require the declared type to be
     /// deferred (`toasty::Deferred<..>`). A non-deferred relation could never
     /// load: the relation carries no storage, so its record slot always
@@ -504,6 +550,7 @@ impl Expand<'_> {
         field_trait: TokenStream,
         ty: &syn::Type,
         field_offset: &TokenStream,
+        parent_path: &TokenStream,
     ) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
@@ -514,7 +561,7 @@ impl Expand<'_> {
         quote_spanned! { span=>
             #vis fn #field_ident(&self) -> <<#ty as #field_trait>::Target as #toasty::Model>::OneField<__Origin> {
                 <<#ty as #field_trait>::Target as #toasty::ModelCodegen>::new_one_field(
-                    self.path.clone().chain(
+                    #parent_path.chain(
                         <#model_ident as #schema_trait>::path_field(#field_offset)
                     )
                 )

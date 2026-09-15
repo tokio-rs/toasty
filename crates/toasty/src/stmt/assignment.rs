@@ -51,6 +51,13 @@ enum AssignmentKind {
         inner: Box<AssignmentKind>,
     },
     Apply(Vec<AssignmentKind>),
+    /// An operation the builder API accepts but Toasty does not support.
+    /// Applying it records the reason on the [`Assignments`] map instead of
+    /// an entry; the statement then fails verification with an
+    /// `unsupported_feature` error before anything is written.
+    ///
+    /// [`Assignments`]: toasty_core::stmt::Assignments
+    Unsupported(String),
 }
 
 impl AssignmentKind {
@@ -79,6 +86,7 @@ impl AssignmentKind {
                     op.apply(assignments, projection.clone());
                 }
             }
+            AssignmentKind::Unsupported(reason) => assignments.reject_unsupported(reason),
         }
     }
 }
@@ -342,27 +350,44 @@ pub fn remove_at<T>(idx: impl IntoExpr<usize>) -> Assignment<List<T>> {
     }
 }
 
-/// Partially update a sub-field of an embedded type.
+/// Partially update a sub-field of an embedded struct.
 ///
 /// Takes a [`Path<T, U>`] (identifying which sub-field to update) and a
 /// value (`impl Assign<U>` — either a plain value or a nested
 /// [`Assignment<U>`] for deeper patching). Returns an [`Assignment<T>`]
 /// that can be passed to the parent field's setter.
 ///
+/// The path may step through embedded structs, and it may end at an
+/// embedded enum field, which the patch then replaces as a whole. It may
+/// not enter an enum variant: setting or incrementing a field inside a
+/// variant is not supported on any backend. `patch` itself cannot fail, so
+/// the update statement carrying such a patch is rejected as a whole with an
+/// `unsupported_feature` error when it is executed, before any write. Change
+/// a variant's field by assigning a whole enum value instead.
+///
 /// # Examples
 ///
 /// ```ignore
 /// // Update a single sub-field
 /// user.update()
-///     .critter(stmt::patch(Creature::fields().human().profession(), "doctor"))
+///     .address(stmt::patch(Address::fields().city(), "Portland"))
 ///     .exec(&mut db)
 ///     .await?;
 ///
 /// // Nested patching
-/// user.update()
-///     .kind(stmt::patch(
-///         Kind::variants().admin().perm(),
-///         stmt::patch(Permission::fields().everything(), true),
+/// company.update()
+///     .headquarters(stmt::patch(
+///         Office::fields().address().into(),
+///         stmt::patch(Address::fields().city(), "Boston"),
+///     ))
+///     .exec(&mut db)
+///     .await?;
+///
+/// // Replace an enum field nested inside a struct
+/// task.update()
+///     .meta(stmt::patch(
+///         Meta::fields().status().into(),
+///         Status::Failed { reason: "flaky".to_string() },
 ///     ))
 ///     .exec(&mut db)
 ///     .await?;
@@ -370,11 +395,23 @@ pub fn remove_at<T>(idx: impl IntoExpr<usize>) -> Assignment<List<T>> {
 pub fn patch<T, U>(path: Path<T, U>, value: impl Assign<U>) -> Assignment<T> {
     let inner = value.into_assignment();
 
-    Assignment {
-        kind: AssignmentKind::Patch {
+    // A variant root is dropped below along with the rest of the path root,
+    // which would leave the variant-local steps to name whichever field the
+    // parent type has at those indices. Reject the patch instead.
+    let kind = match path.untyped.root {
+        stmt::PathRoot::Model(_) => AssignmentKind::Patch {
             path_projection: path.untyped.projection,
             inner: Box::new(inner.kind),
         },
+        stmt::PathRoot::Variant { .. } => AssignmentKind::Unsupported(
+            "patching a field inside an enum variant is not supported; \
+             assign a whole enum value instead"
+                .to_string(),
+        ),
+    };
+
+    Assignment {
+        kind,
         _p: PhantomData,
     }
 }
@@ -490,5 +527,42 @@ pub fn decrement<T: Numeric>() -> Assignment<T> {
     Assignment {
         kind: AssignmentKind::Subtract(stmt::Expr::Value(T::one())),
         _p: PhantomData,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use toasty_core::schema::app::{ModelId, VariantId};
+
+    /// `field 1` of model 0, then field 0 of variant 0 of the enum at model 1.
+    fn path_into_variant() -> Path<(), i64> {
+        Path::<(), ()>::field_at(ModelId(0), 1)
+            .into_variant(VariantId {
+                model: ModelId(1),
+                index: 0,
+            })
+            .chain(Path::<(), i64>::field_at(ModelId(1), 0))
+    }
+
+    #[test]
+    fn patch_into_variant_records_unsupported() {
+        let mut assignments = stmt::Assignments::new();
+        patch(path_into_variant(), increment::<i64>())
+            .assign(&mut assignments, stmt::Projection::from_index(2));
+
+        assert!(assignments.is_empty());
+        assert_eq!(assignments.unsupported().len(), 1);
+    }
+
+    #[test]
+    fn patch_into_variant_nested_in_struct_patch_records_unsupported() {
+        let mut assignments = stmt::Assignments::new();
+        let outer = Path::<(), ()>::field_at(ModelId(0), 3);
+        patch(outer, patch(path_into_variant(), 9_i64))
+            .assign(&mut assignments, stmt::Projection::from_index(2));
+
+        assert!(assignments.is_empty());
+        assert_eq!(assignments.unsupported().len(), 1);
     }
 }

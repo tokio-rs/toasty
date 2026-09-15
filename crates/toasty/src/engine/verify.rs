@@ -1,4 +1,5 @@
 use crate::Result;
+use crate::engine::lower::relation_expr::EmbedTarget;
 use crate::engine::{Engine, upsert};
 use toasty_core::Error;
 use toasty_core::driver::Capability;
@@ -21,6 +22,20 @@ struct VerifyExpr<'a, 'v> {
     capability: &'a Capability,
     model: ModelId,
     error: &'v mut Option<Error>,
+}
+
+/// What an expression path denotes in the application schema. See
+/// `VerifyExpr::resolve_expr_path`.
+enum PathTarget<'a> {
+    /// A field of a model, embed, or relation target.
+    Field(&'a app::Field),
+
+    /// The payload of an embedded enum's selected variant.
+    Variant(EmbedTarget<'a>),
+
+    /// A position inside a `#[document]` value, which the schema does not
+    /// describe field by field.
+    Document,
 }
 
 impl Engine {
@@ -244,8 +259,25 @@ impl stmt::Visit for Verify<'_, '_> {
         stmt::visit::visit_expr_stmt(self, i);
     }
 
+    fn visit_assignments(&mut self, i: &stmt::Assignments) {
+        // Builder combinators that cannot express their operation (a
+        // `stmt::patch` into an enum variant) record a reason instead of an
+        // entry. The statement fails as a whole, before planning.
+        for reason in i.unsupported() {
+            self.record(Error::unsupported_feature(reason.clone()));
+        }
+
+        stmt::visit::visit_assignments(self, i);
+    }
+
     fn visit_stmt_update(&mut self, i: &stmt::Update) {
         stmt::visit::visit_stmt_update(self, i);
+
+        // A rejected assignment may be the only one requested, so there is
+        // nothing further to check.
+        if !i.assignments.unsupported().is_empty() {
+            return;
+        }
 
         // Is not an empty update
         assert!(!i.assignments.is_empty(), "stmt = {i:#?}");
@@ -420,7 +452,7 @@ fn assert_i64_value(expr: &stmt::Expr, what: &str) {
     );
 }
 
-impl VerifyExpr<'_, '_> {
+impl<'a> VerifyExpr<'a, '_> {
     fn verify_filter(&mut self, filter: &stmt::Filter) {
         self.assert_bool_expr(filter.as_expr());
         self.visit_expr(filter.as_expr());
@@ -460,6 +492,90 @@ impl VerifyExpr<'_, '_> {
             self.schema.app.model(embed_id),
             app::Model::EmbeddedStruct(_)
         )
+    }
+
+    /// Resolve an expression path — a field reference in the current scope
+    /// under `Project` and `Variant` layers — to what it denotes in the
+    /// application schema. `None` when the path does not resolve.
+    ///
+    /// A projection step continues into a struct embed's fields, a relation
+    /// target's fields, or the fields of a selected enum variant, by their
+    /// variant-local position (see [`EmbedTarget::field_at`]).
+    fn resolve_expr_path(&self, expr: &stmt::Expr) -> Option<PathTarget<'a>> {
+        match expr {
+            stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }) => self
+                .schema
+                .app
+                .model(self.model)
+                .as_root()?
+                .fields
+                .get(*index)
+                .map(PathTarget::Field),
+            stmt::Expr::Project(project) => {
+                let mut target = self.resolve_expr_path(&project.base)?;
+                for step in project.projection.as_slice() {
+                    target = self.resolve_expr_step(target, *step)?;
+                }
+                Some(target)
+            }
+            stmt::Expr::Variant(variant) => {
+                let PathTarget::Field(field) = self.resolve_expr_path(&variant.base)? else {
+                    return None;
+                };
+                let app::FieldTy::Embedded(embedded) = &field.ty else {
+                    return None;
+                };
+                EmbedTarget::embed(&self.schema.app, embedded.target)?
+                    .select(variant.variant)
+                    .map(PathTarget::Variant)
+            }
+            _ => None,
+        }
+    }
+
+    /// The target one projection step reaches from `target`.
+    fn resolve_expr_step(&self, target: PathTarget<'a>, step: usize) -> Option<PathTarget<'a>> {
+        use app::FieldTy;
+
+        let field = match target {
+            PathTarget::Variant(target) => target.field_at(step),
+            PathTarget::Document => return Some(PathTarget::Document),
+            PathTarget::Field(field) => match &field.ty {
+                FieldTy::Embedded(embedded) => {
+                    EmbedTarget::embed(&self.schema.app, embedded.target)?.field_at(step)
+                }
+                FieldTy::BelongsTo(_) | FieldTy::Has(_) | FieldTy::Via(_) => {
+                    let target = field.relation_target_id().expect("relation has a target");
+                    self.schema
+                        .app
+                        .model(target)
+                        .as_root_unwrap()
+                        .fields
+                        .get(step)
+                }
+                // A `#[document]` embed stores sub-fields in the document
+                // type rather than as `app::Field`s; the path was
+                // type-checked by the generated accessors.
+                FieldTy::Primitive(app::FieldPrimitive {
+                    ty: stmt::Type::Model(_),
+                    ..
+                }) => return Some(PathTarget::Document),
+                FieldTy::Primitive(_) => None,
+            },
+        };
+
+        field.map(PathTarget::Field)
+    }
+
+    /// Whether `expr` is an expression path rooted at a field reference in
+    /// the current scope — the shape `resolve_expr_path` validates.
+    fn is_scoped_expr_path(&self, expr: &stmt::Expr) -> bool {
+        match expr {
+            stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, .. }) => true,
+            stmt::Expr::Project(project) => self.is_scoped_expr_path(&project.base),
+            stmt::Expr::Variant(variant) => self.is_scoped_expr_path(&variant.base),
+            _ => false,
+        }
     }
 
     fn assert_bool_expr(&self, expr: &stmt::Expr) {
@@ -518,23 +634,34 @@ impl stmt::Visit for VerifyExpr<'_, '_> {
     }
 
     fn visit_expr_project(&mut self, i: &stmt::ExprProject) {
-        // For project expressions where the base is a field reference in the
-        // current scope, combine the field index with the project's projection
-        // to form the full path, then resolve from the root model.
-        if let stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }) = &*i.base {
-            let mut full = stmt::Projection::single(*index);
-            for step in &i.projection[..] {
-                full.push(*step);
-            }
-            let root = self.schema.app.model(self.model);
+        // For a path rooted at a field reference in the current scope,
+        // validate the whole path against the schema: each step must name a
+        // field of the embed, relation target, or selected enum variant it
+        // steps into.
+        if self.is_scoped_expr_path(&i.base) {
             assert!(
-                self.schema.app.resolve(root, &full).is_some(),
-                "failed to resolve projection: {full:?}"
+                self.resolve_expr_path(&stmt::Expr::Project(i.clone()))
+                    .is_some(),
+                "failed to resolve projection: {i:#?}"
             );
         } else {
-            // For other base expressions (nested projects, etc.), visit the
-            // base but skip projection validation since the projection is
-            // relative to the base expression's type.
+            // For other base expressions, visit the base but skip projection
+            // validation since the projection is relative to the base
+            // expression's type.
+            self.visit_expr(&i.base);
+        }
+    }
+
+    fn visit_expr_variant(&mut self, i: &stmt::ExprVariant) {
+        // A selection applies to an enum field reached by a scoped path; it
+        // must name one of that enum's variants.
+        if self.is_scoped_expr_path(&i.base) {
+            assert!(
+                self.resolve_expr_path(&stmt::Expr::Variant(i.clone()))
+                    .is_some(),
+                "failed to resolve variant selection: {i:#?}"
+            );
+        } else {
             self.visit_expr(&i.base);
         }
     }
@@ -664,6 +791,23 @@ mod tests {
             lhs: Box::new(Expr::arg(0)),
             rhs: Box::new(rhs),
         })
+    }
+
+    #[test]
+    fn update_with_unsupported_assignment_is_rejected() {
+        let mut assignments = stmt::Assignments::new();
+        assignments.reject_unsupported("patch into variant");
+        let update = stmt::Update {
+            target: stmt::UpdateTarget::Model(ModelId(0)),
+            assignments,
+            filter: stmt::Filter::new(stmt::Expr::from(true)),
+            condition: stmt::Condition::default(),
+            returning: None,
+        };
+
+        let err = verify_with(&Capability::SQLITE, Statement::Update(update))
+            .expect_err("expected unsupported_feature error");
+        assert!(err.is_unsupported_feature());
     }
 
     #[test]

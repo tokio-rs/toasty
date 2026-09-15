@@ -48,6 +48,18 @@ trait RelationSource: std::fmt::Debug {
     fn needs_existence_check(&self) -> bool;
 }
 
+/// A record whose relation slots can be consumed during planning.
+trait RelationRecord: RelationSource {
+    fn take_source_field(&mut self, field: FieldId) -> stmt::Expr;
+}
+
+#[derive(Debug)]
+struct EmbeddedRelationSource<'a> {
+    fields: &'a [Field],
+    offset: usize,
+    row: &'a mut stmt::Expr,
+}
+
 #[derive(Debug)]
 struct InsertRelationSource<'a> {
     model: &'a app::ModelRoot,
@@ -91,38 +103,131 @@ impl LowerStatement<'_, '_> {
     ) {
         let model = self.expr_cx.target().as_model_unwrap();
 
-        for (i, field) in model.fields.iter().enumerate() {
-            if field.is_relation() {
-                let expr = row.entry_mut(i).take();
+        self.plan_record_relations(
+            &model.fields,
+            &mut InsertRelationSource {
+                model,
+                row,
+                returning,
+                index,
+            },
+        );
+    }
 
+    /// Plan root and embedded record fields through the same relation dispatcher.
+    fn plan_record_relations<S: RelationRecord>(&mut self, fields: &[Field], source: &mut S) {
+        for field in fields {
+            if let FieldTy::Embedded(embedded) = &field.ty {
+                let mut value = source.take_source_field(field.id);
+                self.plan_embedded_record_relations(embedded.target, &mut value);
+                source.set_source_field(field.id, value);
+            } else if field.is_relation() {
+                let expr = source.take_source_field(field.id);
                 if expr.is_value_null() || expr.is_default() {
                     if !field.nullable && field.ty.is_has_one() {
                         panic!(
                             "Insert missing non-nullable field; model={}; name={:#?}; ty={:#?}; expr={:#?}",
-                            model.name.upper_camel_case(),
+                            self.schema()
+                                .app
+                                .model(field.id.model)
+                                .name()
+                                .upper_camel_case(),
                             field.name,
                             field.ty,
                             expr
                         );
                     }
-
                     continue;
                 }
-
                 self.plan_mut_relation_field(
                     field,
                     Mutation::Associate {
                         expr,
                         exclusive: field.ty.is_belongs_to(),
                     },
-                    &mut InsertRelationSource {
-                        model,
-                        row,
-                        returning,
-                        index,
-                    },
+                    source,
                 );
             }
+        }
+    }
+
+    /// Resolve the fields of an embedded value, including the active variant's
+    /// local record positions, before its columns are expanded.
+    fn plan_embedded_record_relations(&mut self, model: app::ModelId, expr: &mut stmt::Expr) {
+        if let stmt::Expr::Cast(cast) = expr
+            && cast.from.is_none()
+            && cast.ty == stmt::Type::Model(model)
+            && cast.expr.record_len().is_some()
+        {
+            *expr = cast.expr.take();
+        }
+        let Some(len) = expr.record_len() else {
+            return;
+        };
+        let (fields, offset): (&[Field], _) = match self.schema().app.model(model) {
+            app::Model::Root(_) => return,
+            app::Model::EmbeddedStruct(model) => (&model.fields, 0),
+            app::Model::EmbeddedEnum(model) => {
+                let Some(discriminant) = expr.entry(0) else {
+                    return;
+                };
+                let stmt::Expr::Value(discriminant) = discriminant.to_expr() else {
+                    return;
+                };
+                let Some(variant) = model
+                    .variants
+                    .iter()
+                    .position(|v| v.discriminant == discriminant)
+                else {
+                    return;
+                };
+                (model.variant_fields(variant), 1)
+            }
+        };
+        if len != fields.len() + offset {
+            return;
+        }
+        self.plan_record_relations(
+            fields,
+            &mut EmbeddedRelationSource {
+                fields,
+                offset,
+                row: expr,
+            },
+        );
+    }
+
+    /// Typed embedded values also occur outside writes, for example in filters.
+    /// Keep their relation semantics identical to values assigned to a field.
+    pub(super) fn plan_typed_record_relations(&mut self, expr: &mut stmt::Expr) {
+        let stmt::Expr::Cast(cast) = expr else {
+            return;
+        };
+        let stmt::Type::Model(model) = cast.ty else {
+            return;
+        };
+        let schema_model = self.schema().app.model(model);
+        if cast.from.is_none()
+            && !schema_model.is_root()
+            && schema_model
+                .fields()
+                .iter()
+                .any(|field| field.ty.is_belongs_to())
+            && cast.expr.record_len().is_some()
+        {
+            self.plan_embedded_record_relations(model, expr);
+        }
+    }
+
+    fn plan_embedded_assignment(&mut self, model: app::ModelId, assignment: &mut stmt::Assignment) {
+        match assignment {
+            stmt::Assignment::Set(expr) => self.plan_embedded_record_relations(model, expr),
+            stmt::Assignment::Batch(entries) => {
+                for entry in entries {
+                    self.plan_embedded_assignment(model, entry);
+                }
+            }
+            _ => (),
         }
     }
 
@@ -134,6 +239,16 @@ impl LowerStatement<'_, '_> {
         returning_changed: bool,
     ) {
         let model = self.expr_cx.target().as_model_unwrap();
+
+        for (projection, assignment) in assignments.iter_mut() {
+            let schema = &self.schema().app;
+            if let Some(app::Resolved::Field(field)) =
+                schema.resolve(schema.model(model.id), projection)
+                && let FieldTy::Embedded(embedded) = &field.ty
+            {
+                self.plan_embedded_assignment(embedded.target, assignment);
+            }
+        }
 
         for (i, field) in model.fields.iter().enumerate() {
             if !field.is_relation() {
@@ -473,6 +588,7 @@ impl LowerStatement<'_, '_> {
         expr: stmt::Expr,
         source: &mut dyn RelationSource,
     ) {
+        let expr = relation_key_expr(&field.ty.as_belongs_to_unwrap().foreign_key, expr);
         let dependencies = self.collect_dependencies(|lower| {
             if let Some(pair_id) = field.pair()
                 && lower.field(pair_id).ty.is_has_one()
@@ -575,7 +691,15 @@ impl LowerStatement<'_, '_> {
                 let returning = stmt_info.stmt.as_ref().unwrap().returning().expect("bug");
 
                 let expr = match returning {
-                    stmt::Returning::Expr(expr) if expr.is_const() => expr.clone(),
+                    stmt::Returning::Expr(expr) if expr.is_const() => {
+                        // The insert returns a tuple of referenced fields, even
+                        // when the relation has just one key field.
+                        if belongs_to.foreign_key.fields.len() == 1 {
+                            expr.entry(0).unwrap().to_expr()
+                        } else {
+                            expr.clone()
+                        }
+                    }
                     _ => {
                         // Make sure the source statement returns a single record
                         debug_assert!(match &**stmt_info.stmt.as_ref().unwrap() {
@@ -761,33 +885,9 @@ impl LowerStatement<'_, '_> {
             todo!("field={field:#?}")
         };
 
-        let fk_fields = &belongs_to.foreign_key.fields;
-
-        if let Some(len) = expr.record_len() {
-            assert_eq!(len, fk_fields.len(), "expr={expr:#?}");
-            let fk_values = expr.into_record_items().unwrap();
-
-            for (fk_field, fk_value) in fk_fields.iter().zip(fk_values) {
-                source.set_source_field(fk_field.source, fk_value);
-            }
-        } else {
-            match expr {
-                stmt::Expr::Arg(_) => {
-                    for (i, fk_field) in fk_fields.iter().enumerate() {
-                        source.set_source_field(
-                            fk_field.source,
-                            stmt::Expr::project(expr.clone(), [i]),
-                        );
-                    }
-                }
-                stmt::Expr::Value(_) | stmt::Expr::Reference(_) => {
-                    let [fk_field] = &fk_fields[..] else { todo!() };
-
-                    source.set_source_field(fk_field.source, expr);
-                }
-                expr => todo!("expr={expr:#?}"),
-            }
-        }
+        assign_belongs_to_key(&belongs_to.foreign_key, expr, |field, value| {
+            source.set_source_field(field, value);
+        });
     }
 }
 
@@ -870,7 +970,7 @@ impl RelationSource for InsertRelationSource<'_> {
 
     fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr) {
         assert_eq!(self.model.id, field.model);
-        self.row.as_record_mut_unwrap()[field.index] = expr;
+        self.row.entry_mut(field.index).insert(expr);
     }
 
     fn set_returning_field(&mut self, field: &Field, expr: stmt::Expr) {
@@ -996,4 +1096,122 @@ fn set_returning_slot(
     } else {
         expr
     };
+}
+
+impl RelationRecord for InsertRelationSource<'_> {
+    fn take_source_field(&mut self, field: FieldId) -> stmt::Expr {
+        assert_eq!(self.model.id, field.model);
+        self.row.entry_mut(field.index).take()
+    }
+}
+
+impl EmbeddedRelationSource<'_> {
+    fn slot(&self, field: FieldId) -> usize {
+        let first = self
+            .fields
+            .first()
+            .expect("field in an empty embedded record");
+        let local = field.index.checked_sub(first.id.index).unwrap();
+        assert_eq!(self.fields[local].id, field);
+        self.offset + local
+    }
+}
+
+impl RelationRecord for EmbeddedRelationSource<'_> {
+    fn take_source_field(&mut self, field: FieldId) -> stmt::Expr {
+        let slot = self.slot(field);
+        self.row.entry_mut(slot).take()
+    }
+}
+
+impl RelationSource for EmbeddedRelationSource<'_> {
+    fn selection(&self, _nesting: usize) -> stmt::Query {
+        unreachable!("embedded relations do not have inverse relations")
+    }
+
+    fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr) {
+        let slot = self.slot(field);
+        self.row.entry_mut(slot).insert(expr);
+    }
+
+    fn set_returning_field(&mut self, _field: &Field, _expr: stmt::Expr) {
+        unreachable!("embedded relations are deferred belongs-to fields")
+    }
+
+    fn needs_existence_check(&self) -> bool {
+        false
+    }
+}
+
+/// Assign a relation's key expression to its source fields. A single-field
+/// key stays intact even when its value is itself an embedded record.
+pub(super) fn assign_belongs_to_key(
+    foreign_key: &app::ForeignKey,
+    expr: stmt::Expr,
+    mut assign: impl FnMut(app::FieldId, stmt::Expr),
+) {
+    let key = relation_key_expr(foreign_key, expr);
+
+    if matches!(key, stmt::Expr::Arg(_)) {
+        assign_projected_key(foreign_key, key, &mut assign);
+        return;
+    }
+
+    if let [field] = &foreign_key.fields[..] {
+        assign(field.source, key);
+        return;
+    }
+
+    if let Some(arity) = key.record_len() {
+        assert_eq!(arity, foreign_key.fields.len(), "key={key:#?}");
+        let values = key.into_record_items().unwrap();
+
+        for (field, value) in foreign_key.fields.iter().zip(values) {
+            assign(field.source, value);
+        }
+        return;
+    }
+
+    assign_projected_key(foreign_key, key, &mut assign);
+}
+
+fn assign_projected_key(
+    foreign_key: &app::ForeignKey,
+    key: stmt::Expr,
+    assign: &mut impl FnMut(app::FieldId, stmt::Expr),
+) {
+    for (index, field) in foreign_key.fields.iter().enumerate() {
+        assign(field.source, stmt::Expr::project(key.clone(), [index]));
+    }
+}
+
+fn relation_key_expr(foreign_key: &app::ForeignKey, expr: stmt::Expr) -> stmt::Expr {
+    // A loaded model carries its stored fields, including non-primary keys.
+    // Ordinary relation expressions already contain the key itself.
+    let mut target = match expr {
+        stmt::Expr::Cast(target) => target,
+        expr => return expr,
+    };
+    let stmt::Type::Model(target_model) = target.ty else {
+        return target.into();
+    };
+    if !foreign_key
+        .fields
+        .iter()
+        .all(|field| field.target.model == target_model)
+    {
+        return target.into();
+    }
+
+    let mut key = foreign_key
+        .fields
+        .iter()
+        .map(|field| target.expr.entry_mut(field.target.index).take())
+        .collect::<Vec<_>>();
+
+    if key.len() == 1 {
+        key.pop().unwrap()
+    } else {
+        stmt::Expr::record_from_vec(key)
+    }
 }

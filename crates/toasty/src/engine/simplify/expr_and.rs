@@ -7,6 +7,8 @@ impl Simplify<'_> {
     /// literals, null propagation, single/empty collapse on canonical input)
     /// runs in `fold::expr_and` before this is reached.
     pub(super) fn simplify_expr_and(&mut self, expr: &mut stmt::ExprAnd) -> Option<stmt::Expr> {
+        self.merge_in_subqueries(&mut expr.operands);
+
         // Idempotent law, `a and a` → `a`
         // Note: O(n) lookups are acceptable here since operand lists are typically small.
         // `is_equivalent_to` (not `PartialEq`) keeps this sound for non-deterministic
