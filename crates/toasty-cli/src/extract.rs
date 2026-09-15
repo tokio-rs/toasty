@@ -163,9 +163,18 @@ fn parse_dump(output: &[u8], package: &str, direct_dependency: bool) -> Result<d
     }
 
     if let Some(err) = decode_error {
-        return Err(
-            anyhow::Error::new(err).context("failed to decode the schema produced by the dumper")
-        );
+        // An unknown variant means the project uses a column type whose
+        // feature is off in this build of the CLI, so the type is missing from
+        // its copy of `stmt::Type`.
+        let context = if err.to_string().contains("unknown variant") {
+            "failed to decode the schema produced by the dumper; the project uses a column \
+             type this `toasty` CLI was built without — reinstall it with default features, \
+             or enable the matching one of `jiff`, `rust_decimal`, `bigdecimal`, `net`"
+        } else {
+            "failed to decode the schema produced by the dumper"
+        };
+
+        return Err(anyhow::Error::new(err).context(context));
     }
 
     bail!("{}", no_dump_help(package, direct_dependency))
@@ -240,32 +249,31 @@ mod tests {
     }
 
     #[test]
-    fn every_optional_column_type_can_be_decoded() {
-        // The CLI decodes whatever the user's project dumps. If an optional
-        // type feature is off in this crate's `toasty-core`, the variant is
-        // missing here and the dump fails with `unknown variant`.
+    fn enabled_optional_column_types_can_be_decoded() {
+        // The CLI decodes whatever the user's project dumps. Each enabled type
+        // feature must reach `toasty-core`, or the variant is missing here and
+        // the dump fails with `unknown variant`.
         //
         // Feature unification makes this pass under `cargo test --workspace`
-        // regardless; it catches a regression when run as
+        // regardless; it catches broken wiring when run as
         // `cargo test -p toasty-cli`.
-        for ty in [
-            // jiff
-            "Timestamp",
-            "Zoned",
-            "Date",
-            "Time",
-            "DateTime",
-            // rust_decimal / bigdecimal
-            "Decimal",
-            "BigDecimal",
-            // net
-            "Cidr",
-            "Inet",
-            "MacAddr",
-            "MacAddr8",
-        ] {
-            let json = format!("\"{ty}\"");
-            let parsed = serde_json::from_str::<toasty_core::stmt::Type>(&json);
+        let mut types: Vec<&str> = Vec::new();
+
+        if cfg!(feature = "jiff") {
+            types.extend(["Timestamp", "Zoned", "Date", "Time", "DateTime"]);
+        }
+        if cfg!(feature = "rust_decimal") {
+            types.push("Decimal");
+        }
+        if cfg!(feature = "bigdecimal") {
+            types.push("BigDecimal");
+        }
+        if cfg!(feature = "net") {
+            types.extend(["Cidr", "Inet", "MacAddr", "MacAddr8"]);
+        }
+
+        for ty in types {
+            let parsed = serde_json::from_str::<toasty_core::stmt::Type>(&format!("\"{ty}\""));
             assert!(parsed.is_ok(), "cannot decode `{ty}`: {parsed:?}");
         }
     }

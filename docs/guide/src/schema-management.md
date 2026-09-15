@@ -41,6 +41,17 @@ needed: for commands that need your schema, the CLI compiles your package
 and reads the schema out of the build artifact, so it always sees exactly
 the model types your application runs.
 
+The default build decodes every optional column type — `jiff`, `rust_decimal`,
+`bigdecimal`, and `net`. A project using none of them can install a smaller
+binary by selecting only what it needs:
+
+```bash
+cargo install toasty-cli --no-default-features --features postgresql
+```
+
+Reading a schema that uses a type the CLI was built without fails rather than
+producing a wrong migration.
+
 | Command | What it does |
 |---|---|
 | `migrate generate` | Diffs the current schema against the last snapshot and writes a SQL migration file |
