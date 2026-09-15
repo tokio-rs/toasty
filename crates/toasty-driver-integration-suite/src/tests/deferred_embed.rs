@@ -152,6 +152,48 @@ pub async fn include_deferred_inside_embed_in_enum_variant(t: &mut Test) -> Resu
     Ok(())
 }
 
+// Update-by-query carrying the same variant-rooted include: the include is
+// dropped before lowering, but verify still walks the update-target query.
+// Its variant-local steps must not be resolved as update-model field
+// indices (issue #1224).
+#[driver_test(scenario(crate::scenarios::person_contact_deferred_metadata))]
+pub async fn update_by_query_with_variant_rooted_include(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    let alice = toasty::create!(Person {
+        name: "Alice".to_string(),
+        contact: ContactInfo::Email {
+            address: "alice@example.com".to_string(),
+            metadata: Metadata {
+                author: "Alice".to_string(),
+                notes: "Important".to_string().into(),
+            },
+        },
+    })
+    .exec(&mut db)
+    .await?;
+
+    Person::filter_by_id(alice.id)
+        .include(Person::fields().contact().email().metadata().notes())
+        .update()
+        .name("Updated")
+        .exec(&mut db)
+        .await?;
+
+    let read = Person::filter_by_id(alice.id)
+        .include(Person::fields().contact().email().metadata().notes())
+        .get(&mut db)
+        .await?;
+    let ContactInfo::Email { metadata, .. } = &read.contact else {
+        panic!("expected Email variant");
+    };
+    assert_eq!("Updated", read.name);
+    assert!(!metadata.notes.is_unloaded());
+    assert_eq!("Important", metadata.notes.get());
+
+    Ok(())
+}
+
 // ---------- Deferred<UnitEnum> ----------
 
 #[driver_test]
