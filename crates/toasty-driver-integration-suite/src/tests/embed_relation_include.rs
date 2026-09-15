@@ -87,6 +87,133 @@ fn assert_document_owners(doc: &Document) {
 }
 
 #[driver_test]
+pub async fn eager_embed_projection(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Card {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        owner: EagerOwner,
+    }
+    let mut db = t.setup_db(models!(Document, Person, Card)).await;
+    let alice = toasty::create!(Person { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+    let doc = toasty::create!(Document {
+        primary: EagerOwner::Person { person: &alice },
+        secondary: None,
+    })
+    .exec(&mut db)
+    .await?;
+    let owner = Document::filter_by_id(doc.id)
+        .select(Document::fields().primary())
+        .exec(&mut db)
+        .await?
+        .pop()
+        .unwrap();
+    assert_struct!(owner, Some(EagerOwner::Person { person.name: "Alice", .. }));
+    let (id, owner) = Document::filter_by_id(doc.id)
+        .select((Document::fields().id(), Document::fields().primary()))
+        .exec(&mut db)
+        .await?
+        .pop()
+        .unwrap();
+    assert_eq!(id, doc.id);
+    assert_struct!(owner, Some(EagerOwner::Person { person.name: "Alice", .. }));
+    let absent = Document::filter_by_id(doc.id)
+        .select(Document::fields().secondary())
+        .exec(&mut db)
+        .await?
+        .pop()
+        .unwrap();
+    assert!(absent.is_none());
+    let member = toasty::create!(Card {
+        owner: EagerOwner::Member {
+            membership: Membership {
+                id: alice.id,
+                person: alice
+            }
+        },
+    })
+    .exec(&mut db)
+    .await?;
+    let membership = Card::filter_by_id(member.id)
+        .select(Card::fields().owner().member().membership())
+        .exec(&mut db)
+        .await?
+        .pop()
+        .unwrap();
+    assert_eq!(membership.person.name, "Alice");
+    Ok(())
+}
+
+#[driver_test]
+pub async fn eager_embed_key_patch(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct Attribution {
+        author_id: Option<uuid::Uuid>,
+        #[belongs_to(key = author_id)]
+        author: Option<Person>,
+        label: String,
+    }
+    #[derive(Debug, toasty::Model)]
+    struct Article {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        attribution: Attribution,
+    }
+    let mut db = t.setup_db(models!(Article, Person)).await;
+    let alice = toasty::create!(Person { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+    let bob = toasty::create!(Person { name: "Bob" })
+        .exec(&mut db)
+        .await?;
+    let mut article = toasty::create!(Article {
+        attribution: Attribution {
+            author_id: Some(alice.id),
+            author: Some(alice),
+            label: "by".into()
+        },
+    })
+    .exec(&mut db)
+    .await?;
+    article
+        .update()
+        .attribution(toasty::stmt::patch(
+            Attribution::fields().author_id(),
+            Some(bob.id),
+        ))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(article.attribution.author_id, Some(bob.id));
+    assert_eq!(article.attribution.author.as_ref().unwrap().name, "Bob");
+    assert_eq!(article.attribution.label, "by");
+    let stored = Article::filter_by_id(article.id).get(&mut db).await?;
+    assert_eq!(stored.attribution.author.as_ref().unwrap().name, "Bob");
+    t.log().clear();
+    article
+        .update()
+        .attribution(toasty::stmt::patch(
+            Attribution::fields().label(),
+            "written by",
+        ))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(article.attribution.author.as_ref().unwrap().name, "Bob");
+    assert_query_count(t, 1);
+    article
+        .update()
+        .attribution(toasty::stmt::patch(Attribution::fields().author_id(), None))
+        .exec(&mut db)
+        .await?;
+    assert!(article.attribution.author_id.is_none());
+    assert!(article.attribution.author.is_none());
+    Ok(())
+}
+
+#[driver_test]
 pub async fn eager_embedded_relations_batch_create(t: &mut Test) -> Result<()> {
     let mut db = t.setup_db(models!(Document, Person)).await;
     let alice = toasty::create!(Person { name: "Alice" })

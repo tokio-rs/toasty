@@ -1307,6 +1307,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         let mut lower = self.scope_expr(&stmt.source);
 
         lower.visit_filter_mut(&mut stmt.filter);
+        if lower.model().is_some()
+            && let stmt::Returning::Project(value) = &mut stmt.returning
+        {
+            lower.lower_returning().process_projected_embeds(value);
+        }
         lower.visit_returning_mut(&mut stmt.returning);
         lower.apply_lowering_filter_constraint(&mut stmt.filter);
 

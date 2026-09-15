@@ -74,8 +74,39 @@ struct FieldIncludes {
 }
 
 impl LowerStatement<'_, '_> {
-    /// Load eager relations only for embeds returned as complete values.
-    /// A sparse patch of a sibling primitive does not reload its relations.
+    /// Load relations in complete embedded values selected by a query.
+    pub(super) fn process_projected_embeds(&mut self, value: &mut stmt::Expr) {
+        if let Some((field, mapping, path)) =
+            projected_field(self.schema(), self.model_unwrap().id, value)
+        {
+            if let app::FieldTy::Embedded(embedded) = &field.ty {
+                use stmt::VisitMut;
+                self.visit_expr_mut(value);
+                super::Simplify::with_context(self.expr_cx, self.capability())
+                    .visit_expr_mut(value);
+                self.process_embed(
+                    value,
+                    embedded.target,
+                    mapping,
+                    &[],
+                    IncludeScope {
+                        path: &path,
+                        is_insert: false,
+                        include_relations: false,
+                    },
+                );
+            }
+            // A scalar projection must not load relations in its base embed.
+            return;
+        }
+        if let stmt::Expr::Record(record) = value {
+            for field in &mut record.fields {
+                self.process_projected_embeds(field);
+            }
+        }
+    }
+
+    /// Load complete returned embeds and refresh relations whose keys changed.
     pub(super) fn process_update_embedded_relations(&mut self, returning: &mut stmt::Returning) {
         let stmt::Returning::Project(value) = returning else {
             return;
@@ -100,12 +131,37 @@ impl LowerStatement<'_, '_> {
         let stmt::Expr::Cast(cast) = value else {
             return;
         };
-        let stmt::Type::SparseRecord(indices) = &cast.ty else {
+        let stmt::Type::SparseRecord(indices) = &mut cast.ty else {
             return;
         };
         let stmt::Expr::Record(record) = &mut *cast.expr else {
             return;
         };
+        if !host.projection.is_empty() {
+            for (index, field) in fields.iter().enumerate() {
+                let app::FieldTy::BelongsTo(relation) = &field.ty else {
+                    continue;
+                };
+                if field.deferred
+                    || !relation
+                        .foreign_key
+                        .fields
+                        .iter()
+                        .any(|fk| indices.iter().any(|i| i == fk.source.index))
+                {
+                    continue;
+                }
+                let load =
+                    self.build_relation_subquery_inner(field, host, &[], IncludeQuery::default());
+                let position = indices.iter().take_while(|i| *i < index).count();
+                if indices.iter().any(|i| i == index) {
+                    record.fields[position] = load;
+                } else {
+                    indices.insert(index);
+                    record.fields.insert(position, load);
+                }
+            }
+        }
         for (index, value) in indices.iter().zip(&mut record.fields) {
             let app::FieldTy::Embedded(embedded) = &fields[index].ty else {
                 continue;
@@ -651,6 +707,64 @@ fn field_path(host: &stmt::Path, index: usize) -> stmt::Path {
     let mut path = host.clone();
     path.projection.push(index);
     path
+}
+
+fn projected_field<'a>(
+    schema: &'a toasty_core::Schema,
+    model: app::ModelId,
+    expr: &stmt::Expr,
+) -> Option<(&'a app::Field, &'a mapping::Field, stmt::Path)> {
+    match expr {
+        stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }) => Some((
+            &schema.app.model(model).fields()[*index],
+            &schema.mapping_for(model).fields[*index],
+            stmt::Path::field(model, *index),
+        )),
+        stmt::Expr::Project(project) => {
+            let (field, mapping, path) = if let stmt::Expr::Variant(variant) = &*project.base {
+                let (_, mapping, path) = projected_field(schema, model, &variant.base)?;
+                let fields = schema
+                    .app
+                    .model(variant.variant.model)
+                    .as_embedded_enum_unwrap()
+                    .variant_fields(variant.variant.index);
+                let mapping::Field::Enum(mapping) = mapping else {
+                    return None;
+                };
+                let (&index, rest) = project.projection.as_slice().split_first()?;
+                let mut path = stmt::Path::from_variant(path, variant.variant);
+                path.projection.push(index);
+                let field = &fields[index];
+                let mapping = &mapping.variants[variant.variant.index].fields[index];
+                return projected_subfield(schema, field, mapping, path, rest);
+            } else {
+                projected_field(schema, model, &project.base)?
+            };
+            projected_subfield(schema, field, mapping, path, project.projection.as_slice())
+        }
+        _ => None,
+    }
+}
+
+fn projected_subfield<'a>(
+    schema: &'a toasty_core::Schema,
+    mut field: &'a app::Field,
+    mut mapping: &'a mapping::Field,
+    mut path: stmt::Path,
+    steps: &[usize],
+) -> Option<(&'a app::Field, &'a mapping::Field, stmt::Path)> {
+    for index in steps {
+        let app::FieldTy::Embedded(embedded) = &field.ty else {
+            return None;
+        };
+        let mapping::Field::Struct(mapped) = mapping else {
+            return None;
+        };
+        field = &schema.app.model(embedded.target).fields()[*index];
+        mapping = &mapped.fields[*index];
+        path.projection.push(*index);
+    }
+    Some((field, mapping, path))
 }
 
 impl FieldIncludes {
