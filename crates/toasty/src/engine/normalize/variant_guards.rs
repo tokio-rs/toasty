@@ -68,7 +68,7 @@ impl Normalize<'_> {
         let mut guards = vec![];
         let mut collect = CollectGuards {
             guards: &mut guards,
-            in_force: &self.guards,
+            existing_guards: &self.guards,
         };
 
         match expr {
@@ -119,7 +119,7 @@ fn is_guard(expr: &Expr) -> bool {
 /// subqueries are predicate scopes of their own and are not entered.
 struct CollectGuards<'a> {
     guards: &'a mut Vec<Expr>,
-    in_force: &'a [Expr],
+    existing_guards: &'a [Expr],
 }
 
 impl Visit for CollectGuards<'_> {
@@ -128,7 +128,7 @@ impl Visit for CollectGuards<'_> {
         self.visit_expr(&i.base);
 
         let guard = Expr::is_variant((*i.base).clone(), i.variant);
-        if !self.in_force.contains(&guard) && !self.guards.contains(&guard) {
+        if !self.existing_guards.contains(&guard) && !self.guards.contains(&guard) {
             self.guards.push(guard);
         }
     }
