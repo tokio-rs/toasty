@@ -1,8 +1,8 @@
 use super::{Expr, IntoExpr, IntoStatement, List};
-use crate::schema::Field;
+use crate::schema::{Field, Model};
 use std::{fmt, marker::PhantomData};
 use toasty_core::{
-    schema::app::{ModelId, VariantId},
+    schema::app::{self, ModelId, VariantId},
     stmt::{self, Direction, OrderByExpr},
 };
 
@@ -761,6 +761,260 @@ impl<T, U> IntoExpr<U> for Path<T, U> {
 impl<T, U> From<Path<T, U>> for stmt::Path {
     fn from(value: Path<T, U>) -> Self {
         value.untyped
+    }
+}
+
+impl<T, U> Path<T, U>
+where
+    T: Model,
+{
+    /// App-level (Rust) name of the leaf field this path ends at (embed
+    /// prefixes discarded).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the path does not end at a field, if the projection
+    /// crosses a relation, or if the leaf field is unnamed (the `inner`
+    /// field of a tuple-newtype embed, which has no app-level name):
+    /// only embedded struct, embedded enum, and document
+    /// steps are supported.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// let name = User::fields().name().field_name();
+    /// assert_eq!(name, "name");
+    /// ```
+    pub fn field_name(&self) -> String {
+        let models = Self::registered_models();
+        Self::field_in(&models, &self.untyped)
+            .0
+            .name
+            .app
+            .as_deref()
+            .expect("field_name(): leaf field has no app-level name (tuple-newtype `inner` field)")
+            .to_string()
+    }
+
+    /// Whether this field is the target of a single-field unique index.
+    ///
+    /// Index membership only, not a global-uniqueness guarantee: `NULL`s do
+    /// not conflict (SQL treats them as distinct; DynamoDB skips the index
+    /// entry), so `true` implies globally unique values only for a
+    /// non-nullable column (non-optional leaf, no nullable parent embed or
+    /// enum variant crossed). True for `#[unique]` fields, enum-level
+    /// `#[unique(variant::field)]` and `#[unique(shared)]` references (every
+    /// `#[shared(shared)]` member), and single-field primary keys.
+    /// Components of composite indices are not unique on their own.
+    /// Fields inside a `#[document]` embed report `false`: their app-level
+    /// index has no database backing (`collect_indices` only recurses into
+    /// column-expanded embeds).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the path does not end at a field, or if the projection
+    /// crosses a relation: only embedded struct, embedded enum, and document
+    /// steps are supported.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     #[unique]
+    /// #     email: String,
+    /// # }
+    /// assert!(User::fields().email().is_unique());
+    /// assert!(User::fields().id().is_unique());
+    /// ```
+    pub fn is_unique(&self) -> bool {
+        let models = Self::registered_models();
+        let (field, crossed_document) = Self::field_in(&models, &self.untyped);
+        if crossed_document {
+            return false;
+        }
+        let owner = Self::model_by_id(&models, field.id.model);
+        let indices = match owner {
+            app::Model::Root(root) => &root.indices,
+            app::Model::EmbeddedStruct(embedded) => &embedded.indices,
+            app::Model::EmbeddedEnum(embedded) => &embedded.indices,
+        };
+        indices.iter().any(|idx| {
+            if !idx.unique || idx.fields.len() != 1 {
+                return false;
+            }
+            let indexed = idx.fields[0].field;
+            if indexed == field.id {
+                return true;
+            }
+            // Enum-level `#[unique(name)]` stores the first `#[shared(name)]`
+            // member only, but constrains the shared column for every member.
+            let Some(shared) = &field.shared else {
+                return false;
+            };
+            Self::model_by_id(&models, indexed.model)
+                .fields()
+                .get(indexed.index)
+                .and_then(|f| f.shared.as_ref())
+                == Some(shared)
+        })
+    }
+
+    /// Collects the model set rooted at `T` so field lookups can walk into
+    /// embedded models. Built per call: there is no global registry, and
+    /// `T::register` rebuilds the schema of every reachable model, so the
+    /// metadata accessors built on this are for one-off use, not per-row
+    /// loops.
+    fn registered_models() -> app::ModelSet {
+        let mut models = app::ModelSet::new();
+        T::register(&mut models);
+        models
+    }
+
+    fn model_by_id(models: &app::ModelSet, id: ModelId) -> &app::Model {
+        models
+            .get(id)
+            .unwrap_or_else(|| panic!("model {id:?} is not registered"))
+    }
+
+    fn field_in<'a>(models: &'a app::ModelSet, path: &stmt::Path) -> (&'a app::Field, bool) {
+        match &path.root {
+            stmt::PathRoot::Model(id) => Self::walk_fields(models, *id, path.projection.as_slice()),
+            stmt::PathRoot::Variant { parent, variant_id } => {
+                let (enum_field, parent_crossed) = Self::field_in(models, parent);
+                let embed_id = match &enum_field.ty {
+                    app::FieldTy::Embedded(embedded) => embedded.target,
+                    _ => panic!("variant path parent is not an embedded enum"),
+                };
+                let [first, rest @ ..] = path.projection.as_slice() else {
+                    panic!("path does not end at a field");
+                };
+                let variant_field = Self::model_by_id(models, embed_id)
+                    .as_embedded_enum_unwrap()
+                    .variant_fields(variant_id.index)
+                    .nth(*first)
+                    .expect("path does not end at a field: variant field index out of bounds");
+                if rest.is_empty() {
+                    (variant_field, parent_crossed)
+                } else {
+                    let crossed_here = Self::is_document_field(variant_field);
+                    let embedded_target = Self::embedded_target(variant_field);
+                    let (field, inner_crossed) = Self::walk_fields(models, embedded_target, rest);
+                    (field, parent_crossed || crossed_here || inner_crossed)
+                }
+            }
+        }
+    }
+
+    /// Whether `field` is `#[document]` storage (`Primitive(Model)` or
+    /// `Primitive(List(Model))`). Traversing through one reaches JSON-backed
+    /// state with no database index, so `is_unique()` reports `false`.
+    fn is_document_field(field: &app::Field) -> bool {
+        match &field.ty {
+            app::FieldTy::Primitive(primitive) => match &primitive.ty {
+                stmt::Type::Model(_) => true,
+                stmt::Type::List(elem) => matches!(&**elem, stmt::Type::Model(_)),
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    /// The embedded model a projection step traverses into: a column-expanded
+    /// embed (`Embedded`) or a `#[document]` field (`Primitive(Model)`), whose
+    /// accessor is chainable like a column-expanded embed.
+    fn embedded_target(field: &app::Field) -> ModelId {
+        match &field.ty {
+            app::FieldTy::Embedded(embedded) => embedded.target,
+            app::FieldTy::Primitive(primitive) if let stmt::Type::Model(id) = &primitive.ty => *id,
+            _ => panic!("cannot project through non-embedded field"),
+        }
+    }
+
+    fn walk_fields<'a>(
+        models: &'a app::ModelSet,
+        model_id: ModelId,
+        steps: &[usize],
+    ) -> (&'a app::Field, bool) {
+        let [first, rest @ ..] = steps else {
+            panic!("path does not end at a field");
+        };
+        let mut field = Self::model_by_id(models, model_id)
+            .fields()
+            .get(*first)
+            .expect("path does not end at a field: field index out of bounds");
+        let mut crossed_document = false;
+        for &step in rest {
+            crossed_document |= Self::is_document_field(field);
+            let embed_id = Self::embedded_target(field);
+            field = Self::model_by_id(models, embed_id)
+                .fields()
+                .get(step)
+                .expect("path does not end at a field: field index out of bounds");
+        }
+        (field, crossed_document)
+    }
+}
+
+/// Nullability of a path's leaf field, read off the leaf's Rust type.
+///
+/// The app schema's `nullable` flag is generated from the field type's
+/// [`Field::NULLABLE`], so the typed path already carries the answer and no
+/// schema walk is needed.
+///
+/// Only storable leaf types expose this: relation terminals and model roots
+/// have no method, and projecting through a relation is a compile error
+/// rather than the runtime panic `field_name`/`is_unique` still produce. An
+/// embed root reports `false` but has no leaf field.
+impl<T, U> Path<T, U>
+where
+    T: Model,
+    U: Field,
+{
+    /// Whether the leaf field is `Option`-marked.
+    ///
+    /// Reports the leaf field's own nullability only; a `false` result does
+    /// not rule out storage `NULL`s from a nullable parent embed or an
+    /// inactive enum variant (see [`is_unique`](Self::is_unique)).
+    ///
+    /// Only sound for generated accessors; hand-built `path_field::<U>` /
+    /// `chain` paths must supply the field's `ExprTarget` as `U`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     bio: Option<String>,
+    /// # }
+    /// assert!(User::fields().bio().is_nullable());
+    /// assert!(!User::fields().id().is_nullable());
+    /// ```
+    pub fn is_nullable(&self) -> bool {
+        U::NULLABLE
+    }
+}
+
+/// List-targeted paths (`Vec<T>` fields) are never `Option`-wrapped;
+/// `Option<Vec<T>>` keeps its wrapper as the path target and is covered by
+/// the `U: Field` impl above.
+impl<T, U> Path<T, List<U>>
+where
+    T: Model,
+{
+    /// Always `false` for a list-targeted path.
+    pub fn is_nullable(&self) -> bool {
+        false
     }
 }
 

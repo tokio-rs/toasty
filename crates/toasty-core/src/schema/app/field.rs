@@ -89,8 +89,8 @@ pub struct FieldId {
 /// The name of a field, with separate application and storage representations.
 ///
 /// The `app` field is the Rust-facing name (e.g., `user_name`). It is
-/// `Option<String>` to support unnamed (tuple) fields in the future; for now it
-/// is always `Some`. The optional `storage` field overrides the column name used
+/// `None` for the `inner` field of a tuple-newtype embed, which has no
+/// app-level name. The optional `storage` field overrides the column name used
 /// in the database; when `None`, `app` is used as the storage name.
 ///
 /// # Examples
