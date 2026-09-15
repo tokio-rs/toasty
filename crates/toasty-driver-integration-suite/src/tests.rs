@@ -42,6 +42,7 @@ pub mod embed_enum_unit;
 pub mod embed_enum_variant_patch;
 pub mod embed_newtype;
 pub mod embed_relation;
+pub mod embed_relation_include;
 pub mod embed_struct;
 pub mod embed_struct_index;
 pub mod embed_struct_optional;
