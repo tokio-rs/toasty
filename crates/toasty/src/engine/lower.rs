@@ -971,6 +971,16 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     stmt::visit_mut::visit_expr_mut(self, expr);
                 }
             }
+            stmt::Expr::Project(project) => {
+                // Shared-column read with no variant gate; see
+                // `lower_shared_column_project` below.
+                if let Some(lowered) = self.lower_shared_column_project(project) {
+                    *expr = lowered;
+                    self.visit_expr_mut(expr);
+                } else {
+                    stmt::visit_mut::visit_expr_mut(self, expr);
+                }
+            }
             stmt::Expr::Reference(expr_reference) => {
                 match expr_reference {
                     // A reference to a relation field inside a Returning
@@ -1719,27 +1729,83 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
     fn apply_lowering_filter_constraint(&self, _filter: &mut stmt::Filter) {}
 
+    /// Resolve the gateless shared-column read
+    /// `Project(Reference(enum_field), [step])` to its column, with no gate.
+    /// See [`app::EmbeddedEnum::shared_read_at_step`] for the encoding.
+    /// Returns `None` for everything else, which the generic path handles.
+    fn lower_shared_column_project(&self, project: &stmt::ExprProject) -> Option<stmt::Expr> {
+        // Shared reads address stored rows (filters, `order_by`, returning
+        // clauses, upsert assignments). In an `InsertRow` the same
+        // `Project(Reference(..))` shape addresses the proposed row value,
+        // not a table column, so leave it for the generic path.
+        if !self.cx.reads_stored_row() {
+            return None;
+        }
+
+        let stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index }) =
+            project.base.as_ref()
+        else {
+            return None;
+        };
+        let [step] = project.projection.as_slice() else {
+            return None;
+        };
+
+        let mapping = self.mapping_at_unwrap(*nesting);
+        let field_mapping = mapping.fields.get(*index)?;
+        let field_enum = field_mapping.as_enum()?;
+
+        let parent_field = self.field(app::FieldId {
+            model: mapping.id,
+            index: *index,
+        });
+        let app::FieldTy::Embedded(embedded) = &parent_field.ty else {
+            return None;
+        };
+        let app::Model::EmbeddedEnum(enum_model) = self.schema().app.model(embedded.target) else {
+            return None;
+        };
+        let (shared_index, _) = enum_model.shared_read_at_step(*step)?;
+        let (variant_index, local_index) = enum_model.variant_local_index(shared_index)?;
+
+        let prim = field_enum
+            .variants
+            .get(variant_index)?
+            .fields
+            .get(local_index)?
+            .as_primitive()?;
+
+        let mut expr = prim.column_expr.clone();
+        if *nesting > 0 {
+            let n = *nesting;
+            stmt::visit_mut::for_each_expr_mut(&mut expr, |e| {
+                if let stmt::Expr::Reference(stmt::ExprReference::Column(col)) = e {
+                    col.nesting = n;
+                }
+            });
+        }
+        Some(expr)
+    }
+
     fn lower_expr_field(&self, nesting: usize, index: usize) -> stmt::Expr {
-        match self.cx {
-            LoweringContext::Statement
-            | LoweringContext::Returning(_)
-            | LoweringContext::Insert(..) => {
-                // Upsert update assignments are visited in the surrounding
-                // Insert context. Their field references read the stored row;
-                // proposed-row values use Expr::Incoming instead. Inserted
-                // value rows use the separate InsertRow branch below.
+        if self.cx.reads_stored_row() {
+            // Upsert update assignments are visited in the surrounding
+            // Insert context. Their field references read the stored row;
+            // proposed-row values use Expr::Incoming instead.
+            let mapping = self.mapping_at_unwrap(nesting);
+            mapping.table_to_model.lower_expr_reference(nesting, index)
+        } else {
+            // Inserted value rows read the proposed row value instead.
+            let LoweringContext::InsertRow(row) = self.cx else {
+                unreachable!("InsertRow is the only context that does not read the stored row")
+            };
+            // If nesting > 0, this references a parent scope, not the current row
+            if nesting > 0 {
+                // Use Statement context to properly handle cross-statement references
                 let mapping = self.mapping_at_unwrap(nesting);
                 mapping.table_to_model.lower_expr_reference(nesting, index)
-            }
-            LoweringContext::InsertRow(row) => {
-                // If nesting > 0, this references a parent scope, not the current row
-                if nesting > 0 {
-                    // Use Statement context to properly handle cross-statement references
-                    let mapping = self.mapping_at_unwrap(nesting);
-                    mapping.table_to_model.lower_expr_reference(nesting, index)
-                } else {
-                    row.entry(index).unwrap().to_expr()
-                }
+            } else {
+                row.entry(index).unwrap().to_expr()
             }
         }
     }
@@ -2139,6 +2205,18 @@ impl LoweringContext<'_> {
 
     fn is_statement(&self) -> bool {
         matches!(self, LoweringContext::Statement)
+    }
+
+    /// Field references in these contexts read the stored row: query
+    /// filters, returning clauses, and upsert update assignments. `InsertRow`
+    /// reads the proposed row values instead.
+    fn reads_stored_row(&self) -> bool {
+        matches!(
+            self,
+            LoweringContext::Statement
+                | LoweringContext::Returning(_)
+                | LoweringContext::Insert(..)
+        )
     }
 }
 

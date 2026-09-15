@@ -542,6 +542,15 @@ impl<'a> VerifyExpr<'a, '_> {
             PathTarget::Document => return Some(PathTarget::Document),
             PathTarget::Field(field) => match &field.ty {
                 FieldTy::Embedded(embedded) => {
+                    // Gateless shared-column read: a step at or above
+                    // `shared_step_base` addresses the shared field directly,
+                    // with no variant selection. See
+                    // `EmbeddedEnum::shared_read_at_step`.
+                    if let app::Model::EmbeddedEnum(e) = self.schema.app.model(embedded.target)
+                        && let Some((_, shared)) = e.shared_read_at_step(step)
+                    {
+                        return Some(PathTarget::Field(shared));
+                    }
                     EmbedTarget::embed(&self.schema.app, embedded.target)?.field_at(step)
                 }
                 FieldTy::BelongsTo(_) | FieldTy::Has(_) | FieldTy::Via(_) => {
