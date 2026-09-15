@@ -1107,6 +1107,47 @@ pub async fn struct_embed_temporal_create_get(t: &mut Test) -> Result<(), BoxErr
     Ok(())
 }
 
+/// A `TimeZone` leaf in a `#[document]` round-trips and filters by equality.
+/// Unlike `Zoned` it needs no cast back to a temporal type — no backend has a
+/// time zone type, so the leaf is text on both sides.
+#[driver_test(requires(document_collections))]
+pub async fn struct_embed_time_zone(t: &mut Test) -> Result<(), BoxError> {
+    use jiff::tz::TimeZone;
+
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct Profile {
+        name: String,
+        time_zone: TimeZone,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Account {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        #[document]
+        profile: Profile,
+    }
+
+    let mut db = t.setup_db(models!(Account)).await;
+
+    toasty::create!(Account::[
+        { profile: Profile { name: "ada".into(), time_zone: TimeZone::get("Europe/Amsterdam")? } },
+        { profile: Profile { name: "kenji".into(), time_zone: TimeZone::get("Asia/Tokyo")? } },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let tokyo = TimeZone::get("Asia/Tokyo")?;
+    let found = Account::filter(Account::fields().profile().time_zone().eq(&tokyo))
+        .exec(&mut db)
+        .await?;
+    assert_struct!(found, [{ profile: Profile { name: "kenji", time_zone: == tokyo } }]);
+
+    Ok(())
+}
+
 /// A `Zoned` leaf in a `#[document]` is rejected at schema-build: jiff renders
 /// it with an RFC 9557 `[IANA]` annotation that no SQL backend can parse back,
 /// and dropping the annotation would lose the zone identity the type carries.

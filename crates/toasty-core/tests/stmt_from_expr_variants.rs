@@ -175,11 +175,13 @@ fn from_expr_not_for_expr() {
 fn from_expr_is_null_for_expr() {
     let is_null = ExprIsNull {
         expr: Box::new(Expr::Value(Value::Null)),
+        negated: false,
     };
     assert_eq!(
         Expr::from(is_null),
         Expr::IsNull(ExprIsNull {
             expr: Box::new(Expr::Value(Value::Null)),
+            negated: false,
         })
     );
 }

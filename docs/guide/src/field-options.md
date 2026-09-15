@@ -335,9 +335,11 @@ fields:
 | Rust type | Description |
 |---|---|
 | `jiff::Timestamp` | An instant in time (UTC) |
+| `jiff::Zoned` | An instant in time together with its time zone |
 | `jiff::civil::Date` | A date without time |
 | `jiff::civil::Time` | A time of day without date |
 | `jiff::civil::DateTime` | A date and time without timezone |
+| `jiff::tz::TimeZone` | A time zone on its own, not a point in time |
 
 You can control the storage precision with `#[column(type = ...)]`:
 

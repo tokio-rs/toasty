@@ -614,7 +614,7 @@ impl BuildMapping<'_> {
             .zip(mapping.variants.iter_mut())
             .enumerate()
         {
-            let variant_fields: Vec<&app::Field> = model.variant_fields(variant_index).collect();
+            let variant_fields = model.variant_fields(variant_index);
             let arm_expr = if variant_fields.is_empty() {
                 disc_col_ref.clone()
             } else {
@@ -683,7 +683,7 @@ impl BuildMapping<'_> {
         for (variant_index, (variant, mapping)) in
             model.variants.iter().zip(&mapping.variants).enumerate()
         {
-            let variant_fields: Vec<_> = model.variant_fields(variant_index).collect();
+            let variant_fields = model.variant_fields(variant_index);
             let arm_expr = if variant_fields.is_empty() {
                 disc_col_ref.clone()
             } else {
@@ -725,7 +725,7 @@ impl BuildMapping<'_> {
             return stmt::Expr::null();
         }
         let max_fields = (0..model.variants.len())
-            .map(|i| model.variant_fields(i).count())
+            .map(|i| model.variant_fields(i).len())
             .max()
             .unwrap_or(0);
         if max_fields == 0 {
@@ -1208,6 +1208,7 @@ impl<'a, 'b> MapField<'a, 'b> {
 
                 let fields: Vec<mapping::Field> = embedded_enum
                     .variant_fields(variant_index)
+                    .iter()
                     .enumerate()
                     .map(|(index, field)| {
                         // Variant fields are stored at positions 1.. in the Record

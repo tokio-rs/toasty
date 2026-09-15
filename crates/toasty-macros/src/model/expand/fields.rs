@@ -51,12 +51,14 @@ impl Expand<'_> {
                 let field_ident = &field.name.ident;
                 let field_offset = util::int(offset);
 
-                // Relation fields in embedded types have no filter path yet;
-                // only their key fields are queryable. The offset comes from
-                // the enumeration above, so skipping does not shift later
-                // fields.
+                // `belongs_to` is the only relation kind allowed in embedded
+                // types; its accessor below works for embeds because it
+                // chains off `self.path()` (which may itself be
+                // embed-rooted). Anything else has no filter path. The
+                // offset comes from the enumeration above, so skipping does
+                // not shift later fields.
                 if !matches!(self.model.kind, ModelKind::Root(_))
-                    && !matches!(&field.ty, Primitive(_))
+                    && !matches!(&field.ty, Primitive(_) | BelongsTo(_))
                 {
                     return TokenStream::new();
                 }
@@ -82,6 +84,7 @@ impl Expand<'_> {
                             quote!(#toasty::RelationOneField),
                             &rel.ty,
                             &field_offset,
+                            &quote!(self.path.clone()),
                         )
                     }
                     HasOne(rel) => {
@@ -90,6 +93,7 @@ impl Expand<'_> {
                             quote!(#toasty::RelationOneField),
                             &rel.ty,
                             &field_offset,
+                            &quote!(self.path.clone()),
                         )
                     }
                     HasMany(rel) => {

@@ -394,7 +394,8 @@ impl_scalar!(
     jiff::Zoned,
     jiff::civil::Date,
     jiff::civil::Time,
-    jiff::civil::DateTime
+    jiff::civil::DateTime,
+    jiff::tz::TimeZone
 );
 
 #[cfg(feature = "net")]
