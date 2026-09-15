@@ -22,8 +22,8 @@
 //!   Profile.user_id IN (SELECT User.id FROM User WHERE User.name = 'alice')
 //!   ```
 //!
-//!   Predicates on the same `belongs_to` within one conjunction lift into a
-//!   single subquery ([`LiftInSubquery::lift_relation_path_conjunction`]).
+//!   Simplification combines compatible subqueries after this pass, before
+//!   lowering extracts subqueries into separate statements.
 //!
 //! The relation a path walks may be a field of the model or a `belongs_to`
 //! inside one of its embedded types (`v.human.name = 'alice'`, where
@@ -79,67 +79,6 @@ impl<'a> LiftInSubquery<'a> {
         }
     }
 
-    /// Lift the operands of a conjunction that are predicates on the same
-    /// `belongs_to` into one foreign-key subquery whose filter conjoins
-    /// them: `k IN (SELECT id FROM m WHERE a AND b)` rather than
-    /// `k IN (SELECT id FROM m WHERE a) AND k IN (SELECT id FROM m WHERE b)`.
-    ///
-    /// A predicate through a relation routinely arrives as such a pair:
-    /// normalization fixes a variant guard next to the predicate it scopes
-    /// (`link.item.state IS Selected AND link.item.state.selected.value = x`).
-    /// Lifted one at a time they become two subqueries on the same key,
-    /// which the DynamoDB planner rejects — a key query takes one
-    /// sub-statement input.
-    ///
-    /// The fold holds for a `belongs_to` because its subquery returns the
-    /// target's primary key, which identifies one row: `k` matches both
-    /// subqueries exactly when that row satisfies both filters. It does not
-    /// hold for a `has_*` relation, whose subquery returns the children's
-    /// foreign key: `a AND b` on one child differs from `a` on one child and
-    /// `b` on another. Those operands lift on their own.
-    fn lift_relation_path_conjunction(&self, operands: &mut Vec<stmt::Expr>) {
-        let mut i = 0;
-
-        while i < operands.len() {
-            let Some((path, filter)) = resolve_relation_predicate(&self.cx, &operands[i]) else {
-                i += 1;
-                continue;
-            };
-            if !path.relation.is_belongs_to() {
-                i += 1;
-                continue;
-            }
-
-            // The other operands on the same relation, and their filters.
-            let mut merged = vec![];
-            let mut filters = vec![filter];
-            for (j, operand) in operands.iter().enumerate().skip(i + 1) {
-                if let Some((other, filter)) = resolve_relation_predicate(&self.cx, operand)
-                    && other.relation.same_as(&path.relation)
-                {
-                    merged.push(j);
-                    filters.push(filter);
-                }
-            }
-
-            if !merged.is_empty()
-                && let Some(mut lifted) = lift_relation_predicate(
-                    &self.cx,
-                    &path,
-                    stmt::ExprAnd { operands: filters }.into(),
-                )
-            {
-                self.exclude_nulls(&mut lifted);
-                operands[i] = lifted;
-                for j in merged.into_iter().rev() {
-                    operands.remove(j);
-                }
-            }
-
-            i += 1;
-        }
-    }
-
     fn exclude_nulls(&self, expr: &mut stmt::Expr) {
         if !self.exclude_nulls {
             return;
@@ -177,10 +116,6 @@ impl VisitMut for LiftInSubquery<'_> {
             // negation outside.
             stmt::Expr::InSubquery(e) if !e.negated => {
                 lift_in_subquery(&self.cx, &e.expr, &e.query)
-            }
-            stmt::Expr::And(e) => {
-                self.lift_relation_path_conjunction(&mut e.operands);
-                None
             }
             stmt::Expr::BinaryOp(_) | stmt::Expr::Like(_) | stmt::Expr::IsVariant(_) => {
                 try_lift_relation_path_predicate(&self.cx, expr)
@@ -308,36 +243,6 @@ enum Relation<'a> {
         belongs_to: &'a BelongsTo,
         key_expr: Expr,
     },
-}
-
-impl Relation<'_> {
-    /// Whether the relation is a `belongs_to`, whose foreign-key subquery
-    /// returns the target's primary key.
-    fn is_belongs_to(&self) -> bool {
-        match self {
-            Relation::Field(field) => matches!(field.ty, FieldTy::BelongsTo(_)),
-            Relation::Embedded { .. } => true,
-        }
-    }
-
-    /// Whether `self` and `other` name the same relation reached the same
-    /// way, so that predicates on both lift through one foreign key.
-    fn same_as(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Relation::Field(a), Relation::Field(b)) => a.id == b.id,
-            (
-                Relation::Embedded {
-                    belongs_to: a,
-                    key_expr: a_key,
-                },
-                Relation::Embedded {
-                    belongs_to: b,
-                    key_expr: b_key,
-                },
-            ) => std::ptr::eq(*a, *b) && a_key == b_key,
-            _ => false,
-        }
-    }
 }
 
 fn resolve_relation_path<'a>(cx: &ExprContext<'a>, expr: &Expr) -> Option<RelationPath<'a>> {

@@ -11,6 +11,7 @@ mod expr_list;
 mod expr_map;
 mod expr_or;
 mod expr_project;
+mod merge_in_subqueries;
 mod stmt_query;
 
 use toasty_core::{
@@ -34,6 +35,8 @@ pub(crate) struct Simplify<'a> {
     cx: stmt::ExprContext<'a>,
     /// Driver capabilities, consulted by passes that emit driver-specific shapes.
     capability: &'a Capability,
+    /// Only whether the expression is true matters in a positive filter.
+    positive_filter: bool,
 }
 
 impl Engine {
@@ -49,13 +52,18 @@ pub(crate) fn simplify_expr(
     capability: &Capability,
     expr: &mut stmt::Expr,
 ) {
-    Simplify { cx, capability }.visit_expr_mut(expr);
+    Simplify::with_context(cx, capability).visit_expr_mut(expr);
 }
 
 impl VisitMut for Simplify<'_> {
     fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
-        // Recurse into children first.
+        // Only AND/OR propagate positive filtering to their operands. Under
+        // NOT, IS NULL, or a returned expression, false and null must remain
+        // distinguishable. Nested statement filters establish their own context.
+        let positive_filter = self.positive_filter;
+        self.positive_filter &= matches!(i, Expr::And(_) | Expr::Or(_));
         stmt::visit_mut::visit_expr_mut(self, i);
+        self.positive_filter = positive_filter;
 
         // Fold this node bottom-up so heavyweight rules see canonical input.
         // Children are already canonical (post-order recursion), so this is
@@ -88,6 +96,12 @@ impl VisitMut for Simplify<'_> {
             fold::fold_stmt(&mut expr);
             *i = expr;
         }
+    }
+
+    fn visit_filter_mut(&mut self, filter: &mut stmt::Filter) {
+        let previous = std::mem::replace(&mut self.positive_filter, true);
+        stmt::visit_mut::visit_filter_mut(self, filter);
+        self.positive_filter = previous;
     }
 
     fn visit_expr_match_mut(&mut self, i: &mut stmt::ExprMatch) {
@@ -257,7 +271,11 @@ impl<'a> Simplify<'a> {
     }
 
     pub(crate) fn with_context(cx: stmt::ExprContext<'a>, capability: &'a Capability) -> Self {
-        Simplify { cx, capability }
+        Simplify {
+            cx,
+            capability,
+            positive_filter: false,
+        }
     }
 
     /// Return a new `Simplify` instance that operates on a nested scope
@@ -269,6 +287,7 @@ impl<'a> Simplify<'a> {
         Simplify {
             cx: self.cx.scope(target),
             capability: self.capability,
+            positive_filter: false,
         }
     }
 
