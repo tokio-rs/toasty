@@ -128,7 +128,7 @@ pub trait Driver: Debug + Send + Sync + 'static {
     fn url(&self) -> Cow<'_, str>;
 
     /// Describes the driver's capability, which informs the query planner.
-    fn capability(&self) -> &'static Capability;
+    fn capability(&self) -> &Capability;
 
     /// Creates a new connection to the database.
     ///

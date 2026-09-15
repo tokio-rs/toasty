@@ -1,15 +1,27 @@
-#![cfg(feature = "mysql")]
+#![cfg(feature = "mariadb")]
+
+//! Driver integration suite against MariaDB.
+//!
+//! Separate from `mysql.rs`: `generate_driver_tests!` fixes the expected
+//! capability flags at compile time, and MariaDB's differ. Both use the same
+//! `MySQL` driver, so `TOASTY_TEST_MARIADB_URL` must point at MariaDB 10.5
+//! or later — pointing it at MySQL fails capability validation.
 
 use sqlx_core::sql_str::AssertSqlSafe;
 use sqlx_mysql::{MySqlConnectOptions, MySqlPool};
 use toasty_driver_mysql::MySQL;
 use tokio::sync::OnceCell;
 
-struct MySqlSetup {
+fn url() -> String {
+    std::env::var("TOASTY_TEST_MARIADB_URL")
+        .unwrap_or_else(|_| "mariadb://toasty:toasty@localhost:3307/toasty".to_string())
+}
+
+struct MariaDbSetup {
     pool: OnceCell<MySqlPool>,
 }
 
-impl MySqlSetup {
+impl MariaDbSetup {
     fn new() -> Self {
         Self {
             pool: OnceCell::new(),
@@ -19,28 +31,24 @@ impl MySqlSetup {
     async fn get_pool(&self) -> &MySqlPool {
         self.pool
             .get_or_init(|| async {
-                let url = std::env::var("TOASTY_TEST_MYSQL_URL")
-                    .unwrap_or_else(|_| "mysql://toasty:toasty@localhost/toasty".to_string());
-                let options = url
+                let options = url()
                     .parse::<MySqlConnectOptions>()
-                    .expect("Failed to parse MySQL test URL");
+                    .expect("Failed to parse MariaDB test URL");
                 MySqlPool::connect_with(options)
                     .await
-                    .expect("Failed to connect to MySQL")
+                    .expect("Failed to connect to MariaDB")
             })
             .await
     }
 }
 
 #[async_trait::async_trait]
-impl toasty_driver_integration_suite::Setup for MySqlSetup {
+impl toasty_driver_integration_suite::Setup for MariaDbSetup {
     async fn driver(&self) -> Box<dyn toasty_core::driver::Driver> {
-        let url = std::env::var("TOASTY_TEST_MYSQL_URL")
-            .unwrap_or_else(|_| "mysql://toasty:toasty@localhost/toasty".to_string());
         Box::new(
-            MySQL::new(url.as_str())
+            MySQL::new(url())
                 .await
-                .expect("Failed to create MySQL driver"),
+                .expect("Failed to create MariaDB driver"),
         )
     }
 
@@ -54,8 +62,8 @@ impl toasty_driver_integration_suite::Setup for MySqlSetup {
     }
 }
 
-// Generate all driver tests
-toasty_driver_integration_suite::generate_driver_tests!(MySqlSetup::new(),
+// Flags match `mysql.rs` except `returning_from_insert`.
+toasty_driver_integration_suite::generate_driver_tests!(MariaDbSetup::new(),
     cte_unreferenced: false,
     decimal_arbitrary_precision: false,
     native_ilike: false,
@@ -72,7 +80,7 @@ toasty_driver_integration_suite::generate_driver_tests!(MySqlSetup::new(),
     vec_scalar: true,
     unique_list_index: false,
     document_collections: true,
-    returning_from_insert: false,
+    returning_from_insert: true,
     returning_from_update: false,
     vec_remove: false,
     vec_pop: false,

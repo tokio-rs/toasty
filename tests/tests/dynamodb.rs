@@ -53,7 +53,7 @@ impl DynamoDbSetup {
 
 #[async_trait::async_trait]
 impl toasty_driver_integration_suite::Setup for DynamoDbSetup {
-    fn driver(&self) -> Box<dyn toasty_core::driver::Driver> {
+    async fn driver(&self) -> Box<dyn toasty_core::driver::Driver> {
         let client = self.get_client();
         Box::new(DynamoDb::new("dynamodb://".to_string(), client.clone()))
     }
@@ -69,7 +69,8 @@ impl toasty_driver_integration_suite::Setup for DynamoDbSetup {
 // Generate all driver tests (DynamoDB doesn't support auto_increment, bigdecimal, or decimal)
 toasty_driver_integration_suite::generate_driver_tests!(DynamoDbSetup::new(),
     sql: false,
-    returning_from_mutation: false,
+    returning_from_insert: false,
+    returning_from_update: false,
     auto_increment: false,
     bigdecimal_implemented: false,
     decimal_arbitrary_precision: false,

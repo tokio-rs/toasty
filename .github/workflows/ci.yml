@@ -195,6 +195,35 @@ jobs:
       - name: cargo run example against MySQL
         run: cargo run -p example-quickstart-blog --features mysql
 
+  test-mariadb:
+    needs: check
+    name: Run tests for MariaDB
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:12.3
+        env:
+          MARIADB_ROOT_PASSWORD: toasty
+          MARIADB_USER: toasty
+          MARIADB_PASSWORD: toasty
+          MARIADB_DATABASE: toasty
+        ports:
+          - 3307:3306
+        options: --health-cmd "healthcheck.sh --connect --innodb_initialized" --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      TOASTY_CONNECTION_URL: mariadb://toasty:toasty@localhost:3307/toasty
+      TOASTY_TEST_MARIADB_URL: mariadb://toasty:toasty@localhost:3307/toasty
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: cargo test
+        run: cargo test --no-default-features --features mariadb
+
   test-postgresql:
     needs: check
     name: Run tests for PostgreSQL

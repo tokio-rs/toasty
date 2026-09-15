@@ -19,10 +19,10 @@ use crate::{schema::db, stmt};
 ///
 /// let cap = &Capability::SQLITE;
 /// assert!(cap.sql());
-/// assert!(cap.returning_from_mutation);
+/// assert!(cap.returning_from_insert);
 /// assert!(!cap.select_for_update);
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Capability {
     /// Human-readable driver name used in diagnostics.
     pub driver_name: &'static str,
@@ -58,8 +58,18 @@ pub struct Capability {
     /// to serializable transaction-level isolation.
     pub select_for_update: bool,
 
-    /// SQL: Mysql doesn't support returning clauses from insert / update queries
-    pub returning_from_mutation: bool,
+    /// SQL: whether the backend accepts `RETURNING` on `INSERT`. When
+    /// `false`, the planner falls back to the backend's last-insert-id,
+    /// which reports a single column of a single row.
+    ///
+    /// Separate from `returning_from_update`: MariaDB has one and not the
+    /// other.
+    pub returning_from_insert: bool,
+
+    /// SQL: whether the backend accepts `RETURNING` on `UPDATE`. When
+    /// `false`, the engine rewrites it as `UPDATE` then `SELECT`, which is
+    /// not atomic relative to concurrent writers.
+    pub returning_from_update: bool,
 
     /// Whether an upsert may target the table's primary key.
     ///
@@ -408,7 +418,7 @@ pub struct Capability {
 /// // PostgreSQL stores UUIDs natively
 /// assert!(matches!(st.default_uuid_type, toasty_core::schema::db::Type::Uuid));
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StorageTypes {
     /// The default storage type for a string.
     pub default_string_type: db::Type,
@@ -488,7 +498,7 @@ pub struct StorageTypes {
 /// assert!(cap.schema_mutations.alter_column_type);
 /// assert!(!cap.schema_mutations.alter_column_properties_atomic);
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SchemaMutations {
     /// Whether the database can change the type of an existing column.
     pub alter_column_type: bool,
@@ -655,7 +665,8 @@ impl Capability {
         schema_mutations: SchemaMutations::SQLITE,
         cte_with_update: false,
         select_for_update: false,
-        returning_from_mutation: true,
+        returning_from_insert: true,
+        returning_from_update: true,
         upsert_primary_key: true,
         upsert_unique: true,
         upsert_branch_assignments: true,
@@ -826,7 +837,8 @@ impl Capability {
         storage_types: StorageTypes::MYSQL,
         schema_mutations: SchemaMutations::MYSQL,
         select_for_update: true,
-        returning_from_mutation: false,
+        returning_from_insert: false,
+        returning_from_update: false,
         upsert_primary_key: false,
         upsert_unique: false,
         upsert_branch_assignments: false,
@@ -873,6 +885,25 @@ impl Capability {
         ..Self::SQLITE
     };
 
+    /// MariaDB capabilities.
+    ///
+    /// MariaDB speaks MySQL's SQL, so this starts from [`MYSQL`](Self::MYSQL)
+    /// and differs only where MariaDB accepts more.
+    ///
+    /// One set covers every MariaDB, deliberately not gated on the server
+    /// version. It needs MariaDB 10.7 for the `UUID` type; `INSERT ...
+    /// RETURNING` arrived in 10.5.
+    pub const MARIADB: Self = Self {
+        driver_name: "MariaDB",
+        sql: Some(Dialect::MariaDb),
+        storage_types: StorageTypes::MARIADB,
+
+        // 10.5+. The UPDATE form is still missing upstream (MDEV-5092).
+        returning_from_insert: true,
+
+        ..Self::MYSQL
+    };
+
     /// Turso capabilities.
     ///
     /// Identical to [`SQLITE`](Self::SQLITE) at the flag level. The driver
@@ -903,7 +934,8 @@ impl Capability {
         schema_mutations: SchemaMutations::DYNAMODB,
         cte_with_update: false,
         select_for_update: false,
-        returning_from_mutation: false,
+        returning_from_insert: false,
+        returning_from_update: false,
         upsert_primary_key: true,
         upsert_unique: false,
         upsert_branch_assignments: false,
@@ -1111,6 +1143,20 @@ impl StorageTypes {
 
         // MySQL supports full u64 range via BIGINT UNSIGNED
         max_unsigned_integer: None,
+    };
+
+    /// MariaDB storage types.
+    ///
+    /// [`MYSQL`](Self::MYSQL) with a native `UUID` type (10.7+): 16 bytes
+    /// compared as an integer, against 36 bytes of collated text.
+    ///
+    /// MariaDB rejects a UUID whose version is 8 or higher *and* whose
+    /// variant bits are the legacy NCS form, which the SQL standard calls
+    /// invalid. Every RFC 4122/9562 generator sets the variant to `10xx`, so
+    /// no real UUID lands in that hole.
+    pub const MARIADB: StorageTypes = StorageTypes {
+        default_uuid_type: db::Type::Uuid,
+        ..StorageTypes::MYSQL
     };
 
     /// DynamoDB storage types.

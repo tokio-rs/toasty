@@ -20,7 +20,7 @@ impl Driver for PostgresSchemaDriver {
         "postgresql://test".into()
     }
 
-    fn capability(&self) -> &'static Capability {
+    fn capability(&self) -> &Capability {
         &Capability::POSTGRESQL
     }
 

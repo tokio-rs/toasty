@@ -13,7 +13,7 @@ impl TursoSetup {
 
 #[async_trait::async_trait]
 impl toasty_driver_integration_suite::Setup for TursoSetup {
-    fn driver(&self) -> Box<dyn toasty_core::driver::Driver> {
+    async fn driver(&self) -> Box<dyn toasty_core::driver::Driver> {
         Box::new(toasty_driver_turso::Turso::in_memory())
     }
 

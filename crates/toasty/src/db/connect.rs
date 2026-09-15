@@ -31,9 +31,12 @@ impl Connect {
     /// |---|---|---|
     /// | `sqlite` | SQLite | `sqlite` |
     /// | `postgresql` / `postgres` | PostgreSQL | `postgresql` |
-    /// | `mysql` | MySQL | `mysql` |
+    /// | `mysql` / `mariadb` | MySQL and MariaDB | `mysql` |
     /// | `dynamodb` | DynamoDB | `dynamodb` |
     /// | `turso` | Turso | `turso` |
+    ///
+    /// `mysql` and `mariadb` are interchangeable. The driver identifies the
+    /// server it connects to; the scheme you write does not change that.
     ///
     /// # Errors
     ///
@@ -70,10 +73,12 @@ impl Connect {
                 ));
             }
 
+            // `mariadb` is an alias; the driver identifies the server
+            // rather than trusting the scheme.
             #[cfg(feature = "mysql")]
-            "mysql" => Box::new(toasty_driver_mysql::MySQL::new(url.as_str())?),
+            "mysql" | "mariadb" => Box::new(toasty_driver_mysql::MySQL::new(url.as_str()).await?),
             #[cfg(not(feature = "mysql"))]
-            "mysql" => {
+            "mysql" | "mariadb" => {
                 return Err(toasty_core::Error::unsupported_feature(
                     "`mysql` feature not enabled",
                 ));
@@ -125,7 +130,7 @@ impl Driver for Connect {
         self.driver.url()
     }
 
-    fn capability(&self) -> &'static Capability {
+    fn capability(&self) -> &Capability {
         self.driver.capability()
     }
 

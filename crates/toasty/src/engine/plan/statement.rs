@@ -966,7 +966,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // Insert operation without a SQL RETURNING clause.
         if const_returning.is_none() && !self.load_data.select_items.is_empty() {
             if self.planner.engine.capability().sql.is_some()
-                && !self.planner.engine.capability().returning_from_mutation
+                && !self.planner.engine.capability().returning_from_insert
             {
                 self.verify_insert_returning_without_capability(&stmt)?;
                 ty = Some(

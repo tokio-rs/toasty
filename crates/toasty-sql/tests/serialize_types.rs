@@ -68,6 +68,7 @@ fn serialize_migration(stmts: &[MigrationStatement<'_>], flavor: &str) -> Vec<St
                 "sqlite" => Serializer::sqlite(ms.schema()),
                 "postgresql" => Serializer::postgresql(ms.schema()),
                 "mysql" => Serializer::mysql(ms.schema()),
+                "mariadb" => Serializer::mariadb(ms.schema()),
                 _ => panic!("unknown flavor: {flavor}"),
             };
             serializer.serialize(ms.statement())
@@ -80,6 +81,7 @@ fn capability_for(flavor: &str) -> &'static Capability {
         "sqlite" => &Capability::SQLITE,
         "postgresql" => &Capability::POSTGRESQL,
         "mysql" => &Capability::MYSQL,
+        "mariadb" => &Capability::MARIADB,
         _ => panic!("unknown flavor: {flavor}"),
     }
 }
@@ -530,6 +532,18 @@ fn uuid_postgresql() {
 #[should_panic(expected = "Unsupported type UUID")]
 fn uuid_mysql_panics() {
     render_type("mysql", Type::Uuid);
+}
+
+/// MariaDB has a native UUID type (10.7+); MySQL does not.
+#[test]
+fn uuid_mariadb_renders_native_type() {
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` UUID NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mariadb", Type::Uuid).join("\n"));
 }
 
 #[test]
