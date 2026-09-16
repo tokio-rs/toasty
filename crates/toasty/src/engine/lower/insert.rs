@@ -146,7 +146,7 @@ impl LowerStatement<'_, '_> {
                 preserve_returning_projection,
             );
         }
-        self.process_insert_embedded_relations(record);
+        self.process_top_level_includes(record, &[]);
     }
 
     /// Return the model record for one row of an INSERT's returning value.

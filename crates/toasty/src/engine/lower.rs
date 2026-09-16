@@ -1151,7 +1151,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             let is_insert = self.cx.is_insert();
 
             self.prepare_model_returning_for_context(&mut returning, &mut include_paths, is_insert);
-            self.process_top_level_includes(&mut returning, &include_paths, is_insert);
+            self.process_top_level_includes(returning.as_record_mut_unwrap(), &include_paths);
 
             *i = stmt::Returning::Project(returning);
         }
@@ -2245,12 +2245,16 @@ fn variant_payload(lowered: stmt::Expr, disc_value: &stmt::Value) -> stmt::Expr 
 
 pub(super) fn key_field_refs(
     nesting: usize,
-    mut fields: impl ExactSizeIterator<Item = app::FieldId>,
+    fields: impl ExactSizeIterator<Item = app::FieldId>,
 ) -> stmt::Expr {
+    scalar_or_record(fields.map(|field| stmt::Expr::ref_field(nesting, field)))
+}
+
+fn scalar_or_record(mut fields: impl ExactSizeIterator<Item = stmt::Expr>) -> stmt::Expr {
     if fields.len() == 1 {
-        stmt::Expr::ref_field(nesting, fields.next().unwrap())
+        fields.next().unwrap()
     } else {
-        stmt::Expr::record(fields.map(|field| stmt::Expr::ref_field(nesting, field)))
+        stmt::Expr::record(fields)
     }
 }
 

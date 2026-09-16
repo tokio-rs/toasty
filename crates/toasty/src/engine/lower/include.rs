@@ -54,7 +54,6 @@ struct IncludeQuery {
 #[derive(Clone, Copy)]
 struct IncludeScope<'a> {
     path: &'a stmt::Path,
-    is_insert: bool,
     /// A containing embed was included, activating its relation fields.
     include_relations: bool,
 }
@@ -91,7 +90,6 @@ impl LowerStatement<'_, '_> {
                     &[],
                     IncludeScope {
                         path: &path,
-                        is_insert: false,
                         include_relations: false,
                     },
                 );
@@ -147,14 +145,14 @@ impl LowerStatement<'_, '_> {
                         .foreign_key
                         .fields
                         .iter()
-                        .any(|fk| indices.iter().any(|i| i == fk.source.index))
+                        .any(|fk| indices.contains(fk.source.index))
                 {
                     continue;
                 }
                 let load =
                     self.build_relation_subquery_inner(field, host, &[], IncludeQuery::default());
                 let position = indices.iter().take_while(|i| *i < index).count();
-                if indices.iter().any(|i| i == index) {
+                if indices.contains(index) {
                     record.fields[position] = load;
                 } else {
                     indices.insert(index);
@@ -189,7 +187,6 @@ impl LowerStatement<'_, '_> {
                     &[],
                     IncludeScope {
                         path: &path,
-                        is_insert: false,
                         include_relations: false,
                     },
                 );
@@ -197,38 +194,15 @@ impl LowerStatement<'_, '_> {
         }
     }
 
-    pub(super) fn process_insert_embedded_relations(&mut self, record: &mut stmt::ExprRecord) {
-        let model = self.model_unwrap();
-        let mapping = self.mapping_unwrap();
-        self.process_fields(
-            &mut record.fields,
-            &model.fields,
-            &mapping.fields,
-            &[],
-            IncludeScope {
-                path: &stmt::Path::model(model.id),
-                is_insert: true,
-                include_relations: false,
-            },
-        );
-    }
-
-    fn embedded_relations_ready(&self, is_insert: bool) -> bool {
-        !is_insert || matches!(self.cx, LoweringContext::Insert(_, Some(_)))
-    }
-    /// Top-level entry from `visit_returning_mut` for a `Returning::Model`.
+    /// Process a model's returning record, including per-row insert results.
     /// Flattens each include to its projection (folding any
     /// `PathRoot::Variant` chain into discriminant-index steps), then runs
     /// the recursion against the model's fields.
     pub(super) fn process_top_level_includes(
         &mut self,
-        returning: &mut stmt::Expr,
+        record: &mut stmt::ExprRecord,
         includes: &[stmt::Include],
-        is_insert: bool,
     ) {
-        let stmt::Expr::Record(record) = returning else {
-            return;
-        };
         let flat: Vec<FlatInclude> = includes.iter().map(flatten_include).collect();
         let app_fields = &self.model_unwrap().fields;
         let mapping_fields = &self.mapping_unwrap().fields;
@@ -239,7 +213,6 @@ impl LowerStatement<'_, '_> {
             &flat,
             IncludeScope {
                 path: &stmt::Path::model(self.model_unwrap().id),
-                is_insert,
                 include_relations: false,
             },
         );
@@ -261,14 +234,13 @@ impl LowerStatement<'_, '_> {
     ) {
         let IncludeScope {
             path: host,
-            is_insert,
             include_relations,
         } = scope;
         for (i, (field, mapping)) in app_fields.iter().zip(mapping_fields).enumerate() {
             let field_includes = partition_includes(includes, i);
 
             if field.ty.is_relation() {
-                if self.embedded_relations_ready(is_insert)
+                if !matches!(self.cx, LoweringContext::Insert(_, None))
                     && (field_includes.self_included()
                         || include_relations
                         || (!field.deferred
@@ -322,13 +294,8 @@ impl LowerStatement<'_, '_> {
         matches: &FieldIncludes,
         scope: IncludeScope<'_>,
     ) {
-        let IncludeScope {
-            is_insert,
-            include_relations,
-            ..
-        } = scope;
         if field.deferred {
-            if !is_insert && !matches.self_included() {
+            if !self.cx.is_insert() && !matches.self_included() {
                 return;
             }
             if !matches!(self.cx, LoweringContext::Insert(_, Some(_))) {
@@ -351,7 +318,7 @@ impl LowerStatement<'_, '_> {
                 mapping,
                 &matches.sub_paths,
                 IncludeScope {
-                    include_relations: include_relations || matches.include_self,
+                    include_relations: scope.include_relations || matches.include_self,
                     ..scope
                 },
             );
@@ -410,8 +377,8 @@ impl LowerStatement<'_, '_> {
     /// have already had the parent field index stripped off — within them,
     /// the leading step is a variant index and the next is a local variant
     /// field index. We partition by variant index per arm and then by local
-    /// field index per variant field. `is_insert` independently activates
-    /// every field for `INSERT … RETURNING`.
+    /// field index per variant field. Insert contexts also activate deferred
+    /// non-relation fields for `INSERT … RETURNING`.
     fn process_enum_arms(
         &mut self,
         returning: &mut stmt::Expr,
@@ -423,7 +390,6 @@ impl LowerStatement<'_, '_> {
         let IncludeScope {
             path,
             include_relations,
-            ..
         } = scope;
         let stmt::Expr::Match(match_expr) = returning else {
             return;
@@ -446,32 +412,16 @@ impl LowerStatement<'_, '_> {
                 },
             );
 
-            // Tails of every include that targets THIS arm — i.e., paths whose
-            // leading step equals `variant_idx`. The leading step is stripped.
-            let arm_sub_includes: Vec<FlatInclude> = sub_includes
-                .iter()
-                .filter_map(|fi| {
-                    let (first, rest) = fi.projection.as_slice().split_first()?;
-                    (*first == variant_idx).then(|| FlatInclude {
-                        projection: stmt::Projection::from(rest),
-                        query: fi.query.clone(),
-                    })
-                })
-                .collect();
-            let include_relations = include_relations
-                || arm_sub_includes
-                    .iter()
-                    .any(|include| include.projection.is_empty());
+            let matches = partition_includes(sub_includes, variant_idx);
 
             self.process_fields(
                 &mut arm_record.fields[1..],
                 variant_fields,
                 &variant_mapping.fields,
-                &arm_sub_includes,
+                &matches.sub_paths,
                 IncludeScope {
                     path: &host,
-                    include_relations,
-                    ..scope
+                    include_relations: include_relations || matches.include_self,
                 },
             );
         }
@@ -583,24 +533,11 @@ impl LowerStatement<'_, '_> {
                     });
                     expr
                 };
-                let source_fk;
-                let target_pk;
-
-                if let [fk_field] = &rel.foreign_key.fields[..] {
-                    source_fk = source(fk_field.source);
-                    target_pk = stmt::Expr::ref_self_field(fk_field.target);
-                } else {
-                    let mut source_fk_fields = vec![];
-                    let mut target_pk_fields = vec![];
-
-                    for fk_field in &rel.foreign_key.fields {
-                        source_fk_fields.push(source(fk_field.source));
-                        target_pk_fields.push(stmt::Expr::ref_self_field(fk_field.target));
-                    }
-
-                    source_fk = stmt::Expr::record_from_vec(source_fk_fields);
-                    target_pk = stmt::Expr::record_from_vec(target_pk_fields);
-                }
+                let source_fk = super::scalar_or_record(
+                    rel.foreign_key.fields.iter().map(|fk| source(fk.source)),
+                );
+                let target_pk =
+                    super::key_field_refs(0, rel.foreign_key.fields.iter().map(|fk| fk.target));
 
                 let mut query =
                     stmt::Query::new_select(rel.target, stmt::Expr::eq(source_fk, target_pk));
@@ -740,7 +677,7 @@ fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
             if rest.is_empty() {
                 include_self = true;
                 top_order_by = fi.query.as_ref().and_then(|query| query.order_by.clone());
-                match query_filter_expr(&fi.query) {
+                match query_filter_expr(&fi.query).cloned() {
                     Some(f) if !unfiltered_self => {
                         top_filter = Some(match top_filter.take() {
                             Some(prev) => stmt::Expr::or(prev, f),
@@ -778,17 +715,16 @@ fn flatten_include(include: &stmt::Include) -> FlatInclude {
     }
 }
 
-fn query_filter_expr(query: &Option<stmt::Query>) -> Option<stmt::Expr> {
+fn query_filter_expr(query: &Option<stmt::Query>) -> Option<&stmt::Expr> {
     match &query.as_ref()?.body {
-        stmt::ExprSet::Select(select) => select.filter.expr.clone(),
+        stmt::ExprSet::Select(select) => select.filter.expr.as_ref(),
         _ => None,
     }
 }
 
 fn query_has_modifiers(query: &Option<stmt::Query>) -> bool {
-    query.as_ref().is_some_and(|query| {
-        query_filter_expr(&Some(query.clone())).is_some() || query.order_by.is_some()
-    })
+    query_filter_expr(query).is_some()
+        || query.as_ref().is_some_and(|query| query.order_by.is_some())
 }
 
 /// Flatten an include [`stmt::Path`] into a single projection, folding any
@@ -799,22 +735,17 @@ fn query_has_modifiers(query: &Option<stmt::Query>) -> bool {
 /// `Schema::resolve`). Include lowering walks the IR shape,
 /// not the schema, so LOCAL is what `process_enum_arms` needs.
 fn flatten_path(path: &stmt::Path) -> stmt::Projection {
-    let mut acc = stmt::Projection::identity();
-    push_root_steps(&path.root, &mut acc);
+    let mut acc = if let stmt::PathRoot::Variant { parent, variant_id } = &path.root {
+        let mut acc = flatten_path(parent);
+        acc.push(variant_id.index);
+        acc
+    } else {
+        stmt::Projection::identity()
+    };
     for step in path.projection.as_slice() {
         acc.push(*step);
     }
     acc
-}
-
-fn push_root_steps(root: &stmt::PathRoot, acc: &mut stmt::Projection) {
-    if let stmt::PathRoot::Variant { parent, variant_id } = root {
-        push_root_steps(&parent.root, acc);
-        for step in parent.projection.as_slice() {
-            acc.push(*step);
-        }
-        acc.push(variant_id.index);
-    }
 }
 
 /// Build the loaded-form inner expression for a deferred field.
