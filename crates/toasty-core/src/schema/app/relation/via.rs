@@ -1,5 +1,5 @@
 use crate::{
-    schema::app::{Cardinality, Model, ModelId, Schema},
+    schema::app::{Cardinality, ModelId},
     stmt,
 };
 
@@ -86,10 +86,5 @@ impl Via {
     /// Returns `true` when this is a one-to-one relation.
     pub fn is_one(&self) -> bool {
         self.cardinality.is_one()
-    }
-
-    /// Resolves the target [`Model`] from the given schema.
-    pub(crate) fn target<'a>(&self, schema: &'a Schema) -> &'a Model {
-        schema.model(self.target)
     }
 }
