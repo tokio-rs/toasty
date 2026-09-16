@@ -25,13 +25,13 @@ Three methods on `Path<M, T>` where `M: Model`:
 - `field_name() -> Option<String>` the app-level (Rust) name of the field,
   or `None` for the unnamed `inner` field of a tuple-newtype embed.
 - `is_nullable() -> bool` whether the leaf field is `Option`-marked (not
-  whether storage accepts `NULL`; see Behavior). Available when the leaf
-  target is a storable field type (`T: Field`); relation terminals and model
-  roots have no method, and an embed root reports `false` without a leaf
-  field. List targets are never `Option`-wrapped and report `false`. Read
-  from the leaf type's `Field::NULLABLE`, so it needs no schema walk and is
-  only sound for generated accessors (hand-built `path_field::<U>` / `chain`
-  paths must supply the field's `ExprTarget` as `U`).
+  whether storage accepts `NULL`; see Behavior). Available whenever the path
+  target implements `Field` (`Path<M, T> where T: Field`); generated
+  accessors produce such targets for storable leaves, and hand-built
+  `path_field::<U>` / `chain` paths pair it with whatever `U` they choose.
+  List targets are never `Option`-wrapped and report `false`. Read from the
+  target type's `Field::NULLABLE`, so it needs no schema walk; it is only
+  sound for generated accessors, which supply the field's own target type.
 - `is_unique() -> bool` whether the field is backed by a single-field unique
   index, its own or an enclosing transparent newtype's (index membership
   only, not a global-uniqueness guarantee):
@@ -94,10 +94,13 @@ and the first `#[document]` field crossed, or an `app::ResolveError`.
 - `is_unique()` reports `false` inside a `#[document]` embed: the app-level
   index has no database backing.
 - Panics, matching the crate's `_unwrap`-on-misuse style, when the path
-  does not end at a field or projects through a scalar-terminal `via` (a
-  scalar has no fields to step into). A path may end at a relation field and
-  may project through it to the target model. Projecting through embedded
-  (including `#[document]`) and enum steps is supported.
+  does not end at a field or projects through something that is not a model
+  (a primitive, a non-model embed, or a scalar-terminal `via`); hand-built
+  paths can also panic on a variant root whose parent does not name the
+  embedded enum, or on a step outside `T`'s reachable schema. A path may end
+  at a relation field and may project through it to the target model.
+  Projecting through embedded (including `#[document]`) and enum steps is
+  supported.
 
 ## Edge cases
 

@@ -778,9 +778,10 @@ where
     /// # Panics
     ///
     /// Panics if the path does not end at a field, or if it projects through
-    /// a scalar-terminal `via` (a scalar has no fields to step into).
-    /// Embedded struct, embedded enum, document, and relation steps are
-    /// supported: a relation step resolves on the target model.
+    /// something that is not a model: a primitive, a non-model embed, or a
+    /// scalar-terminal `via`. Hand-built `path_field`/`chain` paths can also
+    /// panic when a variant root's parent does not name the embedded enum, or
+    /// when a step lands on a model outside `T`'s reachable schema.
     ///
     /// # Examples
     ///
@@ -822,9 +823,10 @@ where
     /// # Panics
     ///
     /// Panics if the path does not end at a field, or if it projects through
-    /// a scalar-terminal `via` (a scalar has no fields to step into).
-    /// Embedded struct, embedded enum, document, and relation steps are
-    /// supported: a relation step resolves on the target model.
+    /// something that is not a model: a primitive, a non-model embed, or a
+    /// scalar-terminal `via`. Hand-built `path_field`/`chain` paths can also
+    /// panic when a variant root's parent does not name the embedded enum, or
+    /// when a step lands on a model outside `T`'s reachable schema.
     ///
     /// # Examples
     ///
@@ -984,14 +986,15 @@ where
     }
 }
 
-/// Nullability of a path's leaf field, read off the leaf's Rust type.
+/// Nullability of a path's leaf field, read off the path target type.
 ///
 /// The app schema's `nullable` flag is generated from the field type's
 /// [`Field::NULLABLE`], so the typed path already carries the answer and no
 /// schema walk is needed.
 ///
-/// Only storable leaf types expose this: relation terminals and model roots
-/// have no method. An embed root reports `false` but has no leaf field.
+/// Any target implementing [`Field`] exposes this. Generated accessors
+/// produce such targets for storable leaves; hand-built `path_field`/`chain`
+/// paths can pair the method with any `Field` target, including a model root.
 impl<T, U> Path<T, U>
 where
     T: Model,
