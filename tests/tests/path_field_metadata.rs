@@ -1,9 +1,8 @@
 //! `Path` field-metadata accessors: app name, nullability, and single-field
 //! uniqueness — including nested embedded, enum-variant, and relation
-//! projections — plus the `CorePath` re-export.
+//! projections.
 
 use toasty::schema::{Embed, Model};
-use toasty::stmt::CorePath;
 
 #[derive(Debug, toasty::Model)]
 #[allow(dead_code)]
@@ -369,13 +368,6 @@ fn field_metadata_shared_unique() {
     assert_eq!(animal.field_name().as_deref(), Some("nickname"));
     assert!(!animal.is_nullable());
     assert!(animal.is_unique());
-}
-
-#[test]
-fn path_converts_to_core_path() {
-    let core: CorePath = User::fields().email().into();
-    let expected = User::field_name_to_id("email").index;
-    assert_eq!(core.projection.as_slice(), &[expected]);
 }
 
 #[test]

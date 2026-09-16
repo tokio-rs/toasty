@@ -4,9 +4,7 @@
 
 Typed paths gain three read-only metadata accessors: `field_name()`,
 `is_nullable()`, and `is_unique()` on `Path<M, T>`. They answer "what field
-does this path point at?" without a `Db`. One re-export —
-`toasty::stmt::CorePath` — lets callers name the untyped path behind a
-typed path without depending on `toasty-core`.
+does this path point at?" without a `Db`.
 
 ## Motivation
 
@@ -61,13 +59,10 @@ document, a field on a related model.
 flag from the field type's `Field::NULLABLE`, which the typed path's target
 type already carries.
 
-The re-export:
-
-- `toasty::stmt::CorePath` — the untyped `toasty_core::stmt::Path` that a
-  typed path converts into.
-
-Supporting addition in `toasty-core`: `app::ModelSet::get(id)` returns the
-model with the given `ModelId`, if present.
+Supporting additions in `toasty-core`: `app::ModelSet::get(id)` returns the
+model with the given `ModelId`, if present; `app::ModelSet::resolve_path(path)`
+resolves an untyped path against the set's models, returning the leaf field
+and the first `#[document]` field crossed, or an `app::ResolveError`.
 
 ## Behavior
 

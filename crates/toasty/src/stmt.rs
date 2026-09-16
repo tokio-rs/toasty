@@ -81,9 +81,6 @@ pub use jiff::tz::TimeZone;
 pub use toasty_core::stmt::BigDecimal;
 #[cfg(feature = "rust_decimal")]
 pub use toasty_core::stmt::Decimal;
-/// The untyped path underlying the typed [`Path`], produced by its `From`
-/// conversion.
-pub use toasty_core::stmt::Path as CorePath;
 #[cfg(feature = "jiff")]
 pub use toasty_core::stmt::{Date, DateTime, Time, Timestamp, Zoned};
 #[cfg(feature = "net")]
