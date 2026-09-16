@@ -859,6 +859,14 @@ where
     /// model.
     fn field_has_unique_index(models: &app::ModelSet, field: &app::Field) -> bool {
         let owner = Self::model_by_id(models, field.id.model);
+        if let app::Model::Root(root) = owner {
+            // A single-field primary key is unique by definition. Derived
+            // models also register the backing index; hand-built schemas
+            // need not.
+            if root.primary_key.fields.as_slice() == [field.id] {
+                return true;
+            }
+        }
         let indices = match owner {
             app::Model::Root(root) => &root.indices,
             app::Model::EmbeddedStruct(embedded) => &embedded.indices,
