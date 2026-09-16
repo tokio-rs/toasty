@@ -375,11 +375,11 @@ fn field_metadata_list_path_nullability() {
     // A collection field targets `List<T>`, which is never `Option`-wrapped.
     assert!(!Tagged::fields().tags().is_nullable());
 
-    // `Option<Vec<T>>` keeps the `Option` wrapper as its path target, so the
-    // `U: Field` impl above answers, not the `List<U>` one. The derive cannot
-    // declare the shape (the generated `IntoExpr` bounds need
-    // `Vec<T>: IntoExpr<Vec<T>>`), so the index below is a stand-in: only the
-    // target type reaches `is_nullable`.
+    // An `Option<Vec<T>>` field keeps the `Option` wrapper as its path
+    // target (`Field::ExprTarget` is `Self`), so the `U: Field` impl answers,
+    // not the `List<U>` one. The derive does not declare that shape, so this
+    // is a type-level assertion: `path_field` pairs the target type with an
+    // arbitrary index, and only the target type reaches `is_nullable`.
     let notes = Tagged::path_field::<Option<Vec<String>>>(Tagged::field_name_to_id("tags").index);
     assert!(notes.is_nullable());
 }
@@ -422,6 +422,13 @@ fn field_metadata_nested_newtype_inner_unique() {
 #[should_panic(expected = "path does not end at a field")]
 fn field_metadata_empty_path_panics() {
     let _ = User::path_root().field_name();
+}
+
+#[test]
+#[should_panic(expected = "path does not end at a field")]
+fn field_metadata_out_of_bounds_panics() {
+    // Hand-built paths can name a field index the model does not have.
+    let _ = User::path_field::<String>(99).field_name();
 }
 
 #[test]
