@@ -319,6 +319,14 @@ pub(crate) fn resolve_in<'a>(
             let model = models
                 .get(model_id)
                 .ok_or(ResolveError::UnknownModel(*model_id))?;
+            // Projection indices are root-model field positions. An embedded
+            // model passed here would silently resolve against its flattened
+            // field list instead, so keep the root-only contract in debug
+            // builds.
+            debug_assert!(
+                matches!(model, Model::Root(_)),
+                "model-rooted paths must start at a root model"
+            );
             let [first, rest @ ..] = path.projection.as_slice() else {
                 return Err(ResolveError::Empty);
             };
