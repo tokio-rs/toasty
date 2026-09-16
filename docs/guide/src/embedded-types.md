@@ -617,7 +617,8 @@ struct Object {
 }
 
 let objects = Object::all()
-    .include(Object::fields().owner())
+    .include(Object::fields().owner().human().human())
+    .include(Object::fields().owner().animal().animal())
     .exec(&mut db)
     .await?;
 
@@ -634,12 +635,15 @@ the shared key. The relation fields have no columns. Loading an owner
 checks its variant as well as its key, so a human and an animal with the
 same ID remain distinct.
 
-Including the containing embed loads its deferred relations. To load only
-one relation, include its path, such as
-`Object::fields().owner().human().human()`. A non-deferred field such as
-`human: Human` loads automatically whenever its containing embed loads.
-Relations can also sit inside nested embeds, and `Option<Owner>` represents
-an object without an owner.
+An include loads only the field its path names. The `owner` field above is
+not deferred, so `.include(Object::fields().owner())` has no effect. Name
+each deferred relation that the query should load, as in the example. If
+the model instead stores `owner: Deferred<Owner>`, including `owner()` loads
+the enum but leaves its deferred relations unloaded; including a relation's
+full path loads both the deferred enum and that relation. A non-deferred
+relation such as `human: Human` loads automatically whenever its containing
+embed loads. Relations can also sit inside nested embeds, and `Option<Owner>`
+represents an object without an owner.
 
 Inverse `has_many` and `has_one` fields cannot pair with an embedded relation.
 

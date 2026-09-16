@@ -1260,8 +1260,9 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// (see [`Model`][`derive@Model`]). The differences:
 ///
 /// - `key` references a sibling field of the same struct or variant.
-/// - `.include()` on the containing embed loads its deferred relations.
-///   A path to a particular relation loads only that relation.
+/// - An `.include()` path loads only the field it names. Including a deferred
+///   embed does not load deferred relations inside it; name each relation in
+///   its own include path.
 /// - A non-deferred relation loads automatically with its containing embed.
 /// - A `has_many` on the target cannot pair with it.
 ///

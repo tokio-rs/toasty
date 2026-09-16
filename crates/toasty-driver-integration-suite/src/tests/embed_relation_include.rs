@@ -294,6 +294,9 @@ pub async fn include_nested_relation_path(t: &mut Test) -> Result<()> {
         id: Option<uuid::Uuid>,
         #[belongs_to(key = id)]
         person: toasty::Deferred<Option<Person>>,
+        reviewer_id: Option<uuid::Uuid>,
+        #[belongs_to(key = reviewer_id)]
+        reviewer: toasty::Deferred<Option<Person>>,
         notes: toasty::Deferred<String>,
     }
 
@@ -316,19 +319,26 @@ pub async fn include_nested_relation_path(t: &mut Test) -> Result<()> {
     let alice = toasty::create!(Person { name: "Alice" })
         .exec(&mut db)
         .await?;
-    let target = |id| Target::Assigned {
+    let bob = toasty::create!(Person { name: "Bob" })
+        .exec(&mut db)
+        .await?;
+    let target = |id, reviewer_id| Target::Assigned {
         link: Link {
             id,
             person: Default::default(),
+            reviewer_id,
+            reviewer: Default::default(),
             notes: "notes".to_string().into(),
         },
     };
     let ticket = toasty::create!(Ticket {
-        owner: target(Some(alice.id)),
-        backup: target(None)
+        owner: target(Some(alice.id), Some(bob.id)),
+        backup: target(Some(alice.id), Some(bob.id))
     })
     .exec(&mut db)
     .await?;
+
+    t.log().clear();
     let loaded = Ticket::filter_by_id(ticket.id)
         .include(Ticket::fields().owner().assigned().link().person())
         .get(&mut db)
@@ -337,9 +347,12 @@ pub async fn include_nested_relation_path(t: &mut Test) -> Result<()> {
         panic!("expected assigned")
     };
     assert_eq!(link.person.get().as_ref().unwrap().name, "Alice");
+    assert!(link.reviewer.is_unloaded());
     assert!(link.notes.is_unloaded());
     assert!(loaded.backup.is_unloaded());
+    assert_query_count(t, 2);
 
+    t.log().clear();
     let loaded = Ticket::filter_by_id(ticket.id)
         .include(Ticket::fields().backup())
         .get(&mut db)
@@ -347,8 +360,68 @@ pub async fn include_nested_relation_path(t: &mut Test) -> Result<()> {
     let Target::Assigned { link } = loaded.backup.get() else {
         panic!("expected assigned")
     };
-    assert!(link.person.get().is_none());
+    assert_eq!(link.id, Some(alice.id));
+    assert_eq!(link.reviewer_id, Some(bob.id));
+    assert!(link.person.is_unloaded());
+    assert!(link.reviewer.is_unloaded());
     assert!(link.notes.is_unloaded());
+    assert_query_count(t, 1);
+
+    t.log().clear();
+    let loaded = Ticket::filter_by_id(ticket.id)
+        .include(Ticket::fields().backup().assigned().link().person())
+        .get(&mut db)
+        .await?;
+    let Target::Assigned { link } = loaded.backup.get() else {
+        panic!("expected assigned")
+    };
+    assert_eq!(link.person.get().as_ref().unwrap().name, "Alice");
+    assert!(link.reviewer.is_unloaded());
+    assert!(link.notes.is_unloaded());
+    assert_query_count(t, 2);
+    Ok(())
+}
+
+#[driver_test]
+pub async fn include_deferred_embed_loads_eager_relation(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct Member {
+        id: uuid::Uuid,
+        #[belongs_to(key = id)]
+        person: Person,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Group {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        member: toasty::Deferred<Member>,
+    }
+
+    let mut db = t.setup_db(models!(Group, Person)).await;
+    let alice = toasty::create!(Person { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+    let group = toasty::create!(Group {
+        member: Member {
+            id: alice.id,
+            person: alice
+        }
+    })
+    .exec(&mut db)
+    .await?;
+
+    let unloaded = Group::filter_by_id(group.id).get(&mut db).await?;
+    assert!(unloaded.member.is_unloaded());
+
+    t.log().clear();
+    let loaded = Group::filter_by_id(group.id)
+        .include(Group::fields().member())
+        .get(&mut db)
+        .await?;
+    assert_eq!(loaded.member.get().person.name, "Alice");
+    assert_query_count(t, 2);
     Ok(())
 }
 
@@ -400,7 +473,7 @@ pub async fn include_polymorphic_owner(t: &mut Test) -> Result<()> {
         #[key]
         #[auto]
         id: uuid::Uuid,
-        owner: Option<Owner>,
+        owner: Owner,
     }
 
     let mut db = t.setup_db(models!(Object, Human, Animal, Bot)).await;
@@ -424,9 +497,6 @@ pub async fn include_polymorphic_owner(t: &mut Test) -> Result<()> {
     })
     .exec(&mut db)
     .await?;
-    toasty::create!(Object { owner: None })
-        .exec(&mut db)
-        .await?;
     toasty::create!(Object {
         owner: Owner::Bot { bot: &bot }
     })
@@ -435,16 +505,17 @@ pub async fn include_polymorphic_owner(t: &mut Test) -> Result<()> {
 
     t.log().clear();
     let objects = Object::all()
-        .include(Object::fields().owner())
+        .include(Object::fields().owner().human().human())
+        .include(Object::fields().owner().animal().animal())
+        .include(Object::fields().owner().bot().bot())
         .exec(&mut db)
         .await?;
-    assert_eq!(objects.len(), 4);
+    assert_eq!(objects.len(), 3);
     for object in objects {
         match object.owner {
-            Some(Owner::Human { human, .. }) => assert_eq!(human.get().name, "Alice"),
-            Some(Owner::Animal { animal, .. }) => assert_eq!(animal.get().name, "Cat"),
-            Some(Owner::Bot { bot, .. }) => assert_eq!(bot.get().serial, "robot"),
-            None => {}
+            Owner::Human { human, .. } => assert_eq!(human.get().name, "Alice"),
+            Owner::Animal { animal, .. } => assert_eq!(animal.get().name, "Cat"),
+            Owner::Bot { bot, .. } => assert_eq!(bot.get().serial, "robot"),
         }
     }
     assert_query_count(t, 4);
@@ -454,12 +525,15 @@ pub async fn include_polymorphic_owner(t: &mut Test) -> Result<()> {
         .include(Object::fields().owner())
         .get(&mut db)
         .await?;
-    assert!(matches!(object.owner, Some(Owner::Human { .. })));
-    assert_query_count(t, 2);
+    let Owner::Human { human, .. } = object.owner else {
+        panic!("expected human")
+    };
+    assert!(human.is_unloaded());
+    assert_query_count(t, 1);
 
     t.log().clear();
     let missing = Object::filter_by_id(uuid::Uuid::new_v4())
-        .include(Object::fields().owner())
+        .include(Object::fields().owner().human().human())
         .exec(&mut db)
         .await?;
     assert!(missing.is_empty());

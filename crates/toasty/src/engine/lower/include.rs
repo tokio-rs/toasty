@@ -51,21 +51,14 @@ struct IncludeQuery {
     order_by: Option<stmt::OrderBy>,
 }
 
-#[derive(Clone, Copy)]
-struct IncludeScope<'a> {
-    path: &'a stmt::Path,
-    /// A containing embed was included, activating its relation fields.
-    include_relations: bool,
-}
-
 /// The include entries that target a single field, partitioned by whether
 /// they name the field itself or a sub-path within it.
 ///
 /// Either kind activates the field. Sub-paths only matter when the field
 /// is an embed — they drive the recursion into nested fields.
 struct FieldIncludes {
-    /// At least one include path equals `[i]` — the field is named directly.
-    include_self: bool,
+    /// At least one include path names this field or one of its descendants.
+    included: bool,
     /// Merged query modifiers for includes ending at this field.
     top_query: IncludeQuery,
     /// Tails of every `[i, …]` include path, with the leading index stripped.
@@ -83,16 +76,7 @@ impl LowerStatement<'_, '_> {
                 self.visit_expr_mut(value);
                 super::Simplify::with_context(self.expr_cx, self.capability())
                     .visit_expr_mut(value);
-                self.process_embed(
-                    value,
-                    embedded.target,
-                    mapping,
-                    &[],
-                    IncludeScope {
-                        path: &path,
-                        include_relations: false,
-                    },
-                );
+                self.process_embed(value, embedded.target, mapping, &[], &path);
             }
             // A scalar projection must not load relations in its base embed.
             return;
@@ -180,16 +164,7 @@ impl LowerStatement<'_, '_> {
             } else {
                 use stmt::VisitMut;
                 self.visit_expr_mut(value);
-                self.process_embed(
-                    value,
-                    embedded.target,
-                    &mappings[index],
-                    &[],
-                    IncludeScope {
-                        path: &path,
-                        include_relations: false,
-                    },
-                );
+                self.process_embed(value, embedded.target, &mappings[index], &[], &path);
             }
         }
     }
@@ -211,10 +186,7 @@ impl LowerStatement<'_, '_> {
             app_fields,
             mapping_fields,
             &flat,
-            IncludeScope {
-                path: &stmt::Path::model(self.model_unwrap().id),
-                include_relations: false,
-            },
+            &stmt::Path::model(self.model_unwrap().id),
         );
     }
 
@@ -230,19 +202,14 @@ impl LowerStatement<'_, '_> {
         app_fields: &[app::Field],
         mapping_fields: &[mapping::Field],
         includes: &[FlatInclude],
-        scope: IncludeScope<'_>,
+        host: &stmt::Path,
     ) {
-        let IncludeScope {
-            path: host,
-            include_relations,
-        } = scope;
         for (i, (field, mapping)) in app_fields.iter().zip(mapping_fields).enumerate() {
             let field_includes = partition_includes(includes, i);
 
             if field.ty.is_relation() {
                 if !matches!(self.cx, LoweringContext::Insert(_, None))
-                    && (field_includes.self_included()
-                        || include_relations
+                    && (field_includes.included
                         || (!field.deferred
                             && (!host.projection.is_empty()
                                 || matches!(host.root, stmt::PathRoot::Variant { .. }))))
@@ -267,10 +234,7 @@ impl LowerStatement<'_, '_> {
                 field,
                 mapping,
                 &field_includes,
-                IncludeScope {
-                    path: &field_path(host, i),
-                    ..scope
-                },
+                &field_path(host, i),
             );
         }
     }
@@ -292,10 +256,10 @@ impl LowerStatement<'_, '_> {
         field: &app::Field,
         mapping: &mapping::Field,
         matches: &FieldIncludes,
-        scope: IncludeScope<'_>,
+        path: &stmt::Path,
     ) {
         if field.deferred {
-            if !self.cx.is_insert() && !matches.self_included() {
+            if !self.cx.is_insert() && !matches.included {
                 return;
             }
             if !matches!(self.cx, LoweringContext::Insert(_, Some(_))) {
@@ -317,10 +281,7 @@ impl LowerStatement<'_, '_> {
                 embedded.target,
                 mapping,
                 &matches.sub_paths,
-                IncludeScope {
-                    include_relations: scope.include_relations || matches.include_self,
-                    ..scope
-                },
+                path,
             );
         }
     }
@@ -334,7 +295,7 @@ impl LowerStatement<'_, '_> {
         target: app::ModelId,
         mapping: &mapping::Field,
         sub_includes: &[FlatInclude],
-        scope: IncludeScope<'_>,
+        path: &stmt::Path,
     ) {
         match (self.schema().app.model(target), mapping) {
             (app::Model::EmbeddedStruct(em), mapping::Field::Struct(fs)) => {
@@ -359,11 +320,11 @@ impl LowerStatement<'_, '_> {
                     em.fields.as_slice(),
                     fs.fields.as_slice(),
                     sub_includes,
-                    scope,
+                    path,
                 );
             }
             (app::Model::EmbeddedEnum(em), mapping::Field::Enum(fe)) => {
-                self.process_enum_arms(returning, em, fe, sub_includes, scope);
+                self.process_enum_arms(returning, em, fe, sub_includes, path);
             }
             _ => {}
         }
@@ -385,12 +346,8 @@ impl LowerStatement<'_, '_> {
         app_enum: &app::EmbeddedEnum,
         mapping: &mapping::FieldEnum,
         sub_includes: &[FlatInclude],
-        scope: IncludeScope<'_>,
+        path: &stmt::Path,
     ) {
-        let IncludeScope {
-            path,
-            include_relations,
-        } = scope;
         let stmt::Expr::Match(match_expr) = returning else {
             return;
         };
@@ -419,10 +376,7 @@ impl LowerStatement<'_, '_> {
                 variant_fields,
                 &variant_mapping.fields,
                 &matches.sub_paths,
-                IncludeScope {
-                    path: &host,
-                    include_relations: include_relations || matches.include_self,
-                },
+                &host,
             );
         }
     }
@@ -656,16 +610,9 @@ fn projected_subfield<'a>(
     Some((field, mapping, path))
 }
 
-impl FieldIncludes {
-    /// True when at least one include path activates this field.
-    fn self_included(&self) -> bool {
-        self.include_self || !self.sub_paths.is_empty()
-    }
-}
-
 /// Partitions includes for a field and merges modifiers on the field itself.
 fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
-    let mut include_self = false;
+    let mut included = false;
     let mut unfiltered_self = false;
     let mut top_filter: Option<stmt::Expr> = None;
     let mut top_order_by = None;
@@ -674,8 +621,8 @@ fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
         if let Some((first, rest)) = fi.projection.as_slice().split_first()
             && *first == i
         {
+            included = true;
             if rest.is_empty() {
-                include_self = true;
                 top_order_by = fi.query.as_ref().and_then(|query| query.order_by.clone());
                 match query_filter_expr(&fi.query).cloned() {
                     Some(f) if !unfiltered_self => {
@@ -699,7 +646,7 @@ fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
         }
     }
     FieldIncludes {
-        include_self,
+        included,
         top_query: IncludeQuery {
             filter: top_filter,
             order_by: top_order_by,
