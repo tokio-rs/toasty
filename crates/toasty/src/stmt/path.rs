@@ -969,6 +969,9 @@ where
             Err(app::ResolveError::UnknownModel(id)) => {
                 panic!("model {id:?} is not registered")
             }
+            // `ResolveError` is `#[non_exhaustive]`; report any future variant
+            // through its `Display` message.
+            Err(err) => panic!("could not resolve path: {err}"),
         }
     }
 }

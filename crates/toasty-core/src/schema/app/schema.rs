@@ -35,6 +35,7 @@ pub enum Resolved<'a> {
 /// [`Schema::resolve`] maps every error to `None`; the typed path metadata
 /// accessors turn them into panic messages.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum ResolveError {
     /// The path does not name a field: its projection is empty, or it stops
     /// at a variant discriminant.
@@ -62,6 +63,26 @@ pub enum ResolveError {
     /// The path is rooted at, or descends into, a model that is not in the
     /// resolver's model set.
     UnknownModel(ModelId),
+}
+
+impl std::error::Error for ResolveError {}
+
+impl core::fmt::Display for ResolveError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Empty => write!(f, "path does not name a field"),
+            Self::OutOfBounds { step } => {
+                write!(f, "projection step {step} is out of bounds")
+            }
+            Self::NonEmbedded { step } => {
+                write!(f, "projection step {step} does not descend into a model")
+            }
+            Self::NotEmbeddedEnum { step } => {
+                write!(f, "step {step} does not name an embedded enum")
+            }
+            Self::UnknownModel(id) => write!(f, "model {id:?} is not in the model set"),
+        }
+    }
 }
 
 /// What a path resolves to before the callers map it.
