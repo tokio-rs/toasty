@@ -531,7 +531,7 @@ impl Expand<'_> {
                     FieldTy::BelongsTo(rel) => {
                         let ty = &rel.ty;
                         let targets = rel.foreign_key.iter().map(|fk| util::bare_ident_name(&fk.target));
-                        return quote!(#toasty::embedded_relation_expr::<#ty>(&#value, &[ #( #targets ),* ]));
+                        return quote!(#toasty::embedded_relation_value_expr::<#ty, _>(&#value, &[ #( #targets ),* ]));
                     }
                     _ => unreachable!("unsupported embedded field type"),
                 };

@@ -74,15 +74,6 @@ pub fn into_untyped_expr<T, V: IntoExpr<T>>(value: V) -> core::stmt::Expr {
     expr.into()
 }
 
-/// Encode a relation's loaded model for engine key resolution.
-pub fn embedded_relation_expr<F>(value: &F, fields: &[&str]) -> core::stmt::Expr
-where
-    F: EmbeddedRelationValue<F>,
-    <F as EmbeddedRelationValue<F>>::Model: ModelCodegen,
-{
-    embedded_relation_value_expr::<F, _>(value, fields)
-}
-
 /// A value usable as the parent of an embedded relation in a write.
 ///
 /// The trait parameter `F` is the relation field's *declared* type

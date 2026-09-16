@@ -200,28 +200,17 @@ impl LowerStatement<'_, '_> {
     pub(super) fn process_insert_embedded_relations(&mut self, record: &mut stmt::ExprRecord) {
         let model = self.model_unwrap();
         let mapping = self.mapping_unwrap();
-        for (field, mapping) in model.fields.iter().zip(&mapping.fields) {
-            if let app::FieldTy::Embedded(embedded) = &field.ty {
-                let mut value = &mut record[field.id.index];
-                if field.deferred {
-                    let stmt::Expr::Record(outer) = value else {
-                        continue;
-                    };
-                    value = &mut outer[0];
-                }
-                self.process_embed(
-                    value,
-                    embedded.target,
-                    mapping,
-                    &[],
-                    IncludeScope {
-                        path: &stmt::Path::field(model.id, field.id.index),
-                        is_insert: true,
-                        include_relations: false,
-                    },
-                );
-            }
-        }
+        self.process_fields(
+            &mut record.fields,
+            &model.fields,
+            &mapping.fields,
+            &[],
+            IncludeScope {
+                path: &stmt::Path::model(model.id),
+                is_insert: true,
+                include_relations: false,
+            },
+        );
     }
 
     fn embedded_relations_ready(&self, is_insert: bool) -> bool {
@@ -244,7 +233,7 @@ impl LowerStatement<'_, '_> {
         let app_fields = &self.model_unwrap().fields;
         let mapping_fields = &self.mapping_unwrap().fields;
         self.process_fields(
-            record,
+            &mut record.fields,
             app_fields,
             mapping_fields,
             &flat,
@@ -264,7 +253,7 @@ impl LowerStatement<'_, '_> {
     /// - Anything else → [`process_field`].
     fn process_fields(
         &mut self,
-        returning: &mut stmt::ExprRecord,
+        returning: &mut [stmt::Expr],
         app_fields: &[app::Field],
         mapping_fields: &[mapping::Field],
         includes: &[FlatInclude],
@@ -282,7 +271,9 @@ impl LowerStatement<'_, '_> {
                 if self.embedded_relations_ready(is_insert)
                     && (field_includes.self_included()
                         || include_relations
-                        || (!field.deferred && !host.projection.is_empty()))
+                        || (!field.deferred
+                            && (!host.projection.is_empty()
+                                || matches!(host.root, stmt::PathRoot::Variant { .. }))))
                 {
                     let value = self.build_relation_subquery_inner(
                         field,
@@ -343,29 +334,17 @@ impl LowerStatement<'_, '_> {
             if !matches!(self.cx, LoweringContext::Insert(_, Some(_))) {
                 *returning = lazy_slot::loaded_expr(loaded_form(field, mapping));
             }
-
-            // For an embed, the loaded form is the embed's `default_returning`, which
-            // has its own deferred sub-fields pre-masked. Recurse so those get loaded
-            // forms spliced in too.
-            if let app::FieldTy::Embedded(embedded) = &field.ty {
-                let stmt::Expr::Record(outer) = returning else {
-                    unreachable!("just-wrapped record");
-                };
-                self.process_embed(
-                    &mut outer[0],
-                    embedded.target,
-                    mapping,
-                    &matches.sub_paths,
-                    IncludeScope {
-                        include_relations: include_relations || matches.include_self,
-                        ..scope
-                    },
-                );
-            }
-            return;
         }
 
         if let app::FieldTy::Embedded(embedded) = &field.ty {
+            let returning = if field.deferred {
+                let stmt::Expr::Record(outer) = returning else {
+                    unreachable!("just-wrapped record");
+                };
+                &mut outer[0]
+            } else {
+                returning
+            };
             self.process_embed(
                 returning,
                 embedded.target,
@@ -409,7 +388,7 @@ impl LowerStatement<'_, '_> {
                     _ => return,
                 };
                 self.process_fields(
-                    record,
+                    &mut record.fields,
                     em.fields.as_slice(),
                     fs.fields.as_slice(),
                     sub_includes,
@@ -443,8 +422,8 @@ impl LowerStatement<'_, '_> {
     ) {
         let IncludeScope {
             path,
-            is_insert,
             include_relations,
+            ..
         } = scope;
         let stmt::Expr::Match(match_expr) = returning else {
             return;
@@ -484,44 +463,17 @@ impl LowerStatement<'_, '_> {
                     .iter()
                     .any(|include| include.projection.is_empty());
 
-            for (j, (var_field, var_mapping)) in variant_fields
-                .iter()
-                .zip(&variant_mapping.fields)
-                .enumerate()
-            {
-                let field_includes = partition_includes(&arm_sub_includes, j);
-                if var_field.ty.is_relation() {
-                    if self.embedded_relations_ready(is_insert)
-                        && (include_relations
-                            || field_includes.self_included()
-                            || !var_field.deferred)
-                    {
-                        let value = self.build_relation_subquery_inner(
-                            var_field,
-                            &host,
-                            &field_includes.sub_paths,
-                            field_includes.top_query,
-                        );
-                        arm_record[j + 1] = if var_field.deferred {
-                            lazy_slot::loaded_expr(value)
-                        } else {
-                            value
-                        };
-                    }
-                    continue;
-                }
-                self.process_field(
-                    &mut arm_record[j + 1],
-                    var_field,
-                    var_mapping,
-                    &field_includes,
-                    IncludeScope {
-                        path: &field_path(&host, j),
-                        include_relations,
-                        ..scope
-                    },
-                );
-            }
+            self.process_fields(
+                &mut arm_record.fields[1..],
+                variant_fields,
+                &variant_mapping.fields,
+                &arm_sub_includes,
+                IncludeScope {
+                    path: &host,
+                    include_relations,
+                    ..scope
+                },
+            );
         }
     }
 
