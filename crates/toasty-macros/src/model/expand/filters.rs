@@ -220,7 +220,11 @@ impl Filter {
 impl<'a> BuildModelFilters<'a> {
     fn build(mut self) -> Vec<Filter> {
         self.recurse(&[]);
-        self.filters.into_values().collect()
+        // Hash-map iteration order varies between expansions. Keep generated
+        // method order stable so unrelated rebuilds retain incremental results.
+        let mut filters: Vec<_> = self.filters.into_values().collect();
+        filters.sort_by(|a, b| a.fields.cmp(&b.fields));
+        filters
     }
 
     fn recurse(&mut self, prefix: &[usize]) {
@@ -310,5 +314,31 @@ impl<'a> BuildModelFilters<'a> {
         }
 
         syn::Ident::new(&name, Span::call_site())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn model_filter_expansion_is_deterministic() {
+        let input = quote::quote! {
+            struct User {
+                #[key]
+                id: i64,
+                #[index]
+                email: String,
+                #[index]
+                name: String,
+            }
+        };
+        let expected = crate::model::generate_model(input.clone())
+            .unwrap()
+            .to_string();
+        for _ in 0..32 {
+            let actual = crate::model::generate_model(input.clone())
+                .unwrap()
+                .to_string();
+            assert_eq!(actual, expected);
+        }
     }
 }
