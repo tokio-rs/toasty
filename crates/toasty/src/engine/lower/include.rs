@@ -37,7 +37,7 @@ use toasty_core::{
     stmt,
 };
 
-use crate::engine::lower::{LowerStatement, LoweringContext};
+use crate::engine::lower::LowerStatement;
 use crate::schema::lazy_slot;
 
 struct FlatInclude {
@@ -208,12 +208,16 @@ impl LowerStatement<'_, '_> {
             let field_includes = partition_includes(includes, i);
 
             if field.ty.is_relation() {
-                if !matches!(self.cx, LoweringContext::Insert(_, None))
-                    && (field_includes.included
-                        || (!field.deferred
-                            && (!host.projection.is_empty()
-                                || matches!(host.root, stmt::PathRoot::Variant { .. }))))
-                {
+                // Relation loads need a specific insert row to read its keys.
+                // We add them later, when processing each row.
+                if self.cx.is_insert_without_row() {
+                    continue;
+                }
+
+                let is_nested = !host.projection.is_empty() || host.root.is_variant();
+                let load_by_default = is_nested && !field.deferred;
+
+                if field_includes.included || load_by_default {
                     let value = self.build_relation_subquery_inner(
                         field,
                         host,
@@ -262,7 +266,7 @@ impl LowerStatement<'_, '_> {
             if !self.cx.is_insert() && !matches.included {
                 return;
             }
-            if !matches!(self.cx, LoweringContext::Insert(_, Some(_))) {
+            if !self.cx.is_insert_with_row() {
                 *returning = lazy_slot::loaded_expr(loaded_form(field, mapping));
             }
         }
@@ -535,9 +539,7 @@ impl LowerStatement<'_, '_> {
             .normalize_stmt(&mut statement)
             .expect("valid include subquery");
         let load = self.lower_sub_stmt(statement);
-        if matches!(self.cx, LoweringContext::Insert(_, Some(_)))
-            && (!host.projection.is_empty() || matches!(host.root, stmt::PathRoot::Variant { .. }))
-        {
+        if self.cx.is_insert_with_row() && (!host.projection.is_empty() || host.root.is_variant()) {
             self.order_relation_load_after_enclosing_inserts(&load);
             Self::single_relation_from_load(load)
         } else {

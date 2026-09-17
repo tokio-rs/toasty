@@ -23,6 +23,11 @@ pub enum PathRoot {
 }
 
 impl PathRoot {
+    /// Returns `true` if this root is an embedded enum variant.
+    pub fn is_variant(&self) -> bool {
+        matches!(self, Self::Variant { .. })
+    }
+
     /// Returns the `ModelId`, panicking if this root is a `Variant` root.
     pub fn as_model_unwrap(&self) -> ModelId {
         match self {

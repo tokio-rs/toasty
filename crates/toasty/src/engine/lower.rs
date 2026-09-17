@@ -2171,6 +2171,14 @@ impl LoweringContext<'_> {
         matches!(self, LoweringContext::Insert { .. })
     }
 
+    fn is_insert_without_row(&self) -> bool {
+        matches!(self, Self::Insert(_, None))
+    }
+
+    fn is_insert_with_row(&self) -> bool {
+        matches!(self, Self::Insert(_, Some(_)))
+    }
+
     fn is_returning(&self) -> bool {
         matches!(self, LoweringContext::Returning(_))
     }
