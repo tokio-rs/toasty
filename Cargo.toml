@@ -96,7 +96,12 @@ async-recursion = "1.1.1"
 async-stream = "0.3.6"
 async-trait = "0.1.89"
 aws-config = "1"
-aws-sdk-dynamodb = { version = "1.110.0", features = ["test-util"] }
+# Skip the deprecated `rustls` feature: it pulls rustls-webpki 0.101 (RUSTSEC-2026-0104).
+aws-sdk-dynamodb = { version = "1.110.0", default-features = false, features = [
+    "default-https-client",
+    "rt-tokio",
+    "test-util",
+] }
 # aws-smithy-json 0.63.0 is incompatible with the Document changes in 1.7.0.
 aws-smithy-types = "=1.6.4"
 bit-set = "0.11.0"
