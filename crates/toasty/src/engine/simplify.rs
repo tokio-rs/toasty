@@ -323,5 +323,29 @@ impl<'a> Simplify<'a> {
     }
 }
 
+// Equivalence preserves independent evaluations of non-deterministic expressions.
+fn dedup_operands(operands: &mut Vec<Expr>) {
+    let mut seen: Vec<Expr> = Vec::new();
+    operands.retain(|operand| {
+        if seen.iter().any(|e| e.is_equivalent_to(operand)) {
+            false
+        } else {
+            seen.push(operand.clone());
+            true
+        }
+    });
+}
+
+// Nullable operands do not satisfy the complement law in three-valued logic.
+fn has_complement(operands: &[Expr]) -> bool {
+    operands.iter().any(|operand| {
+        !matches!(operand, Expr::Not(_))
+            && operand.is_always_non_nullable()
+            && operands
+                .iter()
+                .any(|other| matches!(other, Expr::Not(not) if not.expr.is_equivalent_to(operand)))
+    })
+}
+
 #[cfg(test)]
 mod tests;
