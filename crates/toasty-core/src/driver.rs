@@ -56,7 +56,7 @@
 //! [`crate::Error::driver_operation_failed`].
 
 mod capability;
-pub use capability::{Capability, SchemaMutations, SqlPlaceholder, StorageTypes};
+pub use capability::{Capability, SchemaComments, SchemaMutations, SqlPlaceholder, StorageTypes};
 
 mod connection_url;
 pub use connection_url::ConnectionUrl;

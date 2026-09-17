@@ -27,9 +27,11 @@ fn users_schema() -> db::Schema {
         tables: vec![db::Table {
             id: table_id,
             name: "users".to_string(),
+            comment: None,
             columns: vec![db::Column {
                 id,
                 name: "id".to_string(),
+                comment: None,
                 ty: stmt::Type::I64,
                 storage_ty: db::Type::Integer(8),
                 nullable: false,
