@@ -464,37 +464,11 @@ impl LowerStatement<'_, '_> {
             // returns a single record and not a list. This matters for the
             // type system.
             app::FieldTy::BelongsTo(rel) => {
-                let source = |fk: app::FieldId| {
-                    let local = match &host.root {
-                        stmt::PathRoot::Variant { variant_id, .. }
-                            if host.projection.is_empty() =>
-                        {
-                            let app::Model::EmbeddedEnum(em) =
-                                self.schema().app.model(variant_id.model)
-                            else {
-                                unreachable!()
-                            };
-                            em.variant_fields(variant_id.index)
-                                .iter()
-                                .position(|field| field.id == fk)
-                                .unwrap()
-                        }
-                        _ => fk.index,
-                    };
-                    let mut expr = field_path(host, local).into_stmt();
-                    stmt::visit_mut::for_each_expr_mut(&mut expr, |expr| {
-                        if let stmt::Expr::Reference(
-                            stmt::ExprReference::Field { nesting, .. }
-                            | stmt::ExprReference::Model { nesting },
-                        ) = expr
-                        {
-                            *nesting = 1;
-                        }
-                    });
-                    expr
-                };
                 let source_fk = super::scalar_or_record(
-                    rel.foreign_key.fields.iter().map(|fk| source(fk.source)),
+                    rel.foreign_key
+                        .fields
+                        .iter()
+                        .map(|fk| self.relation_source_field(host, fk.source)),
                 );
                 let target_pk =
                     super::key_field_refs(0, rel.foreign_key.fields.iter().map(|fk| fk.target));
@@ -547,6 +521,31 @@ impl LowerStatement<'_, '_> {
         } else {
             load
         }
+    }
+
+    fn relation_source_field(&self, host: &stmt::Path, source_field: app::FieldId) -> stmt::Expr {
+        let local = match &host.root {
+            stmt::PathRoot::Variant { variant_id, .. } if host.projection.is_empty() => {
+                let app::Model::EmbeddedEnum(em) = self.schema().app.model(variant_id.model) else {
+                    unreachable!()
+                };
+                em.variant_fields(variant_id.index)
+                    .iter()
+                    .position(|field| field.id == source_field)
+                    .unwrap()
+            }
+            _ => source_field.index,
+        };
+        let mut expr = field_path(host, local).into_stmt();
+        stmt::visit_mut::for_each_expr_mut(&mut expr, |expr| {
+            if let stmt::Expr::Reference(
+                stmt::ExprReference::Field { nesting, .. } | stmt::ExprReference::Model { nesting },
+            ) = expr
+            {
+                *nesting = 1;
+            }
+        });
+        expr
     }
 }
 
