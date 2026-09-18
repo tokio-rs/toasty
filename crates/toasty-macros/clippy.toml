@@ -1,6 +1,11 @@
 # Generated code must not depend on hash iteration order: a changed expansion
 # invalidates rustc incremental results. Use `indexmap` collections instead.
+#
+# `hashbrown` is not a dependency of this crate, so its paths only resolve if
+# someone adds it back; `allow-invalid` keeps clippy quiet until then.
 disallowed-types = [
     { path = "std::collections::HashMap", reason = "use `indexmap::IndexMap` for deterministic iteration order" },
     { path = "std::collections::HashSet", reason = "use `indexmap::IndexSet` for deterministic iteration order" },
+    { path = "hashbrown::HashMap", reason = "use `indexmap::IndexMap` for deterministic iteration order", allow-invalid = true },
+    { path = "hashbrown::HashSet", reason = "use `indexmap::IndexSet` for deterministic iteration order", allow-invalid = true },
 ]
