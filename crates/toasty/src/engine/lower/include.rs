@@ -510,11 +510,14 @@ impl LowerStatement<'_, '_> {
         // post-lower simplify) on the synthesized subquery, stitching it onto
         // the parent as an `Expr::Arg`.
         let mut statement = stmt::Statement::Query(stmt);
+
         self.state
             .engine
             .normalize_stmt(&mut statement)
             .expect("valid include subquery");
+
         let load = self.lower_sub_stmt(statement);
+
         if self.cx.is_insert_with_row() && field.ty.is_belongs_to() {
             self.order_relation_load_after_enclosing_inserts(&load);
             Self::single_relation_from_load(load)
