@@ -93,7 +93,7 @@ impl LowerStatement<'_, '_> {
             self.lower_insert_with_row(index, |lower| {
                 lower.plan_stmt_insert_relations(row, returning, index);
                 if returning_model {
-                    lower.plan_insert_returning_belongs_to(
+                    lower.plan_insert_returning_relations(
                         row,
                         returning,
                         index,
@@ -105,48 +105,44 @@ impl LowerStatement<'_, '_> {
         }
     }
 
-    /// Fill each eager `belongs_to` slot of an INSERT's returning with a
-    /// per-row load subquery.
-    ///
-    /// Runs after [`Self::plan_stmt_insert_relations`], which resolves
-    /// relation values into the row's FK source fields. The subquery
-    /// correlates on those FK fields, and running per row (under
-    /// `lower_insert_with_row`) captures the row index the planner needs to
-    /// bind the subquery's parent reference to this row of the INSERT.
-    fn plan_insert_returning_belongs_to(
+    /// Load eager relations after insert planning has resolved their foreign keys.
+    fn plan_insert_returning_relations(
         &mut self,
         row: &stmt::Expr,
         returning: &mut Option<stmt::Returning>,
         index: usize,
         preserve_returning_projection: bool,
     ) {
-        let Some(model) = self.expr_cx.target_as_model() else {
-            return;
-        };
         let Some(record) =
             Self::insert_returning_record_mut(returning, index, preserve_returning_projection)
         else {
             return;
         };
 
-        for field in &model.fields {
-            let app::FieldTy::BelongsTo(rel) = &field.ty else {
-                continue;
-            };
-            if field.deferred {
-                continue;
+        // A preserved projection is shared across rows, so it cannot hold
+        // a different relation load for each row.
+        if preserve_returning_projection && index > 0 {
+            for field in &self.model_unwrap().fields {
+                if let app::FieldTy::BelongsTo(rel) = &field.ty {
+                    assert!(
+                        field.deferred || Self::belongs_to_fk_is_unset(row, rel),
+                        "eager belongs_to in a multi-row insert with a preserved returning projection"
+                    );
+                }
             }
-            if Self::belongs_to_fk_is_unset(row, rel) {
-                continue;
-            }
-
-            record[field.id.index] = self.plan_insert_belongs_to_load(
-                field.id.index,
-                index,
-                preserve_returning_projection,
-            );
         }
+
         self.process_top_level_includes(record, &[]);
+    }
+
+    /// Return whether the row has no usable foreign key for this relation.
+    fn belongs_to_fk_is_unset(row: &stmt::Expr, rel: &app::BelongsTo) -> bool {
+        rel.foreign_key.fields.iter().any(|fk_field| {
+            row.entry(fk_field.source.index).is_none_or(|entry| {
+                let expr = entry.to_expr();
+                expr.is_value_null() || expr.is_default()
+            })
+        })
     }
 
     /// Return the model record for one row of an INSERT's returning value.
@@ -173,35 +169,6 @@ impl LowerStatement<'_, '_> {
             }
             _ => None,
         }
-    }
-
-    /// Return whether the row has no usable foreign key for this relation.
-    fn belongs_to_fk_is_unset(row: &stmt::Expr, rel: &app::BelongsTo) -> bool {
-        rel.foreign_key.fields.iter().any(|fk_field| {
-            row.entry(fk_field.source.index).is_none_or(|entry| {
-                let expr = entry.to_expr();
-                expr.is_value_null() || expr.is_default()
-            })
-        })
-    }
-
-    /// Build the expression that loads one eager `belongs_to` relation.
-    fn plan_insert_belongs_to_load(
-        &mut self,
-        field_index: usize,
-        row_index: usize,
-        preserve_returning_projection: bool,
-    ) -> stmt::Expr {
-        // A preserved projection is shared across rows and cannot hold
-        // different subqueries for different VALUES rows.
-        assert!(
-            !preserve_returning_projection || row_index == 0,
-            "eager belongs_to in a multi-row insert with a preserved returning projection"
-        );
-
-        let load = self.build_relation_subquery(field_index);
-        self.order_relation_load_after_enclosing_inserts(&load);
-        Self::single_relation_from_load(load)
     }
 
     /// Make a relation load wait for the database writes that can create its row.

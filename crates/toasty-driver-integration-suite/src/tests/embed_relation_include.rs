@@ -550,3 +550,62 @@ fn assert_query_count(t: &Test, expected: usize) {
     }
     assert_eq!(count, expected);
 }
+
+#[driver_test]
+pub async fn create_eager_root_and_embedded_relations(t: &mut Test) -> Result<()> {
+    use toasty::stmt::IntoExpr;
+
+    #[derive(Debug, toasty::Model)]
+    struct Card {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        person_id: uuid::Uuid,
+        #[belongs_to(key = person_id)]
+        person: Person,
+        membership: Membership,
+    }
+
+    let mut db = t.setup_db(models!(Card, Person)).await;
+    let member: toasty::stmt::Expr<Person> = toasty::create!(Person { name: "Bob" }).into_expr();
+    let membership =
+        toasty::stmt::Expr::<Membership>::from_untyped(toasty_core::stmt::Expr::record([
+            toasty_core::stmt::Expr::null(),
+            member.into(),
+        ]));
+    let card = toasty::create!(Card {
+        person: toasty::create!(Person { name: "Alice" }),
+        membership,
+    })
+    .exec(&mut db)
+    .await?;
+
+    assert_eq!(card.person.name, "Alice");
+    assert_eq!(card.membership.person.name, "Bob");
+    assert_eq!(card.person_id, card.person.id);
+    assert_eq!(card.membership.id, card.membership.person.id);
+    let stored = Card::get_by_id(&mut db, card.id).await?;
+    assert_eq!(stored.person.id, card.person.id);
+    assert_eq!(stored.membership.person.id, card.membership.person.id);
+    Ok(())
+}
+
+#[driver_test]
+pub async fn create_eager_relation_without_key(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Card {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        person_id: Option<uuid::Uuid>,
+        #[belongs_to(key = person_id)]
+        person: Option<Person>,
+    }
+
+    let mut db = t.setup_db(models!(Card, Person)).await;
+    let card = toasty::create!(Card {}).exec(&mut db).await?;
+    assert_none!(card.person);
+    let stored = Card::get_by_id(&mut db, card.id).await?;
+    assert_none!(stored.person);
+    Ok(())
+}

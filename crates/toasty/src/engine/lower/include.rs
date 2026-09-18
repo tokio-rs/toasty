@@ -214,10 +214,12 @@ impl LowerStatement<'_, '_> {
                     continue;
                 }
 
-                let is_nested = !host.projection.is_empty() || host.root.is_variant();
-                let load_by_default = is_nested && !field.deferred;
+                // Insert planning already filled has-one and has-many results.
+                if self.cx.is_insert_with_row() && !field.ty.is_belongs_to() {
+                    continue;
+                }
 
-                if field_includes.included || load_by_default {
+                if field_includes.included || !field.deferred {
                     let value = self.build_relation_subquery_inner(
                         field,
                         host,
@@ -539,7 +541,7 @@ impl LowerStatement<'_, '_> {
             .normalize_stmt(&mut statement)
             .expect("valid include subquery");
         let load = self.lower_sub_stmt(statement);
-        if self.cx.is_insert_with_row() && (!host.projection.is_empty() || host.root.is_variant()) {
+        if self.cx.is_insert_with_row() && field.ty.is_belongs_to() {
             self.order_relation_load_after_enclosing_inserts(&load);
             Self::single_relation_from_load(load)
         } else {
