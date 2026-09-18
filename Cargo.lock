@@ -5359,8 +5359,8 @@ dependencies = [
 name = "toasty-macros"
 version = "0.10.0"
 dependencies = [
- "hashbrown 0.17.1",
  "heck",
+ "indexmap",
  "jiff",
  "pluralizer",
  "proc-macro2",
