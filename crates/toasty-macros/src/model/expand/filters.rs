@@ -1,7 +1,7 @@
 use super::Expand;
 use crate::model::schema::{FieldTy, Index, Model};
 
-use hashbrown::HashMap;
+use indexmap::IndexMap;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 
@@ -29,7 +29,7 @@ pub(super) struct Filter {
 
 struct BuildModelFilters<'a> {
     model: &'a Model,
-    filters: HashMap<Vec<usize>, Filter>,
+    filters: IndexMap<Vec<usize>, Filter>,
 }
 
 impl Expand<'_> {
@@ -211,7 +211,7 @@ impl Filter {
     pub(super) fn build_model_filters(model: &Model) -> Vec<Self> {
         BuildModelFilters {
             model,
-            filters: HashMap::new(),
+            filters: IndexMap::new(),
         }
         .build()
     }
@@ -220,11 +220,9 @@ impl Filter {
 impl<'a> BuildModelFilters<'a> {
     fn build(mut self) -> Vec<Filter> {
         self.recurse(&[]);
-        // Hash-map iteration order varies between expansions. Keep generated
+        // `IndexMap` yields filters in insertion order, keeping generated
         // method order stable so unrelated rebuilds retain incremental results.
-        let mut filters: Vec<_> = self.filters.into_values().collect();
-        filters.sort_by(|a, b| a.fields.cmp(&b.fields));
-        filters
+        self.filters.into_values().collect()
     }
 
     fn recurse(&mut self, prefix: &[usize]) {

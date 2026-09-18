@@ -1,0 +1,6 @@
+# Generated code must not depend on hash iteration order: a changed expansion
+# invalidates rustc incremental results. Use `indexmap` collections instead.
+disallowed-types = [
+    { path = "std::collections::HashMap", reason = "use `indexmap::IndexMap` for deterministic iteration order" },
+    { path = "std::collections::HashSet", reason = "use `indexmap::IndexSet` for deterministic iteration order" },
+]
