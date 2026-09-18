@@ -1,7 +1,7 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/toasty-macros/src/model/expand/embedded_enum.rs`."><title>embedded_enum.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="toasty_macros" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../../static.files/src-script-813739b1.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">toasty_macros/model/expand/</div>embedded_enum.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use super</span>::{Expand, schema, util};
 <a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span><span class="kw">crate</span>::model::schema::{BelongsTo, EnumStorageStrategy, FieldTy, Name, VariantValue};
 <a href=#3 id=3 data-nosnippet>3</a>
-<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>hashbrown::HashMap;
+<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>indexmap::IndexMap;
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>proc_macro2::TokenStream;
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>quote::{quote, quote_spanned};
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>syn::spanned::Spanned;
@@ -599,8 +599,8 @@
 <a href=#599 id=599 data-nosnippet>599</a>    /// override on one sharing field suffices, so propagate it to every
 <a href=#600 id=600 data-nosnippet>600</a>    /// member. Disagreeing overrides are rejected by
 <a href=#601 id=601 data-nosnippet>601</a>    /// `expand_shared_column_checks`; here the first one wins.
-<a href=#602 id=602 data-nosnippet>602</a>    </span><span class="kw">fn </span>shared_column_overrides(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; HashMap&lt;String, <span class="kw-2">&amp;</span>syn::LitStr&gt; {
-<a href=#603 id=603 data-nosnippet>603</a>        <span class="kw">let </span><span class="kw-2">mut </span>overrides = HashMap::new();
+<a href=#602 id=602 data-nosnippet>602</a>    </span><span class="kw">fn </span>shared_column_overrides(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; IndexMap&lt;String, <span class="kw-2">&amp;</span>syn::LitStr&gt; {
+<a href=#603 id=603 data-nosnippet>603</a>        <span class="kw">let </span><span class="kw-2">mut </span>overrides = IndexMap::new();
 <a href=#604 id=604 data-nosnippet>604</a>        <span class="kw">for </span>field <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.model.fields {
 <a href=#605 id=605 data-nosnippet>605</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(ident) = <span class="kw-2">&amp;</span>field.attrs.shared <span class="kw">else </span>{
 <a href=#606 id=606 data-nosnippet>606</a>                <span class="kw">continue</span>;
@@ -665,7 +665,7 @@
 <a href=#665 id=665 data-nosnippet>665</a>    <span class="kw">fn </span>primitive_schema_parts(
 <a href=#666 id=666 data-nosnippet>666</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#667 id=667 data-nosnippet>667</a>        field: <span class="kw-2">&amp;</span><span class="kw">crate</span>::model::schema::Field,
-<a href=#668 id=668 data-nosnippet>668</a>        shared_overrides: <span class="kw-2">&amp;</span>HashMap&lt;String, <span class="kw-2">&amp;</span>syn::LitStr&gt;,
+<a href=#668 id=668 data-nosnippet>668</a>        shared_overrides: <span class="kw-2">&amp;</span>IndexMap&lt;String, <span class="kw-2">&amp;</span>syn::LitStr&gt;,
 <a href=#669 id=669 data-nosnippet>669</a>    ) -&gt; SchemaFieldParts {
 <a href=#670 id=670 data-nosnippet>670</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
 <a href=#671 id=671 data-nosnippet>671</a>        <span class="kw">let </span>ty = primitive_ty_unwrap(field);
@@ -708,7 +708,7 @@
 <a href=#708 id=708 data-nosnippet>708</a>    </span><span class="kw">fn </span>primitive_storage_name(
 <a href=#709 id=709 data-nosnippet>709</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#710 id=710 data-nosnippet>710</a>        field: <span class="kw-2">&amp;</span><span class="kw">crate</span>::model::schema::Field,
-<a href=#711 id=711 data-nosnippet>711</a>        shared_overrides: <span class="kw-2">&amp;</span>HashMap&lt;String, <span class="kw-2">&amp;</span>syn::LitStr&gt;,
+<a href=#711 id=711 data-nosnippet>711</a>        shared_overrides: <span class="kw-2">&amp;</span>IndexMap&lt;String, <span class="kw-2">&amp;</span>syn::LitStr&gt;,
 <a href=#712 id=712 data-nosnippet>712</a>    ) -&gt; TokenStream {
 <a href=#713 id=713 data-nosnippet>713</a>        <span class="kw">let </span>own_override = field.attrs.column.as_ref().and_then(|c| c.name.as_ref());
 <a href=#714 id=714 data-nosnippet>714</a>        <span class="kw">let </span>group_override = || {
@@ -1168,8 +1168,8 @@
 <a href=#1168 id=1168 data-nosnippet>1168</a>/// siblings fill each other.
 <a href=#1169 id=1169 data-nosnippet>1169</a></span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>relation_key_fill&lt;<span class="lifetime">'a</span>&gt;(
 <a href=#1170 id=1170 data-nosnippet>1170</a>    fields: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw">crate</span>::model::schema::Field],
-<a href=#1171 id=1171 data-nosnippet>1171</a>) -&gt; HashMap&lt;usize, (<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw">crate</span>::model::schema::Field, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>syn::Ident)&gt; {
-<a href=#1172 id=1172 data-nosnippet>1172</a>    <span class="kw">let </span><span class="kw-2">mut </span>fill = HashMap::new();
+<a href=#1171 id=1171 data-nosnippet>1171</a>) -&gt; IndexMap&lt;usize, (<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw">crate</span>::model::schema::Field, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>syn::Ident)&gt; {
+<a href=#1172 id=1172 data-nosnippet>1172</a>    <span class="kw">let </span><span class="kw-2">mut </span>fill = IndexMap::new();
 <a href=#1173 id=1173 data-nosnippet>1173</a>    <span class="kw">for </span>field <span class="kw">in </span>fields {
 <a href=#1174 id=1174 data-nosnippet>1174</a>        <span class="kw">if let </span>FieldTy::BelongsTo(rel) = <span class="kw-2">&amp;</span>field.ty {
 <a href=#1175 id=1175 data-nosnippet>1175</a>            <span class="kw">for </span>fk_field <span class="kw">in </span><span class="kw-2">&amp;</span>rel.foreign_key {

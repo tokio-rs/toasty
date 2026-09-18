@@ -282,7 +282,7 @@
 <a href=#282 id=282 data-nosnippet>282</a>        // variants via `#[shared(name)]`. Emit each accessor name only once to
 <a href=#283 id=283 data-nosnippet>283</a>        // avoid duplicate method definitions. Root models and embedded structs
 <a href=#284 id=284 data-nosnippet>284</a>        // can never have duplicate field names, so this dedup is a no-op there.
-<a href=#285 id=285 data-nosnippet>285</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>seen_names = std::collections::HashSet::new();
+<a href=#285 id=285 data-nosnippet>285</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>seen_names = indexmap::IndexSet::new();
 <a href=#286 id=286 data-nosnippet>286</a>        <span class="kw">let </span>methods = <span class="self">self
 <a href=#287 id=287 data-nosnippet>287</a>            </span>.model
 <a href=#288 id=288 data-nosnippet>288</a>            .fields
