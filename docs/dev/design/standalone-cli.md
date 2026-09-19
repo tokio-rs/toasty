@@ -12,8 +12,8 @@ mutation.
 
 ## Motivation
 
-Today, using Toasty's migration tooling requires writing a per-project CLI
-binary that links the user's models and dispatches to `toasty-cli` as a
+Previously, using Toasty's migration tooling required writing a per-project
+CLI binary that links the user's models and dispatches to `toasty-cli` as a
 library. That is friction for every new Toasty project and does not scale to
 a workflow where `cargo install toasty-cli` should be enough.
 
@@ -50,10 +50,13 @@ toasty migrate apply --url postgres://...
 toasty migrate reset --url sqlite://app.db
 ```
 
-`toasty migrate generate` is the only subcommand that needs the user's
-schema. It compiles the user's package and reads the schema back out of the
-build artifact. Other subcommands operate on saved migration files or talk
-to a database directly.
+`toasty migrate generate` and `toasty migrate snapshot` need the user's
+schema. They compile the user's package and read the schema back out of the
+build artifact. Because each flavor maps model types to different column
+types, `generate` takes `--flavor` (or a `migration.flavor` default in
+`Toasty.toml`). Other subcommands operate on saved migration files or talk
+to a database directly via `--url` (defaulting to the `DATABASE_URL`
+environment variable).
 
 ### Workspaces
 
@@ -64,10 +67,10 @@ In a workspace, the CLI uses the workspace root package by default. Use
 toasty -p api migrate generate --flavor postgresql
 ```
 
-The flag is passed through to `cargo metadata` and the subsequent build, so
-its semantics match Cargo's exactly. If the workspace has no root package
-(a virtual manifest) and `-p` is not supplied, the CLI errors with the list
-of workspace members.
+`Toasty.toml` and the migration directory live in the selected package's
+directory, so each member keeps its own migration history. If the workspace
+has no root package (a virtual manifest) and `-p` is not supplied, the CLI
+errors with the list of workspace members.
 
 ### What the user does not have to do
 
@@ -85,9 +88,9 @@ Given a target package (root package, or `-p <pkg>`), the CLI picks an
 artifact to build:
 
 1. If the package has at least one `[[bin]]` target, build it with
-   `cargo build --bin <name>`. When multiple bins exist, `--bin <name>`
-   selects one explicitly; otherwise the CLI errors with the list of bin
-   names.
+   `cargo build --bin <name>`. When multiple bins exist,
+   `toasty migrate generate --bin <name>` selects one explicitly; otherwise
+   the CLI errors with the list of bin names.
 2. Otherwise, if the package has a `[lib]` target, build it as a `cdylib`
    with `cargo rustc --crate-type cdylib`. This overrides the crate type
    without modifying `Cargo.toml`.
@@ -102,21 +105,37 @@ ctor.
 `toasty` itself contributes a constructor through [`linktime`]:
 
 ```rust
-#[cfg_attr(debug_assertions, ctor)]
+#[cfg(debug_assertions)]
+#[linktime::ctor(unsafe)]
 fn __toasty_maybe_dump_schema() {
-    if std::env::var_os("TOASTY_DUMP_SCHEMA").is_none() {
-        return;
-    }
-    toasty::__dump_schema_to_stdout();
+    let Some(flavor) = std::env::var_os("TOASTY_DUMP_SCHEMA") else { return };
+    // dump the schema for `flavor` to stdout, then
     std::process::exit(0);
 }
 ```
 
 This runs before `main` (for binaries) or during `dlopen` (for cdylibs).
-When the env var is set, it walks the same `inventory` registrations
-`#[derive(Model)]` already produces, builds an `app::Schema`, serializes
-it as JSON to stdout, and exits with status 0. When the env var is not
-set, it returns immediately.
+The env var's value names the flavor (`sqlite`, `postgresql`, `mysql`,
+`turso`); a second variable carries the table name prefix, when one is
+configured. When it is set, the constructor collects the same `inventory`
+registrations `#[derive(Model)]` already produces (sorted by model name, so
+output is stable across rebuilds regardless of link order), builds an
+`app::Schema`, lowers it with the flavor's `Capability`, serializes the
+resulting `db::Schema` as JSON to stdout inside a versioned envelope, and
+exits with status 0. An unknown flavor value prints an error listing the
+valid names and exits with status 1. When the env var is not set, the
+constructor returns immediately.
+
+The dump payload is the `db::Schema`, not the `app::Schema`. The
+`db::Schema` is what migration generation diffs and what snapshot files
+already serialize, so it has a serde representation with a version field and
+a compatibility expectation across releases. The `app::Schema` graph is not
+serializable (`stmt::Value`, `stmt::Path`), and its IDs are assigned in
+registration order, which would make it an unstable wire format between a
+separately installed CLI and the user's `toasty` version. Lowering happens
+in the user's process, where the user's `toasty-core` version is
+authoritative; the CLI checks the envelope version and reports a version
+mismatch instead of misparsing.
 
 The ctor is gated on `cfg(debug_assertions)` so release builds carry no
 schema-dump machinery at all.
@@ -131,7 +150,7 @@ run.
 For a bin target, the CLI invokes the artifact directly:
 
 ```
-TOASTY_DUMP_SCHEMA=1 ./target/debug/<bin-name>
+TOASTY_DUMP_SCHEMA=postgresql ./target/debug/<bin-name>
 ```
 
 The ctor fires before `main` runs, dumps, and `exit(0)`s. The user's `main`
@@ -148,23 +167,18 @@ Rather than ship a second binary, `toasty-cli` re-execs itself with a
 hidden subcommand:
 
 ```
-toasty __load-cdylib /path/to/libuser_app.dylib
+toasty __load-cdylib /path/to/libuser_app.dylib --flavor postgresql
 ```
 
-The subcommand body is roughly:
-
-```rust
-unsafe {
-    libloading::Library::new(path)?;
-}
-unreachable!("ctor should have exited the process");
-```
-
-Setting `TOASTY_DUMP_SCHEMA=1` in the child's environment causes the ctor
-to dump and exit during `Library::new`. The parent CLI captures the
-child's stdout the same way it captures a bin's stdout. One binary is
-shipped; the re-exec keeps the dump happening in a process the parent
-controls.
+The subcommand sets `TOASTY_DUMP_SCHEMA` in its own environment and then
+loads the library with `libloading::Library::new`; the ctor dumps and exits
+during the load. `main` dispatches it before building the async runtime, so
+the process is still single-threaded when it mutates its own environment. The flavor travels as an argument rather than as an env
+var on the child because a debug build of the CLI links `toasty` itself and
+would otherwise trigger its own dump constructor — with an empty schema —
+before reaching the subcommand. The parent CLI captures the child's stdout
+the same way it captures a bin's stdout. One binary is shipped; the re-exec
+keeps the dump happening in a process the parent controls.
 
 The `__load-cdylib` subcommand is hidden from `--help` and not part of
 the public surface — its only caller is `toasty-cli` itself.
@@ -175,9 +189,9 @@ the public surface — its only caller is `toasty-cli` itself.
 2. Build the chosen artifact (`--bin <name>` or
    `cargo rustc --crate-type cdylib`), parsing
    `--message-format=json-render-diagnostics` to find the artifact path.
-3. Invoke the dumper: spawn the bin, or re-exec `toasty __load-cdylib`,
-   with `TOASTY_DUMP_SCHEMA=1` in the environment.
-4. Deserialize stdout as `app::Schema`.
+3. Invoke the dumper: spawn the bin with `TOASTY_DUMP_SCHEMA=<flavor>`, or
+   re-exec `toasty __load-cdylib <artifact> --flavor <flavor>`.
+4. Deserialize stdout as the versioned `db::Schema` envelope.
 5. Diff against the latest snapshot, prompt for renames, write the
    migration and snapshot files.
 
@@ -193,19 +207,41 @@ the public surface — its only caller is `toasty-cli` itself.
   or LTO settings, the ctor still runs — `linktime` uses `#[used]` plus
   link-section attributes that survive ordinary optimization. Aggressive
   cross-crate LTO at `dev` level is unusual; if a setting strips the ctor,
-  the CLI errors with "schema dumper produced no output, check that
-  `toasty` is a direct dependency of `<pkg>`."
+  the CLI errors with "the schema dumper produced no schema; check that the
+  `dev` profile of `<pkg>` does not strip link-time constructors."
 - **`toasty` not actually depended on.** The ctor is in `toasty`; without
-  the dependency the env var has no effect. The CLI detects this in
-  `cargo metadata` and errors before building.
+  the dependency the env var has no effect and running the artifact would
+  just run the user's program. The CLI checks twice before running anything.
+  First it resolves the dependency graph and refuses a package that cannot
+  reach `toasty` at all, which costs no build. The whole graph is walked, not
+  just direct dependencies, so a `models` crate paired with a `server` binary
+  still extracts. Reachability is not linkage, though — rustc links only what
+  the target references, so a binary that declares a `toasty`-dependent crate
+  and never names it carries no ctor. So after the build the CLI looks for
+  `TOASTY_DUMP_SCHEMA` in the artifact's bytes, which the ctor reads first
+  thing, and refuses to run an artifact without it. The reverse mistake is
+  harmless: code naming the constant for its own reasons is run as before.
+- **An empty schema.** An artifact that links `toasty` but never references
+  the crate holding the models dumps zero models. Generating from that would
+  write a `DROP TABLE` for every table in the previous snapshot, so the CLI
+  rejects a dump with no tables instead.
 - **Release builds.** The ctor is `cfg(debug_assertions)`-gated, so a
   release-only project would compile a binary without it. The CLI always
   uses the dev profile, so this does not affect the schema-extract path,
   but it does mean release binaries never carry the dump machinery.
+- **Version skew between the CLI and the user's `toasty`.** The dump
+  envelope carries a format version; on mismatch the CLI reports it and
+  asks the user to align the two, instead of failing on a parse error.
+- **Builder-level schema options.** Options set on `Db::builder()` at
+  runtime are not visible to the constructor, which runs before any user
+  code. `table_name_prefix` is therefore configured a second time, as
+  `migration.table_name_prefix` in `Toasty.toml`; the CLI passes it to the
+  dumper so the extracted schema names tables the way the application
+  does. The two values are not checked against each other.
 - **Env var leaking to user processes.** The env var is set only on the
   child the CLI spawns, never exported in the user's shell. Users who
-  manually `TOASTY_DUMP_SCHEMA=1 cargo run` get the dump-and-exit behavior
-  too, which is the intended way to test the path.
+  manually `TOASTY_DUMP_SCHEMA=sqlite cargo run` get the dump-and-exit
+  behavior too, which is the intended way to test the path.
 - **Sandboxed or hardened-runtime macOS bins.** Constructors run normally
   in `cargo build` output. We do not support extracting from an externally
   signed and notarized release binary.
@@ -213,10 +249,11 @@ the public surface — its only caller is `toasty-cli` itself.
 ## Driver integration
 
 Nothing for driver authors. The schema-extract path is entirely above the
-`Driver` trait. SQL serialization for `migrate generate` already moves
-from `Driver::generate_migration` to `toasty_sql::Flavor::generate_migration`
-in [#824] and that change is preserved here — drivers stay focused on
-runtime database access.
+`Driver` trait. `generate_migration` moves off the `Driver` trait entirely:
+migration SQL is a function of the diff and the target `Capability`, so it
+is generated by `toasty_sql::generate_migration` and drivers stay focused
+on runtime database access. A driver that previously customized migration
+SQL now expresses the difference through its `Capability`.
 
 ## Alternatives considered
 
@@ -225,6 +262,14 @@ a `Cargo.toml` that path-depends on the user's lib and a 6-line
 `dumper.rs`. Works, but lib-only, and the manifest must mirror the user's
 feature selection. The linktime approach uses the user's existing target,
 no manifest mirroring, and handles bin-only.
+
+**Dump the `app::Schema` and lower in the CLI.** Would make the dump
+flavor-independent, but requires serde support across the whole
+`app::Schema` graph — including `stmt::Value` and `stmt::Path` — and turns
+an unstable, registration-order-dependent structure into a wire format
+between separately versioned binaries. The `db::Schema` already has a
+stable, versioned serialization (it is the snapshot format), and lowering
+in the user's process keeps the user's `toasty-core` authoritative.
 
 **Static extraction via `object` / `goblin`.** Read schema fragments out
 of the linked binary without executing it. Requires every part of
@@ -248,25 +293,15 @@ hand.
 auto-discovers `examples/*.rs`. Mutates the user's source tree even
 transactionally; rejected for the same reason in [#762].
 
-## Open questions
-
-- **`cfg(debug_assertions)` vs. always-on ctor.** A `getenv` per startup
-  is cheap; gating on `debug_assertions` is cleaner. Keeping the gate
-  means a release-only consumer cannot extract a schema from their built
-  artifact, which is acceptable for a dev-time tool. Deferrable.
-- **Subcommand surface for `--bin <name>`.** Likely just `toasty migrate
-  generate --bin <name>`, mirroring `cargo`. Deferrable until the build
-  selection logic lands.
-
 ## Out of scope
 
 - **Watch mode.** Auto-regenerate migrations on save. Separate feature.
 - **Cross-compilation.** The ctor approach assumes the dumper artifact
   runs on the host. Schema extraction for cross-compiled targets is not
   supported.
-- **Schema export format.** This design extracts the same `app::Schema`
-  the runtime uses, serialized as JSON. A stable on-disk schema format
-  is a separate concern.
+- **Schema export format.** The dump envelope is IPC between the CLI and
+  the constructor, not a public schema format. A stable on-disk schema
+  format is a separate concern.
 
 [#762]: https://github.com/tokio-rs/toasty/issues/762
 [#824]: https://github.com/tokio-rs/toasty/pull/824

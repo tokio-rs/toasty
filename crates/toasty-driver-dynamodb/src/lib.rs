@@ -28,10 +28,7 @@ use toasty_core::{
         Capability, ConnectContext, Driver, ExecResponse, QueryLogConfig, log::QueryLog,
         operation::Operation,
     },
-    schema::{
-        db::{self, Column, ColumnId, Migration, Table},
-        diff,
-    },
+    schema::db::{self, Column, ColumnId, Table},
     stmt::{self, ExprContext},
 };
 
@@ -112,12 +109,6 @@ impl Driver for DynamoDb {
         let mut connection = Connection::new(self.client.clone());
         connection.query_log = cx.query_log;
         Ok(Box::new(connection))
-    }
-
-    fn generate_migration(&self, _schema_diff: &diff::Schema<'_>) -> Migration {
-        unimplemented!(
-            "DynamoDB migrations are not yet supported. DynamoDB schema changes require manual table updates through the AWS console or SDK."
-        )
     }
 
     async fn reset_db(&self) -> toasty_core::Result<()> {

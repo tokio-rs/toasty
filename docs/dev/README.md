@@ -34,6 +34,7 @@ Guide-level design documents for specific features. Use
 - [Lower-then-Simplify Pipeline](./design/lower-then-simplify.md)
 - [`query!` Macro](./design/query-macro.md)
 - [Retry-Safe Recovery from Connection Loss](./design/retry-safe-recovery.md)
+- [Standalone `toasty` CLI](./design/standalone-cli.md)
 - [Static Assertions for `create!` Required Fields](./design/static-assertions-create-macro.md)
 
 ## Roadmap
