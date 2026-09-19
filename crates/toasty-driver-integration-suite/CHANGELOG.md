@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.10.0...toasty-driver-integration-suite-v0.11.0) - 2026-09-19
+
+### Added
+
+- Reference embedded relations with model values ([#1172])
+- Support jiff::tz::TimeZone as a model field type ([#1221])
+- *(postgresql)* Support unique Vec constraints ([#1199])
+- *(engine)* Support conditional execution in the exec program ([#1182])
+
+### Fixed
+
+- *(engine)* Support variant-rooted includes on update queries ([#1237])
+- *(engine)* Support `Not` operator in query evaluation and type inference ([#1214])
+- *(mysql)* [**breaking**] MySQL batch inserts no longer automatically infer IDs ([#1194])
+- *(sql)* Quote PostgreSQL enum type names ([#1186])
+- *(macros)* [**breaking**] New-type fields renamed from `_0` to `inner` ([#1183])
+
+[#1172]: https://github.com/tokio-rs/toasty/pull/1172
+[#1182]: https://github.com/tokio-rs/toasty/pull/1182
+[#1183]: https://github.com/tokio-rs/toasty/pull/1183
+[#1186]: https://github.com/tokio-rs/toasty/pull/1186
+[#1194]: https://github.com/tokio-rs/toasty/pull/1194
+[#1199]: https://github.com/tokio-rs/toasty/pull/1199
+[#1214]: https://github.com/tokio-rs/toasty/pull/1214
+[#1221]: https://github.com/tokio-rs/toasty/pull/1221
+[#1237]: https://github.com/tokio-rs/toasty/pull/1237
+
 ## [0.10.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.9.0...toasty-driver-integration-suite-v0.10.0) - 2026-08-11
 
 ### Added

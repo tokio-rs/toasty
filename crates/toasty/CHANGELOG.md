@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.10.0...toasty-v0.11.0) - 2026-09-19
+
+### Added
+
+- *(turso)* [**breaking**] Connect to Turso Cloud over HTTP (serverless) ([#1211])
+- Reference embedded relations with model values ([#1172])
+- Support jiff::tz::TimeZone as a model field type ([#1221])
+- *(postgresql)* Support unique Vec constraints ([#1199])
+- *(engine)* Add conditional execution to the exec program ([#1182])
+
+### Fixed
+
+- *(engine)* Allow variant-rooted includes on update queries ([#1237])
+- *(toasty-core)* Resolve enum fields by variant-local index ([#1218])
+- *(engine)* Support `Not` in eval verify and type inference ([#1214])
+- Get Connect max_connection from driver ([#1195])
+- *(macros)* Allow fields named path and from_path ([#1196])
+- *(mysql)* [**breaking**] Stop inferring batch insert IDs ([#1194])
+
+[#1172]: https://github.com/tokio-rs/toasty/pull/1172
+[#1182]: https://github.com/tokio-rs/toasty/pull/1182
+[#1194]: https://github.com/tokio-rs/toasty/pull/1194
+[#1195]: https://github.com/tokio-rs/toasty/pull/1195
+[#1196]: https://github.com/tokio-rs/toasty/pull/1196
+[#1199]: https://github.com/tokio-rs/toasty/pull/1199
+[#1211]: https://github.com/tokio-rs/toasty/pull/1211
+[#1214]: https://github.com/tokio-rs/toasty/pull/1214
+[#1218]: https://github.com/tokio-rs/toasty/pull/1218
+[#1221]: https://github.com/tokio-rs/toasty/pull/1221
+[#1237]: https://github.com/tokio-rs/toasty/pull/1237
+
 ## [0.10.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.9.0...toasty-v0.10.0) - 2026-08-11
 
 ### Added
