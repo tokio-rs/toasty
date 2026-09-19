@@ -54,7 +54,7 @@ impl Driver for MigrationDriver {
         Cow::Borrowed("test:embedded-migrations")
     }
 
-    fn capability(&self) -> &'static Capability {
+    fn capability(&self) -> &Capability {
         &Capability::SQLITE
     }
 

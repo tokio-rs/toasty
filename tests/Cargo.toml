@@ -30,6 +30,12 @@ mysql = [
     "dep:sqlx-core",
     "dep:sqlx-mysql",
 ]
+mariadb = [
+    "toasty/mysql",
+    "dep:toasty-driver-mysql",
+    "dep:sqlx-core",
+    "dep:sqlx-mysql",
+]
 dynamodb = ["toasty/dynamodb", "dep:toasty-driver-dynamodb", "dep:aws-config", "dep:aws-sdk-dynamodb"]
 postgresql = ["toasty/postgresql", "dep:toasty-driver-postgresql", "dep:tokio-postgres"]
 
