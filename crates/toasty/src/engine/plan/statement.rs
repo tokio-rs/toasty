@@ -2036,7 +2036,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     // ===== Finalization helpers =====
 
     fn process_back_ref_projections(&mut self, exec_stmt_node_id: mir::NodeId) {
-        for back_ref in self.stmt_info.back_refs.values() {
+        for (child_id, back_ref) in &self.stmt_info.back_refs {
             let projection = stmt::Expr::record(back_ref.exprs.iter().map(|expr_reference| {
                 let index = self
                     .load_data
@@ -2054,9 +2054,89 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             let body = eval::Func::from_stmt(projection, vec![row_ty]);
             let eval =
                 mir::Eval::map_over(&self.planner.mir, exec_stmt_node_id, IndexSet::new(), body);
-            let project_node_id = self.planner.mir.insert(eval);
+            let mut project_node_id = self.planner.mir.insert(eval);
+            if self.stmt_info.stmt().is_query()
+                && let Some(predicate) = self.back_ref_filter(*child_id, back_ref, project_node_id)
+            {
+                project_node_id = self.planner.mir.insert(mir::Filter {
+                    input: project_node_id,
+                    args: IndexSet::new(),
+                    predicate,
+                    ty: self.planner.mir[project_node_id].ty().clone(),
+                });
+            }
             back_ref.node_id.set(Some(project_node_id));
         }
+    }
+
+    /// Filter each child's batch input by predicates that depend only on the
+    /// parent. In particular, a variant-scoped include receives keys only from
+    /// that variant. An empty batch simplifies the child query to no results.
+    fn back_ref_filter(
+        &self,
+        child_id: hir::StmtId,
+        back_ref: &hir::BackRef,
+        input: mir::NodeId,
+    ) -> Option<eval::Func> {
+        let child = &self.planner.hir[child_id];
+        let stmt::Statement::Query(query) = child.stmt() else {
+            return None;
+        };
+        let stmt::ExprSet::Select(select) = &query.body else {
+            return None;
+        };
+        let filter = select.filter.expr.as_ref()?;
+        let operands = match filter {
+            stmt::Expr::And(and) => and.operands.as_slice(),
+            expr => std::slice::from_ref(expr),
+        };
+        let mut predicates = vec![];
+        for operand in operands {
+            let mut predicate = operand.clone();
+            let mut valid = true;
+            let mut references_parent = false;
+            visit_mut::for_each_expr_mut(&mut predicate, |expr| match expr {
+                stmt::Expr::Arg(arg) => {
+                    if let Some(hir::Arg::Ref {
+                        stmt_id,
+                        target_expr_ref,
+                        ..
+                    }) = child.args.get(arg.position)
+                        && *stmt_id == self.stmt_id
+                    {
+                        let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
+                        *expr = stmt::Expr::arg_project(0, [column]);
+                        references_parent = true;
+                    } else {
+                        valid = false;
+                    }
+                }
+                stmt::Expr::Value(_)
+                | stmt::Expr::BinaryOp(_)
+                | stmt::Expr::And(_)
+                | stmt::Expr::Or(_)
+                | stmt::Expr::Not(_)
+                | stmt::Expr::IsNull(_)
+                | stmt::Expr::Cast(_)
+                | stmt::Expr::Project(_)
+                | stmt::Expr::Record(_)
+                | stmt::Expr::Match(_) => {}
+                _ => valid = false,
+            });
+            if valid && references_parent {
+                predicates.push(predicate);
+            }
+        }
+        if predicates.is_empty() {
+            return None;
+        }
+        let stmt::Type::List(row_ty) = self.planner.mir[input].ty() else {
+            return None;
+        };
+        Some(eval::Func::from_stmt(
+            stmt::Expr::and_from_vec(predicates),
+            vec![(**row_ty).clone()],
+        ))
     }
 
     fn plan_child_statements(&mut self) -> Result<()> {
