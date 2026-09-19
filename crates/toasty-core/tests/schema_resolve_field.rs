@@ -6,6 +6,8 @@ const USER: ModelId = ModelId(0);
 const STATUS_ENUM: ModelId = ModelId(1);
 const CONTACT_ENUM: ModelId = ModelId(2);
 const ADDRESS: ModelId = ModelId(3);
+const DOC_PROFILE: ModelId = ModelId(4);
+const POST: ModelId = ModelId(5);
 
 fn id_field(model: ModelId) -> Field {
     Field {
@@ -102,11 +104,144 @@ fn embedded_field(model: ModelId, index: usize, name: &str, target: ModelId) -> 
     }
 }
 
+/// A `#[document]` field: the target model's fields live inside one document
+/// column rather than as `app::Field`s on the parent.
+fn document_field(model: ModelId, index: usize, name: &str, target: ModelId) -> Field {
+    Field {
+        id: model.field(index),
+        name: FieldName {
+            app: Some(name.to_string()),
+            storage: None,
+        },
+        ty: FieldTy::Primitive(FieldPrimitive {
+            ty: stmt::Type::Model(target),
+            storage_ty: None,
+            serialize: None,
+        }),
+        nullable: false,
+        primary_key: false,
+        auto: None,
+        versionable: false,
+        deferred: false,
+        constraints: vec![],
+        variant: None,
+        shared: None,
+    }
+}
+
+fn has_field(model: ModelId, index: usize, name: &str, target: ModelId, pair: FieldId) -> Field {
+    Field {
+        id: model.field(index),
+        name: FieldName {
+            app: Some(name.to_string()),
+            storage: None,
+        },
+        ty: FieldTy::Has(Has {
+            target,
+            expr_ty: stmt::Type::Unknown,
+            cardinality: Cardinality::Many {
+                singular: Name::new("post"),
+            },
+            pair_id: pair,
+        }),
+        nullable: false,
+        primary_key: false,
+        auto: None,
+        versionable: false,
+        deferred: true,
+        constraints: vec![],
+        variant: None,
+        shared: None,
+    }
+}
+
+fn belongs_to_field(
+    model: ModelId,
+    index: usize,
+    name: &str,
+    target: ModelId,
+    pair: FieldId,
+    fk_source: FieldId,
+    fk_target: FieldId,
+) -> Field {
+    Field {
+        id: model.field(index),
+        name: FieldName {
+            app: Some(name.to_string()),
+            storage: None,
+        },
+        ty: FieldTy::BelongsTo(BelongsTo {
+            target,
+            expr_ty: stmt::Type::Unknown,
+            pair: Some(pair),
+            foreign_key: ForeignKey {
+                fields: vec![ForeignKeyField {
+                    source: fk_source,
+                    target: fk_target,
+                }],
+            },
+        }),
+        nullable: false,
+        primary_key: false,
+        auto: None,
+        versionable: false,
+        deferred: true,
+        constraints: vec![],
+        variant: None,
+        shared: None,
+    }
+}
+
+fn via_field(
+    model: ModelId,
+    index: usize,
+    name: &str,
+    target: ModelId,
+    projection: &[usize],
+    terminal: Option<usize>,
+) -> Field {
+    Field {
+        id: model.field(index),
+        name: FieldName {
+            app: Some(name.to_string()),
+            storage: None,
+        },
+        ty: FieldTy::Via(Via::new(
+            target,
+            stmt::Type::Unknown,
+            Cardinality::Many {
+                singular: Name::new("post"),
+            },
+            stmt::Path {
+                root: stmt::PathRoot::Model(model),
+                projection: stmt::Projection::from(projection),
+            },
+            terminal,
+        )),
+        nullable: false,
+        primary_key: false,
+        auto: None,
+        versionable: false,
+        deferred: true,
+        constraints: vec![],
+        variant: None,
+        shared: None,
+    }
+}
+
 /// Schema:
-///   User { id, name, status: Status, contact: ContactInfo, address: Address }
+///   User { id, name, status: Status, contact: ContactInfo, address: Address,
+///          profile: DocProfile as #[document], posts: Has<Post>,
+///          posts_via: Via<Post> via posts, post_titles: Via<String> via posts.title }
+///   Post { id, title, author_id, author: BelongsTo<User> }
 ///   Status = enum { Active(0), Inactive(1) }  (unit variants only)
 ///   ContactInfo = enum { Email(0, fields: [address]), Phone(1, fields: [country_code, number]) }
 ///   Address = struct { street, city }
+///   DocProfile = struct { city, zip, contact: ContactInfo }
+///
+/// The enum inside `DocProfile` is not a valid Db document shape
+/// (`schema::Builder` rejects it), but `Schema::from_macro` accepts it, so
+/// the app-schema walk must still resolve paths through it.
 fn schema() -> Schema {
     let status = Model::EmbeddedEnum(EmbeddedEnum {
         id: STATUS_ENUM,
@@ -170,6 +305,46 @@ fn schema() -> Schema {
         indices: vec![],
     });
 
+    let doc_profile = Model::EmbeddedStruct(EmbeddedStruct {
+        id: DOC_PROFILE,
+        name: Name::new("DocProfile"),
+        fields: vec![
+            prim_field(DOC_PROFILE, 0, "city"),
+            prim_field(DOC_PROFILE, 1, "zip"),
+            embedded_field(DOC_PROFILE, 2, "contact", CONTACT_ENUM),
+        ],
+        indices: vec![],
+    });
+
+    let post = Model::Root(ModelRoot {
+        id: POST,
+        name: Name::new("Post"),
+        fields: vec![
+            id_field(POST),
+            prim_field(POST, 1, "title"),
+            prim_field(POST, 2, "author_id"),
+            belongs_to_field(
+                POST,
+                3,
+                "author",
+                USER,
+                USER.field(6),
+                POST.field(2),
+                USER.field(0),
+            ),
+        ],
+        primary_key: PrimaryKey {
+            fields: vec![POST.field(0)],
+            index: IndexId {
+                model: POST,
+                index: 0,
+            },
+        },
+        table_name: "posts".to_string(),
+        indices: vec![],
+        version_field: None,
+    });
+
     let user = Model::Root(ModelRoot {
         id: USER,
         name: Name::new("User"),
@@ -179,6 +354,10 @@ fn schema() -> Schema {
             embedded_field(USER, 2, "status", STATUS_ENUM),
             embedded_field(USER, 3, "contact", CONTACT_ENUM),
             embedded_field(USER, 4, "address", ADDRESS),
+            document_field(USER, 5, "profile", DOC_PROFILE),
+            has_field(USER, 6, "posts", POST, POST.field(3)),
+            via_field(USER, 7, "posts_via", POST, &[6], None),
+            via_field(USER, 8, "post_titles", POST, &[6, 1], Some(1)),
         ],
         primary_key: PrimaryKey {
             fields: vec![USER.field(0)],
@@ -192,7 +371,7 @@ fn schema() -> Schema {
         version_field: None,
     });
 
-    Schema::from_macro([user, status, contact, address]).unwrap()
+    Schema::from_macro([user, status, contact, address, doc_profile, post]).unwrap()
 }
 
 // === Primitive fields ===
@@ -394,6 +573,175 @@ fn resolve_field_returns_none_for_variant_only_projection() {
     );
     assert!(
         s.resolve_field(root, &stmt::Projection::from([2, 0]))
+            .is_none()
+    );
+}
+
+// === #[document] fields ===
+
+#[test]
+fn resolve_document_path_returns_document_field() {
+    let s = schema();
+    let root = s.model(USER);
+
+    // User.profile.city => the document field, not the sub-field: the
+    // document model's fields have no `app::Field` on `User`.
+    let field = s
+        .resolve_field(root, &stmt::Projection::from([5, 0]))
+        .unwrap();
+    assert_eq!(field.name.app.as_deref(), Some("profile"));
+
+    // A path that stops at the document field itself resolves to it too.
+    let field = s.resolve_field(root, &stmt::Projection::from([5])).unwrap();
+    assert_eq!(field.name.app.as_deref(), Some("profile"));
+}
+
+// === resolve_field_path() — variant roots ===
+
+/// A typed variant path (`Variant(ContactInfo/Phone)` + local step) and its
+/// flattened spelling (`Model(User)` + `[3, 1, 1]`) resolve to the same field.
+#[test]
+fn resolve_field_path_variant_root_matches_flattened_path() {
+    let s = schema();
+
+    let mut variant = stmt::Path::from_variant(
+        stmt::Path::field(USER, 3),
+        VariantId {
+            model: CONTACT_ENUM,
+            index: 1,
+        },
+    );
+    variant.projection.push(1);
+
+    let mut flattened = stmt::Path::from_index(USER, 3);
+    flattened.projection.push(1);
+    flattened.projection.push(1);
+
+    let variant_field = s.resolve_field_path(&variant).unwrap();
+    let flattened_field = s.resolve_field_path(&flattened).unwrap();
+    assert_eq!(variant_field.name.app.as_deref(), Some("number"));
+    assert_eq!(variant_field.id, flattened_field.id);
+}
+
+#[test]
+fn resolve_field_path_variant_root_without_local_step_is_none() {
+    let s = schema();
+
+    // A variant root with no local step names a discriminant, not a field.
+    let variant = stmt::Path::from_variant(
+        stmt::Path::field(USER, 3),
+        VariantId {
+            model: CONTACT_ENUM,
+            index: 1,
+        },
+    );
+    assert!(s.resolve_field_path(&variant).is_none());
+}
+
+#[test]
+fn resolve_field_path_variant_root_out_of_bounds_is_none() {
+    let s = schema();
+
+    // Email has a single local field; local step 1 is out of bounds.
+    let mut variant = stmt::Path::from_variant(
+        stmt::Path::field(USER, 3),
+        VariantId {
+            model: CONTACT_ENUM,
+            index: 0,
+        },
+    );
+    variant.projection.push(1);
+    assert!(s.resolve_field_path(&variant).is_none());
+}
+
+#[test]
+fn resolve_field_path_variant_root_mismatched_enum_is_none() {
+    let s = schema();
+
+    // The parent field is `ContactInfo`, but the variant id names `Status`.
+    // Without the check, the local step would be read against `ContactInfo`.
+    let mut variant = stmt::Path::from_variant(
+        stmt::Path::field(USER, 3),
+        VariantId {
+            model: STATUS_ENUM,
+            index: 0,
+        },
+    );
+    variant.projection.push(0);
+    assert!(s.resolve_field_path(&variant).is_none());
+}
+
+#[test]
+fn resolve_field_path_variant_root_crossing_document_reports_leaf() {
+    let s = schema();
+
+    // User.profile.contact -> Email -> local 0 (address): the parent path
+    // crosses the `profile` document field, but a variant root reports the
+    // leaf, not the document ancestor.
+    let mut variant = stmt::Path::from_variant(
+        stmt::Path {
+            root: stmt::PathRoot::Model(USER),
+            projection: stmt::Projection::from([5, 2]),
+        },
+        VariantId {
+            model: CONTACT_ENUM,
+            index: 0,
+        },
+    );
+    variant.projection.push(0);
+
+    let field = s.resolve_field_path(&variant).unwrap();
+    assert_eq!(field.name.app.as_deref(), Some("address"));
+}
+
+// === Relations ===
+
+#[test]
+fn resolve_follows_relations_and_returns_relation_field() {
+    let s = schema();
+
+    // A projection that stops at a relation returns the relation field.
+    let user = s.model(USER);
+    let field = s.resolve_field(user, &stmt::Projection::from([6])).unwrap();
+    assert_eq!(field.name.app.as_deref(), Some("posts"));
+
+    let post = s.model(POST);
+    let field = s.resolve_field(post, &stmt::Projection::from([3])).unwrap();
+    assert_eq!(field.name.app.as_deref(), Some("author"));
+
+    let field = s.resolve_field(user, &stmt::Projection::from([7])).unwrap();
+    assert_eq!(field.name.app.as_deref(), Some("posts_via"));
+
+    // Steps through relations continue on the target model.
+    let field = s
+        .resolve_field(user, &stmt::Projection::from([6, 1]))
+        .unwrap();
+    assert_eq!(field.name.app.as_deref(), Some("title"));
+
+    let field = s
+        .resolve_field(post, &stmt::Projection::from([3, 1]))
+        .unwrap();
+    assert_eq!(field.name.app.as_deref(), Some("name"));
+
+    // A model-terminal via follows its target like any other relation.
+    let field = s
+        .resolve_field(user, &stmt::Projection::from([7, 1]))
+        .unwrap();
+    assert_eq!(field.name.app.as_deref(), Some("title"));
+}
+
+#[test]
+fn resolve_scalar_terminal_via_is_leaf_but_not_traversable() {
+    let s = schema();
+    let user = s.model(USER);
+
+    // A scalar-terminal via names the via field itself.
+    let field = s.resolve_field(user, &stmt::Projection::from([8])).unwrap();
+    assert_eq!(field.name.app.as_deref(), Some("post_titles"));
+
+    // Its terminal is a scalar, so there is no model to step into.
+    assert!(
+        s.resolve_field(user, &stmt::Projection::from([8, 0]))
             .is_none()
     );
 }
