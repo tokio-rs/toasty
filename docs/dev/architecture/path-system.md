@@ -159,8 +159,9 @@ discriminant, or a `ResolveError`. Two callers shape what it returns:
   the local indices the typed accessors produce — including a document
   crossed on the parent path.
 
-The simplification phase uses `Schema::resolve_field_path` to turn relation
-paths into concrete relation metadata.
+The lowering phase uses `Schema::resolve_field_path` to turn relation paths
+into concrete relation metadata
+(`toasty/src/engine/lower/association.rs`).
 
 ### Field-bitset metadata
 
