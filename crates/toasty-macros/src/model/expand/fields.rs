@@ -282,7 +282,7 @@ impl Expand<'_> {
         // variants via `#[shared(name)]`. Emit each accessor name only once to
         // avoid duplicate method definitions. Root models and embedded structs
         // can never have duplicate field names, so this dedup is a no-op there.
-        let mut seen_names = std::collections::HashSet::new();
+        let mut seen_names = indexmap::IndexSet::new();
         let methods = self
             .model
             .fields
