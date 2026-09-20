@@ -124,7 +124,7 @@ pub async fn compare_non_primary_reference_same_key_type(test: &mut Test) -> Res
         id: String,
         #[unique]
         serial: String,
-        #[unique]
+        #[index]
         label: toasty::Deferred<String>,
     }
 
