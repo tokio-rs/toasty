@@ -28,6 +28,7 @@ use std::path::Path;
 /// );
 /// ```
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct Config {
     /// Migration-related configuration
     pub migration: MigrationConfig,

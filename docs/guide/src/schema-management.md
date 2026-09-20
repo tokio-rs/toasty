@@ -58,25 +58,28 @@ anyhow = "1"
 Create a CLI binary in `src/bin/cli.rs`:
 
 ```rust,ignore
-use toasty_cli::{Config, ToastyCli};
+use toasty_cli::ToastyCli;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let config = Config::load()?;
-
     let db = toasty::Db::builder()
         .models(toasty::models!(crate::*))
         .connect("sqlite:./my_app.db")
         .await?;
 
-    let cli = ToastyCli::with_config(db, config);
+    let cli = ToastyCli::new(db);
     cli.parse_and_run().await?;
 
     Ok(())
 }
 ```
 
-Add a `Toasty.toml` configuration file in your project root:
+`ToastyCli::new` reads `Toasty.toml` from the working directory when a command
+runs. If the file is absent, it uses defaults. Omitted settings also use
+defaults; invalid configuration returns an error.
+
+Add a `Toasty.toml` configuration file in your project root and run the CLI
+from that directory:
 
 ```toml
 [migration]
@@ -85,6 +88,9 @@ prefix_style = "Sequential"
 checksums = false
 statement_breakpoints = true
 ```
+
+To supply configuration programmatically, use `ToastyCli::with_config(db,
+config)`. This uses the supplied configuration without reading `Toasty.toml`.
 
 ## Configuration options
 

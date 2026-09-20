@@ -34,6 +34,7 @@ use std::path::PathBuf;
 /// );
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct MigrationConfig {
     /// Path to the migrations folder
     pub path: PathBuf,

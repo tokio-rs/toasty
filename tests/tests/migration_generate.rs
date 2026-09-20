@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, fs, path::Path, process::Command, sync::Arc};
 use toasty::db::{Capability, ConnectContext, Driver, ExecResponse};
 use toasty_core::{
     Schema,
@@ -70,21 +70,7 @@ impl Connection for SchemaConnection {
 
 #[tokio::test]
 async fn migration_generate_with_decimal_model_writes_snapshot() {
-    #[derive(Debug, toasty::Model)]
-    struct SomeModel {
-        #[key]
-        #[auto]
-        id: u64,
-
-        weight: rust_decimal::Decimal,
-    }
-
-    let db = toasty::Db::builder()
-        .models(toasty::models!(SomeModel))
-        .table_name_prefix("svc_")
-        .build(PostgresSchemaDriver)
-        .await
-        .unwrap();
+    let db = schema_db().await;
     let dir = tempfile::tempdir().unwrap();
     let config =
         toasty_cli::Config::new().migration(toasty_cli::MigrationConfig::new().path(dir.path()));
@@ -105,4 +91,138 @@ async fn migration_generate_with_decimal_model_writes_snapshot() {
         .unwrap();
     assert_eq!(weight.ty, stmt::Type::Decimal);
     assert_eq!(weight.storage_ty, Type::Numeric(None));
+}
+
+#[tokio::test]
+async fn migration_generate_uses_toasty_toml() {
+    if !in_project(Some("[migration]\nprefix_style = \"Timestamp\"\n")) {
+        return;
+    }
+
+    toasty_cli::ToastyCli::new(schema_db().await)
+        .parse_from(["toasty", "migration", "generate"])
+        .await
+        .unwrap();
+
+    let history = toasty::migration::History::load("toasty/history.toml").unwrap();
+    let [entry] = history.entries() else {
+        panic!("expected one migration");
+    };
+    let prefix = entry.name.strip_suffix("_migration.sql").unwrap();
+    jiff::civil::DateTime::strptime("%Y%m%d_%H%M%S", prefix).unwrap();
+    assert!(Path::new("toasty/migrations").join(&entry.name).is_file());
+    assert_eq!(entry.snapshot_name, format!("{prefix}_snapshot.toml"));
+    assert!(
+        Path::new("toasty/snapshots")
+            .join(&entry.snapshot_name)
+            .is_file()
+    );
+}
+
+#[tokio::test]
+async fn migration_generate_without_toasty_toml_uses_defaults() {
+    if !in_project(None) {
+        return;
+    }
+
+    toasty_cli::ToastyCli::new(schema_db().await)
+        .parse_from(["toasty", "migration", "generate"])
+        .await
+        .unwrap();
+
+    assert!(Path::new("toasty/migrations/0000_migration.sql").is_file());
+}
+
+#[tokio::test]
+async fn migration_generate_rejects_invalid_toasty_toml() {
+    if !in_project(Some("[migration]\nprefix_style = \"invalid\"\n")) {
+        return;
+    }
+
+    let err = toasty_cli::ToastyCli::new(schema_db().await)
+        .parse_from(["toasty", "migration", "generate"])
+        .await
+        .unwrap_err();
+
+    let message = format!("{err:#}");
+    assert!(message.contains("failed to parse Toasty config file at `Toasty.toml`"));
+    assert!(message.contains("invalid"));
+    assert!(!Path::new("toasty").exists());
+}
+
+#[tokio::test]
+async fn migration_generate_with_config_ignores_toasty_toml() {
+    if !in_project(Some("invalid TOML")) {
+        return;
+    }
+
+    let config =
+        toasty_cli::Config::new().migration(toasty_cli::MigrationConfig::new().path("custom"));
+    toasty_cli::ToastyCli::with_config(schema_db().await, config)
+        .parse_from(["toasty", "migration", "generate"])
+        .await
+        .unwrap();
+
+    assert!(Path::new("custom/migrations/0000_migration.sql").is_file());
+    assert!(!Path::new("toasty").exists());
+}
+
+#[test]
+fn toasty_toml_defaults_for_omitted_settings() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("Toasty.toml");
+
+    for contents in ["", "[migration]\n"] {
+        fs::write(&path, contents).unwrap();
+        assert_eq!(
+            toasty_cli::Config::load_from(&path).unwrap(),
+            toasty_cli::Config::default()
+        );
+    }
+}
+
+fn in_project(config: Option<&str>) -> bool {
+    let thread = std::thread::current();
+    let test_name = thread.name().unwrap();
+    if std::env::var("TOASTY_CLI_TEST_CHILD").as_deref() == Ok(test_name) {
+        return true;
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    if let Some(config) = config {
+        fs::write(dir.path().join("Toasty.toml"), config).unwrap();
+    }
+
+    // Isolate the working directory from tests running in parallel.
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", test_name, "--nocapture"])
+        .env("TOASTY_CLI_TEST_CHILD", test_name)
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    false
+}
+
+async fn schema_db() -> toasty::Db {
+    #[derive(Debug, toasty::Model)]
+    struct SomeModel {
+        #[key]
+        #[auto]
+        id: u64,
+
+        weight: rust_decimal::Decimal,
+    }
+
+    toasty::Db::builder()
+        .models(toasty::models!(SomeModel))
+        .table_name_prefix("svc_")
+        .build(PostgresSchemaDriver)
+        .await
+        .unwrap()
 }

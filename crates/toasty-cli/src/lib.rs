@@ -45,6 +45,7 @@ pub use migration::{
 
 use anyhow::Result;
 use clap::Parser;
+use std::path::Path;
 use toasty::Db;
 
 /// A CLI runner that dispatches migration subcommands against a [`Db`].
@@ -68,23 +69,38 @@ use toasty::Db;
 pub struct ToastyCli {
     db: Db,
     config: Config,
+    load_config_file: bool,
 }
 
 impl ToastyCli {
-    /// Create a new ToastyCli instance with the given database connection
+    /// Create a new ToastyCli instance with the given database connection.
+    ///
+    /// Commands load `Toasty.toml` from the working directory, using defaults
+    /// if the file is absent. Configuration errors are returned by
+    /// [`parse_and_run`](Self::parse_and_run) or [`parse_from`](Self::parse_from).
     pub fn new(db: Db) -> Self {
         Self {
             db,
             config: Config::default(),
+            load_config_file: true,
         }
     }
 
-    /// Create a new ToastyCli instance with a custom configuration
+    /// Create a new ToastyCli instance with a custom configuration.
+    ///
+    /// Commands use this configuration without reading `Toasty.toml`.
     pub fn with_config(db: Db, config: Config) -> Self {
-        Self { db, config }
+        Self {
+            db,
+            config,
+            load_config_file: false,
+        }
     }
 
-    /// Get a reference to the configuration
+    /// Get a reference to the default or explicitly supplied configuration.
+    ///
+    /// With [`new`](Self::new), file configuration is loaded separately when
+    /// a command runs and is not reflected here.
     pub fn config(&self) -> &Config {
         &self.config
     }
@@ -106,8 +122,14 @@ impl ToastyCli {
     }
 
     async fn run(&self, cli: Cli) -> Result<()> {
+        let config = if self.load_config_file && Path::new("Toasty.toml").try_exists()? {
+            Config::load()?
+        } else {
+            self.config.clone()
+        };
+
         match cli.command {
-            Command::Migration(cmd) => cmd.run(&self.db, &self.config).await,
+            Command::Migration(cmd) => cmd.run(&self.db, &config).await,
         }
     }
 }
