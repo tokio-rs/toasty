@@ -687,6 +687,8 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // match on.  Nested binary ops are handled by the recursive walk
         // through `visit_expr_mut`.
         if i.op.is_eq() || i.op.is_ne() {
+            self.rewrite_relation_model_value(&i.lhs, &mut i.rhs);
+            self.rewrite_relation_model_value(&i.rhs, &mut i.lhs);
             self.rewrite_eq_operand(&mut i.lhs);
             self.rewrite_eq_operand(&mut i.rhs);
         }
@@ -705,6 +707,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
+        self.rewrite_model_value(expr);
         self.plan_typed_record_relations(expr);
         match expr {
             stmt::Expr::BinaryOp(e) => {
@@ -1398,6 +1401,30 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 }
 
 impl<'a, 'b> LowerStatement<'a, 'b> {
+    fn rewrite_relation_model_value(&self, operand: &stmt::Expr, value: &mut stmt::Expr) {
+        if let Some(relation) = relation_expr::resolve(&self.expr_cx, operand)
+            && relation.is_endpoint()
+            && let app::FieldTy::BelongsTo(belongs_to) = &relation.field.ty
+        {
+            *value = relation::relation_key_expr(&belongs_to.foreign_key, value.take());
+        }
+    }
+
+    fn rewrite_model_value(&self, expr: &mut stmt::Expr) {
+        let stmt::Expr::Cast(cast) = expr else {
+            return;
+        };
+        let stmt::Type::Model(model) = cast.ty else {
+            return;
+        };
+        let app::Model::Root(model) = self.schema().app.model(model) else {
+            return;
+        };
+        if cast.from.is_none() && cast.expr.record_len().is_some() {
+            *expr = relation::model_key_expr(expr.take(), model.primary_key.fields.iter().copied());
+        }
+    }
+
     /// App-level operand rewrite for `eq` and `ne` binary ops.
     ///
     /// `Reference::Model { nesting }` becomes a reference to the model's
@@ -1474,58 +1501,19 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     /// App-level rewrite for the LHS of an `IN`-list expression:
     /// `Reference::Model { nesting } IN list` becomes `<pk_field> IN list`,
     /// and `<embedded-relation-path> IN list` becomes
-    /// `<key projection> IN list`. The list holds model values, which the
-    /// typed layer already reduced to their keys.
+    /// `<key projection> IN list`. Model values are reduced to the referenced
+    /// fields before the relation path is replaced with its key.
     ///
     /// Must fire before the LHS is walked, since walking lowers the model
     /// reference into a column reference and the rewrite has nothing to
     /// match on.
     fn rewrite_in_list_model_operand(&self, expr: &mut stmt::ExprInList) {
-        if self.rewrite_embedded_relation_operand(&mut expr.expr) {
-            return;
-        }
-
-        let (nesting, pk_field_id) = {
-            let stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Model { nesting }) =
-                &*expr.expr
-            else {
-                return;
-            };
-            let nesting = *nesting;
-            let model = self
-                .expr_cx
-                .resolve_expr_reference(expr_ref)
-                .as_model_unwrap();
-            let [pk_field_id] = &model.primary_key.fields[..] else {
-                todo!()
-            };
-            (nesting, *pk_field_id)
-        };
-
-        let schema = self.expr_cx.schema();
-        let pk = schema.app.field(pk_field_id);
-
-        // Sanity-check the RHS shape against the PK type.
-        match &mut *expr.list {
-            stmt::Expr::List(expr_list) => {
-                for item in &mut expr_list.items {
-                    match item {
-                        stmt::Expr::Value(value) => {
-                            assert!(value.is_a(&schema.app, &pk.ty.as_primitive_unwrap().ty));
-                        }
-                        _ => todo!("{item:#?}"),
-                    }
-                }
+        if let stmt::Expr::List(list) = &mut *expr.list {
+            for item in &mut list.items {
+                self.rewrite_relation_model_value(&expr.expr, item);
             }
-            stmt::Expr::Value(stmt::Value::List(values)) => {
-                for value in values {
-                    assert!(value.is_a(&schema.app, &pk.ty.as_primitive_unwrap().ty));
-                }
-            }
-            _ => todo!("expr={expr:#?}"),
         }
-
-        *expr.expr = stmt::Expr::ref_field(nesting, pk.id());
+        self.rewrite_eq_operand(&mut expr.expr);
     }
 
     fn lower_expr_binary_op(

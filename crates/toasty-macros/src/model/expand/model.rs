@@ -437,6 +437,43 @@ impl Expand<'_> {
     pub(super) fn expand_model_into_expr_body(&self, by_ref: bool) -> TokenStream {
         let toasty = &self.toasty;
 
+        // Preserve candidate keys until the relation selects its referenced fields.
+        if self
+            .model
+            .indices
+            .iter()
+            .any(|index| index.unique && !index.primary_key)
+        {
+            let fields = self
+                .model
+                .fields
+                .iter()
+                .filter(|field| {
+                    self.model.indices.iter().any(|index| {
+                        index.unique && index.fields.iter().any(|key| key.field == field.id)
+                    })
+                })
+                .map(|field| {
+                    let name = util::bare_ident_name(&field.name.ident);
+                    let FieldTy::Primitive(ty) = &field.ty else {
+                        unreachable!("relation target keys must be stored fields");
+                    };
+                    quote! {
+                        if !<#ty as #toasty::Field>::DEFERRED {
+                            fields.push(#name);
+                        }
+                    }
+                });
+
+            return quote! {
+                let mut fields = ::std::vec::Vec::new();
+                #( #fields )*
+                #toasty::stmt::Expr::from_untyped(
+                    <Self as #toasty::ModelCodegen>::to_relation_expr(&self, &fields)
+                )
+            };
+        }
+
         let pk_fields: Vec<_> = self
             .model
             .primary_key_fields()
