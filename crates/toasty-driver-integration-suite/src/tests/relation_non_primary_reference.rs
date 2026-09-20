@@ -1,6 +1,63 @@
 use crate::prelude::*;
 
 #[driver_test]
+pub async fn compare_unindexed_reference_before_schema(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct Details {
+        notes: toasty::Deferred<String>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Bot {
+        #[key]
+        id: String,
+        serial: String,
+        details: Option<Details>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Gadget {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        #[index]
+        bot_serial: String,
+        #[belongs_to(key = bot_serial, references = serial)]
+        bot: toasty::Deferred<Bot>,
+    }
+
+    let bot = Bot {
+        id: "primary".into(),
+        serial: "serial".into(),
+        details: Some(Details {
+            notes: toasty::Deferred::default(),
+        }),
+    };
+    let query = Gadget::filter(Gadget::fields().bot().eq(&bot));
+    let primary_query = Bot::filter(Bot::fields().eq(bot));
+
+    let mut db = test.setup_db(models!(Bot, Gadget)).await;
+    toasty::create!(Bot {
+        id: "primary",
+        serial: "serial"
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Gadget {
+        bot_serial: "serial"
+    })
+    .exec(&mut db)
+    .await?;
+
+    let found: Vec<Gadget> = query.exec(&mut db).await?;
+    assert_struct!(found, [{ bot_serial: "serial" }]);
+    let found: Vec<Bot> = primary_query.exec(&mut db).await?;
+    assert_struct!(found, [{ id: "primary" }]);
+
+    Ok(())
+}
+
+#[driver_test]
 pub async fn compare_non_primary_reference_model(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Bot {

@@ -38,6 +38,7 @@ impl Expand<'_> {
                             primary_key: #primary_key,
                             table_name: #table_name,
                             indices: #indices,
+                            referenced_fields: ::std::vec::Vec::new(),
                             version_field: #version_field,
                         }
                     )

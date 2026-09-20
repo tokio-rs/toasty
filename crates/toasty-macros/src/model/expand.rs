@@ -109,6 +109,13 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let newtype_marker = expand.expand_embedded_newtype_marker();
     let newtype_indexable_impl = expand.expand_embedded_indexable_impl();
     let field_list_struct_ident = &embedded.field_list_struct_ident;
+    let can_be_relation_key = match &model.fields[..] {
+        [field] if !fields_named => match &field.ty {
+            FieldTy::Primitive(ty) => quote!(<#ty as #toasty::Field>::CAN_BE_RELATION_KEY),
+            _ => quote!(false),
+        },
+        _ => quote!(false),
+    };
 
     wrap_in_const(quote! {
         #newtype_marker
@@ -152,6 +159,8 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         }
 
         impl #toasty::Field for #model_ident {
+            const CAN_BE_RELATION_KEY: bool = #can_be_relation_key;
+
             type ExprTarget = Self;
             type Path<__Origin> = #field_struct_ident<__Origin>;
             type ListPath<__Origin> = #field_list_struct_ident<__Origin>;
@@ -272,6 +281,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     // A unit (data-less) enum is a single scalar discriminant: indexable, and a
     // valid `Vec<Enum>` element (`Scalar` unlocks the container operators).
     // Data-carrying enums span multiple columns and get neither.
+    let can_be_relation_key = model.fields.is_empty();
     let unit_enum_impls = if model.fields.is_empty() {
         quote! {
             impl #toasty::index::IndexableField for #model_ident {}
@@ -322,6 +332,8 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
         #load_impl
 
         impl #toasty::Field for #model_ident {
+            const CAN_BE_RELATION_KEY: bool = #can_be_relation_key;
+
             type ExprTarget = Self;
             type Path<__Origin> = #field_struct_ident<__Origin>;
             type ListPath<__Origin> = #field_list_struct_ident<__Origin>;

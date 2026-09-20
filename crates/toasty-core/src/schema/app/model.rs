@@ -160,6 +160,10 @@ pub struct ModelRoot {
     /// Secondary indices defined on this model.
     pub indices: Vec<Index>,
 
+    /// Fields on this model referenced by relation foreign keys.
+    /// Populated when the schema links relations, including embedded relations.
+    pub referenced_fields: Vec<FieldId>,
+
     /// The versionable field, if any. Points directly into `fields` to avoid scanning.
     pub version_field: Option<FieldId>,
 }
