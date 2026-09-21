@@ -82,7 +82,7 @@ impl Connect {
             }
 
             #[cfg(feature = "mariadb")]
-            "mariadb" => Box::new(toasty_driver_mariadb::MariaDb::new(url.as_str())?),
+            "mariadb" => Box::new(toasty_driver_mysql::MariaDB::new(url.as_str())?),
             #[cfg(not(feature = "mariadb"))]
             "mariadb" => {
                 return Err(toasty_core::Error::unsupported_feature(

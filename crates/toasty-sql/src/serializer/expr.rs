@@ -102,11 +102,21 @@ impl ToSql for &stmt::Expr {
                 Dialect::Postgresql => {
                     fmt!(f, expr.lhs " " expr.op " ANY(" expr.rhs ")");
                 }
-                // `JSON_ARRAY` lifts the scalar to a JSON value of its own
-                // type, so the comparison is by type and by bytes rather than
-                // by the connection collation.
-                Dialect::Mysql | Dialect::MariaDb if matches!(expr.op, stmt::BinaryOp::Eq) => {
+                // MySQL's `value MEMBER OF (json_array)` (8.0.17+). Only the
+                // equality form makes sense; `Path::contains` is the only
+                // current emitter and the lowering pass never produces
+                // ANY on MySQL since `predicate_match_any` is false.
+                Dialect::Mysql if matches!(expr.op, stmt::BinaryOp::Eq) => {
+                    fmt!(f, expr.lhs " MEMBER OF (" expr.rhs ")");
+                }
+                Dialect::Mysql => unreachable!("AnyOp with non-Eq operator on MySQL: {expr:?}"),
+                // MariaDB lacks MEMBER OF. JSON_ARRAY preserves the scalar's
+                // JSON type and makes string membership case-sensitive.
+                Dialect::MariaDb if matches!(expr.op, stmt::BinaryOp::Eq) => {
                     fmt!(f, "JSON_CONTAINS(" expr.rhs ", JSON_ARRAY(" expr.lhs "))");
+                }
+                Dialect::MariaDb => {
+                    unreachable!("AnyOp with non-Eq operator on MariaDB: {expr:?}")
                 }
                 // SQLite renders `value = ANY(col)` (i.e. `Path::contains`)
                 // as `value IN (SELECT value FROM json_each(col))`.
@@ -116,9 +126,9 @@ impl ToSql for &stmt::Expr {
                         expr.lhs " IN (SELECT value FROM json_each(" expr.rhs "))"
                     );
                 }
-                // `Path::contains` is the only emitter, and lowering never
-                // produces ANY where `predicate_match_any` is false.
-                dialect => unreachable!("AnyOp with non-Eq operator on {dialect:?}: {expr:?}"),
+                Dialect::Sqlite => {
+                    unreachable!("AnyOp with non-Eq operator on SQLite: {expr:?}")
+                }
             },
             stmt::Expr::AllOp(expr) => {
                 fmt!(f, expr.lhs " " expr.op " ALL(" expr.rhs ")");

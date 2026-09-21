@@ -1,16 +1,20 @@
 #![warn(missing_docs)]
 #![allow(clippy::needless_range_loop)]
 
-//! Toasty driver for [MySQL](https://www.mysql.com/) using
-//! [SQLx](https://docs.rs/sqlx).
+//! Toasty drivers for [MySQL](https://www.mysql.com/) and
+//! [MariaDB](https://mariadb.org/) 11.8 and later, using [SQLx](https://docs.rs/sqlx).
 //!
 //! # Examples
 //!
 //! ```no_run
-//! use toasty_driver_mysql::MySQL;
+//! use toasty_driver_mysql::{MySQL, MariaDB};
 //!
 //! let driver = MySQL::new("mysql://localhost/mydb").unwrap();
+//! let driver = MariaDB::new("mariadb://localhost/mydb").unwrap();
 //! ```
+
+mod mariadb;
+pub use mariadb::MariaDB;
 
 mod value;
 pub(crate) use value::Value;
@@ -95,7 +99,9 @@ fn record_mysql_err(valid: &Cell<bool>, e: sqlx_core::Error) -> toasty_core::Err
 /// ```
 #[derive(Debug)]
 pub struct MySQL {
-    inner: MySqlProtocol,
+    url: String,
+    opts: MySqlConnectOptions,
+    capability: &'static Capability,
 }
 
 impl MySQL {
@@ -104,49 +110,10 @@ impl MySQL {
     /// The URL must use the `mysql` scheme and include a database path, such as
     /// `mysql://user:pass@host:3306/dbname`.
     pub fn new(url: impl Into<String>) -> Result<Self> {
-        Ok(Self {
-            inner: MySqlProtocol::new(url, "mysql", &Capability::MYSQL)?,
-        })
-    }
-}
-
-#[async_trait]
-impl Driver for MySQL {
-    fn url(&self) -> Cow<'_, str> {
-        self.inner.url()
+        Self::with_capability(url, "mysql", &Capability::MYSQL)
     }
 
-    fn capability(&self) -> &'static Capability {
-        &Capability::MYSQL
-    }
-
-    async fn connect(
-        &self,
-        cx: &ConnectContext,
-    ) -> Result<Box<dyn toasty_core::driver::Connection>> {
-        self.inner.connect(cx).await
-    }
-
-    fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
-        self.inner.generate_migration(schema_diff)
-    }
-
-    async fn reset_db(&self) -> Result<()> {
-        self.inner.reset_db().await
-    }
-}
-
-/// Shared implementation for the MySQL and MariaDB driver crates.
-#[doc(hidden)]
-#[derive(Debug)]
-pub struct MySqlProtocol {
-    url: String,
-    opts: MySqlConnectOptions,
-    capability: &'static Capability,
-}
-
-impl MySqlProtocol {
-    pub fn new(
+    fn with_capability(
         url: impl Into<String>,
         scheme: &str,
         capability: &'static Capability,
@@ -198,7 +165,7 @@ fn serializer<'a>(capability: &Capability, schema: &'a db::Schema) -> sql::Seria
 }
 
 #[async_trait]
-impl Driver for MySqlProtocol {
+impl Driver for MySQL {
     fn url(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.url)
     }
@@ -265,7 +232,6 @@ pub struct Connection {
     /// passive validity flag, so the driver records one for [`is_valid`].
     valid: Cell<bool>,
     query_log: QueryLogConfig,
-
     capability: &'static Capability,
 }
 
@@ -404,13 +370,6 @@ impl toasty_core::driver::Connection for Connection {
                 // set to read. For MySQL the planner strips it and asks for
                 // the auto-increment key alone, via LAST_INSERT_ID().
                 let returns_rows = op.stmt.returning().is_some();
-
-                if returns_rows && !self.capability.returning_from_insert {
-                    return Err(toasty_core::Error::invalid_result(format!(
-                        "{} does not support RETURNING on INSERT; stmt={:#?}",
-                        self.capability.driver_name, op.stmt
-                    )));
-                }
 
                 let ret = match op.ret {
                     Some(types) if returns_rows => SqlReturn::Types(types),

@@ -4,7 +4,6 @@ use std::{net::TcpListener, time::Duration};
 use toasty_core::driver::{Capability, Dialect, Driver};
 use toasty_core::schema::db::Type;
 
-#[cfg(feature = "mysql")]
 #[test]
 fn mysql_constructor_is_offline() {
     let cap: &'static Capability = {
@@ -22,12 +21,11 @@ fn mysql_constructor_is_offline() {
     assert!(error.is_invalid_connection_url());
 }
 
-#[cfg(feature = "mariadb")]
 #[test]
 fn mariadb_constructor_is_offline() {
     let cap: &'static Capability = {
         let url = "mariadb://localhost:1/test";
-        let driver = toasty_driver_mariadb::MariaDb::new(url).unwrap();
+        let driver = toasty_driver_mysql::MariaDB::new(url).unwrap();
         assert_eq!(driver.url(), url);
         driver.capability()
     };
@@ -41,7 +39,7 @@ fn mariadb_constructor_is_offline() {
         "mariadb://localhost",
         "mariadb:///test",
     ] {
-        let error = toasty_driver_mariadb::MariaDb::new(url).unwrap_err();
+        let error = toasty_driver_mysql::MariaDB::new(url).unwrap_err();
         assert!(error.is_invalid_connection_url(), "{url}: {error}");
     }
 }

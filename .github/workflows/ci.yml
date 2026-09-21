@@ -101,8 +101,6 @@ jobs:
             extra_args: ""
           - package: toasty-driver-mysql
             extra_args: ""
-          - package: toasty-driver-mariadb
-            extra_args: ""
           - package: toasty-driver-postgresql
             extra_args: ""
     steps:
@@ -216,7 +214,6 @@ jobs:
           - 3307:3306
         options: --health-cmd "healthcheck.sh --connect --innodb_initialized" --health-interval 10s --health-timeout 5s --health-retries 5
     env:
-      TOASTY_CONNECTION_URL: mariadb://toasty:toasty@localhost:3307/toasty
       TOASTY_TEST_MARIADB_URL: mariadb://toasty:toasty@localhost:3307/toasty
     steps:
       - uses: actions/checkout@v7
@@ -228,8 +225,6 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: cargo test
         run: cargo test --no-default-features --features mariadb
-      - name: cargo test -p toasty-driver-mariadb
-        run: cargo test -p toasty-driver-mariadb
 
   test-postgresql:
     needs: check

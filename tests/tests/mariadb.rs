@@ -6,7 +6,7 @@
 
 use sqlx_core::sql_str::AssertSqlSafe;
 use sqlx_mysql::{MySqlConnectOptions, MySqlPool};
-use toasty_driver_mariadb::MariaDb;
+use toasty_driver_mysql::MariaDB;
 use tokio::sync::OnceCell;
 
 fn url() -> String {
@@ -42,7 +42,7 @@ impl MariaDbSetup {
 #[async_trait::async_trait]
 impl toasty_driver_integration_suite::Setup for MariaDbSetup {
     fn driver(&self) -> Box<dyn toasty_core::driver::Driver> {
-        Box::new(MariaDb::new(url()).expect("Failed to create MariaDB driver"))
+        Box::new(MariaDB::new(url()).expect("Failed to create MariaDB driver"))
     }
 
     async fn delete_table(&self, name: &str) {
@@ -74,7 +74,6 @@ toasty_driver_integration_suite::generate_driver_tests!(MariaDbSetup::new(),
     unique_list_index: false,
     document_collections: true,
     returning_from_insert: true,
-    returning_from_update: false,
     vec_remove: false,
     vec_pop: false,
     vec_remove_at: false,

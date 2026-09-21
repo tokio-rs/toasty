@@ -75,7 +75,7 @@ Examples:
 .connect("dynamodb://us-east-1")
 ```
 
-The `mariadb` feature uses the `toasty-driver-mariadb` crate. MariaDB stores
+The `mariadb` feature uses `MariaDB` from the `toasty-driver-mysql` crate. MariaDB stores
 UUIDs in native `UUID` columns and supports `INSERT ... RETURNING`, including
 generated IDs from batch inserts. `UPDATE ... RETURNING` uses the same
 follow-up query as MySQL. Both drivers accept the

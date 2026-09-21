@@ -24,7 +24,7 @@ mysql = [
 ]
 mariadb = [
     "toasty/mariadb",
-    "dep:toasty-driver-mariadb",
+    "dep:toasty-driver-mysql",
     "dep:sqlx-core",
     "dep:sqlx-mysql",
 ]
@@ -52,7 +52,6 @@ toasty-driver-integration-suite.workspace = true
 toasty-driver-sqlite = { workspace = true, optional = true }
 toasty-driver-turso = { workspace = true, optional = true }
 toasty-driver-mysql = { workspace = true, optional = true }
-toasty-driver-mariadb = { workspace = true, optional = true }
 toasty-driver-postgresql = { workspace = true, optional = true }
 toasty-driver-dynamodb = { workspace = true, optional = true }
 

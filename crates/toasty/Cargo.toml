@@ -18,10 +18,10 @@ default = ["rustls"]
 dynamodb = ["dep:toasty-driver-dynamodb"]
 migration = ["dep:serde", "dep:toml", "dep:toml_edit", "toasty-core/migration"]
 mysql = ["dep:toasty-driver-mysql"]
-mariadb = ["dep:toasty-driver-mariadb"]
-native-tls = ["toasty-driver-mysql?/native-tls", "toasty-driver-mariadb?/native-tls"]
+mariadb = ["dep:toasty-driver-mysql"]
+native-tls = ["toasty-driver-mysql?/native-tls"]
 postgresql = ["dep:toasty-driver-postgresql"]
-rustls = ["toasty-driver-mysql?/rustls", "toasty-driver-mariadb?/rustls"]
+rustls = ["toasty-driver-mysql?/rustls"]
 sqlite = ["dep:toasty-driver-sqlite"]
 turso = ["dep:toasty-driver-turso"]
 rust_decimal = [
@@ -29,7 +29,6 @@ rust_decimal = [
 	"toasty-core/rust_decimal",
 	"toasty-driver-postgresql?/rust_decimal",
 	"toasty-driver-mysql?/rust_decimal",
-	"toasty-driver-mariadb?/rust_decimal",
 	"toasty-driver-sqlite?/rust_decimal",
 	"toasty-driver-turso?/rust_decimal",
 ]
@@ -38,7 +37,6 @@ bigdecimal = [
 	"toasty-core/bigdecimal",
 	"toasty-driver-postgresql?/bigdecimal",
 	"toasty-driver-mysql?/bigdecimal",
-	"toasty-driver-mariadb?/bigdecimal",
 	"toasty-driver-sqlite?/bigdecimal",
 	"toasty-driver-turso?/bigdecimal",
 ]
@@ -47,7 +45,6 @@ jiff = [
 	"toasty-core/jiff",
 	"toasty-driver-postgresql?/jiff",
 	"toasty-driver-mysql?/jiff",
-	"toasty-driver-mariadb?/jiff",
 	"toasty-driver-sqlite?/jiff",
 	"toasty-driver-turso?/jiff",
 ]
@@ -55,7 +52,6 @@ net = [
 	"toasty-core/net",
 	"toasty-driver-postgresql?/net",
 	"toasty-driver-mysql?/net",
-	"toasty-driver-mariadb?/net",
 	"toasty-driver-sqlite?/net",
 	"toasty-driver-turso?/net",
 ]
@@ -68,7 +64,6 @@ toasty-core.workspace = true
 
 # Built-in database drivers
 toasty-driver-dynamodb = { workspace = true, optional = true }
-toasty-driver-mariadb = { workspace = true, optional = true }
 toasty-driver-mysql = { workspace = true, optional = true }
 toasty-driver-postgresql = { workspace = true, optional = true }
 toasty-driver-sqlite = { workspace = true, optional = true }

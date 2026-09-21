@@ -1,19 +1,4 @@
-#![warn(missing_docs)]
-
-//! Toasty driver for [MariaDB](https://mariadb.org/) 11.8 and later.
-//!
-//! Uses the MySQL wire protocol with MariaDB's native `UUID` type and
-//! `INSERT ... RETURNING`. Enable Toasty's `mariadb` feature to connect
-//! using a `mariadb://` URL.
-//!
-//! # Examples
-//!
-//! ```
-//! use toasty_driver_mariadb::MariaDb;
-//!
-//! let driver = MariaDb::new("mariadb://localhost/mydb").unwrap();
-//! ```
-
+use super::MySQL;
 use async_trait::async_trait;
 use std::borrow::Cow;
 use toasty_core::{
@@ -21,15 +6,24 @@ use toasty_core::{
     driver::{Capability, ConnectContext, Connection, Driver},
     schema::{db::Migration, diff},
 };
-use toasty_driver_mysql::MySqlProtocol;
 
-/// A MariaDB [`Driver`] that connects through SQLx.
+/// A MariaDB 11.8+ [`Driver`] that connects through SQLx.
+///
+/// Uses MariaDB's native `UUID` type and `INSERT ... RETURNING`.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_driver_mysql::MariaDB;
+///
+/// let driver = MariaDB::new("mariadb://localhost/mydb").unwrap();
+/// ```
 #[derive(Debug)]
-pub struct MariaDb {
-    inner: MySqlProtocol,
+pub struct MariaDB {
+    inner: MySQL,
 }
 
-impl MariaDb {
+impl MariaDB {
     /// Creates a MariaDB driver without connecting to the server.
     ///
     /// The URL must use the `mariadb` scheme and include a database path,
@@ -41,13 +35,13 @@ impl MariaDb {
     /// Returns an error if the URL is malformed or uses another scheme.
     pub fn new(url: impl Into<String>) -> Result<Self> {
         Ok(Self {
-            inner: MySqlProtocol::new(url, "mariadb", &Capability::MARIADB)?,
+            inner: MySQL::with_capability(url, "mariadb", &Capability::MARIADB)?,
         })
     }
 }
 
 #[async_trait]
-impl Driver for MariaDb {
+impl Driver for MariaDB {
     fn url(&self) -> Cow<'_, str> {
         self.inner.url()
     }
