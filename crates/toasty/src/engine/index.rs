@@ -8,12 +8,7 @@ pub(crate) use index_plan::IndexPlan;
 
 use crate::{Result, engine::Engine};
 use hashbrown::HashMap;
-use toasty_core::{
-    Schema,
-    driver::Capability,
-    schema::db::{Index, Table},
-    stmt,
-};
+use toasty_core::{Schema, driver::Capability, schema::db::Index, stmt};
 
 impl Engine {
     pub(crate) fn plan_index_path<'a>(
@@ -46,18 +41,41 @@ pub(crate) fn plan_index_path<'a>(
     //   filter == AND(pre_filter, remaining_filter)
     let (pre_filter, remaining_filter) = extract_pre_filter(filter);
 
-    let mut index_planner = IndexPlanner {
-        cx,
-        table,
-        filter: &remaining_filter,
-        index_matches: vec![],
-        index_paths: vec![],
-        capability,
-    };
+    let index_match = table
+        .indices
+        .iter()
+        .filter_map(|index| {
+            let mut index_match = IndexMatch {
+                index,
+                columns: index
+                    .columns
+                    .iter()
+                    .map(|_| IndexColumnMatch {
+                        exprs: HashMap::new(),
+                    })
+                    .collect(),
+            };
 
-    let Some(index_path) = index_planner.plan_index_path()? else {
-        // No index found and the driver supports scan — caller handles it.
-        return Ok(None);
+            if !index_match.match_restriction(&cx, &remaining_filter)
+                || index_match.columns[0].exprs.is_empty()
+            {
+                return None;
+            }
+
+            Some(index_match)
+        })
+        .min_by_key(|index_match| index_match.compute_cost(&remaining_filter));
+
+    let Some(index_match) = index_match else {
+        if capability.scan {
+            return Ok(None);
+        }
+        return Err(toasty_core::Error::unsupported_feature(format!(
+            "{} requires queries to use an index. The current filter cannot be satisfied by \
+             any available index. Consider adding an index that matches your query filter, or \
+             restructure the query to use indexed fields.",
+            capability.driver_name
+        )));
     };
 
     let mut partition_cx = PartitionCtx {
@@ -65,14 +83,13 @@ pub(crate) fn plan_index_path<'a>(
         apply_result_filter_on_results: false,
     };
 
-    let index_match = &index_planner.index_matches[index_path.index_match];
     let (index_filter, result_filter) =
-        index_match.partition_filter(&mut partition_cx, index_planner.filter);
+        index_match.partition_filter(&mut partition_cx, &remaining_filter);
 
     // Extract literal key values before OR rewrite, while index_filter is still
     // in Expr::Or form. After rewrite it becomes ANY(MAP(...)) and the Or arm
     // in try_extract_key_values would no longer fire.
-    let key_values = try_extract_key_values(&index_planner.cx, index_match.index, &index_filter);
+    let key_values = try_extract_key_values(&cx, index_match.index, &index_filter);
 
     // For backends that do not support OR in key conditions (e.g. DynamoDB), rewrite
     // any OR in the index filter to canonical ANY(MAP(...)) fan-out form.
@@ -105,105 +122,9 @@ pub(crate) fn plan_index_path<'a>(
     }))
 }
 
-struct IndexPlanner<'stmt> {
-    cx: stmt::ExprContext<'stmt>,
-
-    table: &'stmt Table,
-
-    /// Query filter
-    filter: &'stmt stmt::Expr,
-
-    /// Matches clauses in the filter with available indices
-    index_matches: Vec<IndexMatch<'stmt>>,
-
-    /// Possible ways to execute the query using one or more index
-    index_paths: Vec<IndexPath>,
-
-    /// Driver capability flags (used to decide scan vs error when no index found).
-    capability: &'stmt Capability,
-}
-
-#[derive(Debug, Clone)]
-struct IndexPath {
-    index_match: usize,
-    cost: usize,
-}
-
 struct PartitionCtx<'a> {
     capability: &'a Capability,
     apply_result_filter_on_results: bool,
-}
-
-impl IndexPlanner<'_> {
-    fn plan_index_path(&mut self) -> Result<Option<IndexPath>> {
-        // A preprocessing step that matches filter clauses to various index columns.
-        self.build_index_matches();
-
-        // Populate index_paths with possible ways to execute the query.
-        self.build_single_index_paths();
-
-        if self.index_paths.is_empty() {
-            if self.capability.scan {
-                // No index found but driver supports scan — signal caller to use a Scan node.
-                return Ok(None);
-            }
-            return Err(toasty_core::Error::unsupported_feature(format!(
-                "{} requires queries to use an index. The current filter cannot be satisfied by \
-                 any available index. Consider adding an index that matches your query filter, or \
-                 restructure the query to use indexed fields.",
-                self.capability.driver_name
-            )));
-        }
-
-        Ok(Some(
-            self.index_paths
-                .iter()
-                .min_by_key(|index_path| index_path.cost)
-                .unwrap()
-                .clone(),
-        ))
-    }
-
-    fn build_index_matches(&mut self) {
-        for index in &self.table.indices {
-            let mut index_match = IndexMatch {
-                index,
-                columns: index
-                    .columns
-                    .iter()
-                    .map(|_| IndexColumnMatch {
-                        exprs: HashMap::new(),
-                    })
-                    .collect(),
-            };
-
-            if !index_match.match_restriction(&self.cx, self.filter) {
-                continue;
-            }
-
-            // Check if the *first* index column matched any sub expression. If
-            // not, the index is not useful to us.
-            if index_match.columns[0].exprs.is_empty() {
-                continue;
-            }
-
-            // The index might be useful, so track it
-            self.index_matches.push(index_match);
-        }
-    }
-
-    fn build_single_index_paths(&mut self) {
-        let mut index_paths = vec![];
-
-        for (i, index_match) in self.index_matches.iter().enumerate() {
-            index_paths.push(IndexPath {
-                cost: index_match.compute_cost(self.filter),
-                index_match: i,
-            });
-        }
-
-        self.index_paths = index_paths;
-    }
 }
 
 /// Try to extract a key expression from `index_filter` for direct `GetByKey` routing.
