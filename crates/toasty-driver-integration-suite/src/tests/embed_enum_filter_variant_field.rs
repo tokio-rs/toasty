@@ -226,5 +226,16 @@ pub async fn filter_variant_field_with_storage_override(t: &mut Test) -> Result<
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].id, expected.id);
 
+    let found = Object::filter(
+        Object::fields()
+            .owner()
+            .human()
+            .matches(|h| h.id().in_list([target, uuid::Uuid::new_v4()])),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, expected.id);
+
     Ok(())
 }
