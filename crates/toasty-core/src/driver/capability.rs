@@ -892,7 +892,10 @@ impl Capability {
     pub const MARIADB: Self = Self {
         driver_name: "MariaDB",
         sql: Some(Dialect::MariaDb),
-        storage_types: StorageTypes::MARIADB,
+        storage_types: StorageTypes {
+            default_uuid_type: db::Type::Uuid,
+            ..StorageTypes::MYSQL
+        },
 
         // 10.5+. The UPDATE form is still missing upstream (MDEV-5092).
         returning_from_insert: true,
@@ -1139,20 +1142,6 @@ impl StorageTypes {
 
         // MySQL supports full u64 range via BIGINT UNSIGNED
         max_unsigned_integer: None,
-    };
-
-    /// MariaDB storage types.
-    ///
-    /// [`MYSQL`](Self::MYSQL) with a native `UUID` type (10.7+): 16 bytes
-    /// compared as an integer, against 36 bytes of collated text.
-    ///
-    /// MariaDB rejects a UUID whose version is 8 or higher *and* whose
-    /// variant bits are the legacy NCS form, which the SQL standard calls
-    /// invalid. Every RFC 4122/9562 generator sets the variant to `10xx`, so
-    /// no real UUID lands in that hole.
-    pub const MARIADB: StorageTypes = StorageTypes {
-        default_uuid_type: db::Type::Uuid,
-        ..StorageTypes::MYSQL
     };
 
     /// DynamoDB storage types.

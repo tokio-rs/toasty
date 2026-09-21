@@ -967,30 +967,18 @@ impl ToSql for &stmt::Values {
             // MariaDB's table value constructor cannot type a bare `?`: the
             // column binds to the empty string, so the join silently matches
             // nothing. A UNION ALL of SELECTs binds and names its own columns.
-            for (i, row) in self.rows.iter().enumerate() {
-                if i > 0 {
-                    fmt!(f, " UNION ALL ");
-                }
-                fmt!(f, "SELECT ");
-
+            let rows = self.rows.iter().enumerate().map(|(i, row)| {
                 let fields = match row {
                     stmt::Expr::Record(record) => &record.fields[..],
                     other => std::slice::from_ref(other),
                 };
-
-                for (column, field) in fields.iter().enumerate() {
-                    if column > 0 {
-                        fmt!(f, ", ");
-                    }
-                    fmt!(f, field);
-
-                    // Only the first SELECT names the columns; the rest
-                    // inherit them through UNION ALL.
-                    if i == 0 {
-                        fmt!(f, " AS " ColumnAlias(column));
-                    }
-                }
-            }
+                // Only the first SELECT names the columns.
+                let fields = fields.iter().enumerate().map(move |(column, field)| {
+                    (field, (i == 0).then_some((" AS ", ColumnAlias(column))))
+                });
+                ("SELECT ", Comma(fields))
+            });
+            fmt!(f, Delimited(rows, " UNION ALL "));
         } else {
             let rows = Comma(self.rows.iter());
             fmt!(f, "VALUES " rows)
