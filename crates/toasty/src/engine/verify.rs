@@ -289,7 +289,11 @@ impl stmt::Visit for Verify<'_, '_> {
             error: &mut *self.error,
         };
 
-        verify_expr.visit_stmt_update(i);
+        // The target query was verified above in its own scope. Its include
+        // paths may be rooted at enum variants, not at the updated model.
+        verify_expr.visit_assignments(&i.assignments);
+        verify_expr.visit_filter(&i.filter);
+        verify_expr.visit_condition(&i.condition);
     }
 }
 

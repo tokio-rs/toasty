@@ -1,9 +1,9 @@
 use std::{
-    collections::HashSet,
     env, fs,
     path::{Component, Path, PathBuf},
 };
 
+use indexmap::IndexSet;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::LitStr;
@@ -26,8 +26,8 @@ pub(crate) fn generate(input: TokenStream) -> syn::Result<TokenStream> {
     })?;
 
     let migrations_dir = root.join("migrations");
-    let mut ids = HashSet::new();
-    let mut names = HashSet::new();
+    let mut ids = IndexSet::new();
+    let mut names = IndexSet::new();
     let mut migrations = Vec::with_capacity(history.entries().len());
 
     for entry in history.entries() {

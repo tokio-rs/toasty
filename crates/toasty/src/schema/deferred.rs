@@ -13,6 +13,11 @@ use std::fmt;
 ///
 /// `Deferred<Option<T>>` is supported when the column is nullable.
 ///
+/// Equality and hashing include the load state and, when loaded, the value.
+/// Two unloaded fields compare equal. An unloaded field is unequal to a loaded
+/// field, including a loaded `None`. These traits require the corresponding
+/// trait on `T`.
+///
 /// # Serde
 ///
 /// With the `serde` feature a loaded `Deferred<T>` serializes transparently as
@@ -28,7 +33,7 @@ use std::fmt;
 /// Serializing an unloaded field without `skip_serializing_if` emits `null`,
 /// which does not round-trip (it reads back as loaded), so the annotation is
 /// expected on every deferred field.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Deferred<T> {
     value: Option<Box<T>>,
 }
