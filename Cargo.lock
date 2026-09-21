@@ -14,9 +14,9 @@ dependencies = [
 
 [[package]]
 name = "aegis"
-version = "0.9.16"
+version = "0.9.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4542662923e93dc727bc364f885f6cf24adb4dc60d6fcce0e8d397d214179e14"
+checksum = "889e16399083fb85723e46ab10c0d34345012bd5a3b3f412e131a909f6fb5be4"
 dependencies = [
  "cc",
  "softaes",
@@ -533,19 +533,17 @@ dependencies = [
  "http-body 1.1.0",
  "hyper 0.14.32",
  "hyper 1.11.1",
- "hyper-rustls 0.24.2",
- "hyper-rustls 0.27.10",
+ "hyper-rustls",
  "hyper-util",
  "indexmap",
  "pin-project-lite",
- "rustls 0.21.12",
- "rustls 0.23.45",
+ "rustls",
  "rustls-native-certs",
  "rustls-pki-types",
  "serde",
  "serde_json",
  "tokio",
- "tokio-rustls 0.26.5",
+ "tokio-rustls",
  "tower",
  "tracing",
 ]
@@ -2383,21 +2381,6 @@ dependencies = [
 
 [[package]]
 name = "hyper-rustls"
-version = "0.24.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec3efd23720e2049821a693cbc7e65ea87c72f1c58ff2f9522ff332b1491e590"
-dependencies = [
- "futures-util",
- "http 0.2.12",
- "hyper 0.14.32",
- "log",
- "rustls 0.21.12",
- "tokio",
- "tokio-rustls 0.24.1",
-]
-
-[[package]]
-name = "hyper-rustls"
 version = "0.27.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfa8e654703247911e29c23fbeaa261834bd9bb74efba2f9acddc37bfb127f53"
@@ -2406,10 +2389,10 @@ dependencies = [
  "hyper 1.11.1",
  "hyper-util",
  "log",
- "rustls 0.23.45",
+ "rustls",
  "rustls-native-certs",
  "tokio",
- "tokio-rustls 0.26.5",
+ "tokio-rustls",
  "tower-service",
 ]
 
@@ -2911,9 +2894,9 @@ dependencies = [
 
 [[package]]
 name = "libredox"
-version = "0.1.24"
+version = "0.1.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6480ccc157a1389bb2e4891b24751b0f798ba640d22386f23143fbcc89da195a"
+checksum = "61ff90caf6077a803a240f62fdbe88645a890bbca49ef8174c3cb0404362171d"
 dependencies = [
  "libc",
 ]
@@ -3710,7 +3693,7 @@ dependencies = [
  "quinn-proto",
  "quinn-udp",
  "rustc-hash 2.1.3",
- "rustls 0.23.45",
+ "rustls",
  "socket2 0.6.5",
  "thiserror",
  "tokio",
@@ -3732,7 +3715,7 @@ dependencies = [
  "rand_pcg 0.10.2",
  "ring",
  "rustc-hash 2.1.3",
- "rustls 0.23.45",
+ "rustls",
  "rustls-pki-types",
  "slab",
  "thiserror",
@@ -3995,7 +3978,7 @@ dependencies = [
  "http-body 1.1.0",
  "http-body-util",
  "hyper 1.11.1",
- "hyper-rustls 0.27.10",
+ "hyper-rustls",
  "hyper-util",
  "js-sys",
  "log",
@@ -4003,14 +3986,14 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "quinn",
- "rustls 0.23.45",
+ "rustls",
  "rustls-pki-types",
  "rustls-platform-verifier",
  "serde",
  "serde_json",
  "sync_wrapper",
  "tokio",
- "tokio-rustls 0.26.5",
+ "tokio-rustls",
  "tokio-util",
  "tower",
  "tower-http",
@@ -4185,18 +4168,6 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.21.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f56a14d1f48b391359b22f731fd4bd7e43c97f3c50eee276f3aa09c94784d3e"
-dependencies = [
- "log",
- "ring",
- "rustls-webpki 0.101.7",
- "sct",
-]
-
-[[package]]
-name = "rustls"
 version = "0.23.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
@@ -4206,7 +4177,7 @@ dependencies = [
  "once_cell",
  "ring",
  "rustls-pki-types",
- "rustls-webpki 0.103.15",
+ "rustls-webpki",
  "subtle",
  "zeroize",
 ]
@@ -4253,10 +4224,10 @@ dependencies = [
  "jni",
  "log",
  "once_cell",
- "rustls 0.23.45",
+ "rustls",
  "rustls-native-certs",
  "rustls-platform-verifier-android",
- "rustls-webpki 0.103.15",
+ "rustls-webpki",
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
@@ -4268,16 +4239,6 @@ name = "rustls-platform-verifier-android"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f87165f0995f63a9fbeea62b64d10b4d9d8e78ec6d7d51fb2125fda7bb36788f"
-
-[[package]]
-name = "rustls-webpki"
-version = "0.101.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b6275d1ee7a1cd780b64aca7726599a1dbc893b1e64144529e55c3c2f745765"
-dependencies = [
- "ring",
- "untrusted",
-]
 
 [[package]]
 name = "rustls-webpki"
@@ -4344,16 +4305,6 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
-
-[[package]]
-name = "sct"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da046153aa2352493d6cb7da4b6e5c0c057d8a1d0a9aa8560baffdd945acd414"
-dependencies = [
- "ring",
- "untrusted",
-]
 
 [[package]]
 name = "security-framework"
@@ -4692,7 +4643,7 @@ dependencies = [
  "memchr",
  "native-tls",
  "percent-encoding",
- "rustls 0.23.45",
+ "rustls",
  "smallvec",
  "thiserror",
  "time",
@@ -5347,10 +5298,10 @@ dependencies = [
  "postgres-protocol",
  "postgres-types",
  "rust_decimal",
- "rustls 0.23.45",
+ "rustls",
  "rustls-pemfile",
  "rustls-platform-verifier",
- "rustls-webpki 0.103.15",
+ "rustls-webpki",
  "toasty-core",
  "toasty-sql",
  "tokio",
@@ -5479,22 +5430,12 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c2ad44aa0ae96db89c4742212ed41645b2f597311ff6e1945542a4d9fadc2fb"
 dependencies = [
- "rustls 0.23.45",
+ "rustls",
  "sha2",
  "tokio",
  "tokio-postgres",
- "tokio-rustls 0.26.5",
+ "tokio-rustls",
  "x509-cert",
-]
-
-[[package]]
-name = "tokio-rustls"
-version = "0.24.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c28327cf380ac148141087fbfb9de9d7bd4e84ab5d2c28fbc911d753de8a7081"
-dependencies = [
- "rustls 0.21.12",
- "tokio",
 ]
 
 [[package]]
@@ -5503,7 +5444,7 @@ version = "0.26.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0c85f2c3ef0b1cd58b36682f4b17aaa995f0e5db534d85692b4903abce21f67"
 dependencies = [
- "rustls 0.23.45",
+ "rustls",
  "tokio",
 ]
 
@@ -5750,7 +5691,7 @@ dependencies = [
  "bytes",
  "http-body-util",
  "hyper 1.11.1",
- "hyper-rustls 0.27.10",
+ "hyper-rustls",
  "hyper-util",
  "mimalloc",
  "thiserror",
