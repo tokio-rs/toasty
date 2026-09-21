@@ -118,6 +118,7 @@ fn schema() -> Schema {
     maybe_owner.nullable = true;
 
     let object = Model::Root(ModelRoot {
+        relations: vec![],
         id: OBJECT,
         name: Name::new("Object"),
         fields: vec![

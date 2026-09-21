@@ -346,10 +346,6 @@ impl BuildTableFromModels<'_> {
                     )?;
                 }
                 app::Model::EmbeddedEnum(embedded_enum) => {
-                    if embedded_enum.indices.is_empty() {
-                        continue;
-                    }
-
                     let field_mapping = field_mappings[field_index]
                         .as_enum()
                         .expect("embedded enum field should have enum mapping");

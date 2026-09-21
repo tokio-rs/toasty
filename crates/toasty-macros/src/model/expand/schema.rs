@@ -39,6 +39,7 @@ impl Expand<'_> {
                             table_name: #table_name,
                             indices: #indices,
                             version_field: #version_field,
+                            relations: vec![],
                         }
                     )
                 }
@@ -652,15 +653,17 @@ fn expand_pair(
     toasty: &TokenStream,
     field_trait: TokenStream,
     target_ty: &syn::Type,
-    pair: Option<&syn::Ident>,
+    pair: Option<&Vec<syn::Ident>>,
 ) -> TokenStream {
     match pair {
-        Some(ident) => {
-            let name = ident.to_string();
+        Some(segments) => {
             quote! {
                 Some({
                     type __RelationTarget = <#target_ty as #field_trait>::Target;
-                    <__RelationTarget as #toasty::Model>::field_name_to_id(#name)
+                    let path: #toasty::stmt::Path<__RelationTarget, _> =
+                        __RelationTarget::fields()#(.into_pair_path().#segments())*.into();
+                    let path: #toasty::core::stmt::Path = path.into();
+                    path
                 })
             }
         }

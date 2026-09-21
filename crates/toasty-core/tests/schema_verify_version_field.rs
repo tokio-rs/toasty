@@ -38,6 +38,7 @@ fn build_model(fields: Vec<Field>, version_field: Option<FieldId>) -> Model {
         index: 0,
     };
     Model::Root(ModelRoot {
+        relations: vec![],
         id,
         name: Name::new("Thing"),
         fields,

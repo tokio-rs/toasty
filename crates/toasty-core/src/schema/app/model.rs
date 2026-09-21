@@ -139,6 +139,9 @@ impl ExactSizeIterator for ModelSetIntoIter {}
 /// ```
 #[derive(Debug, Clone)]
 pub struct ModelRoot {
+    /// Belongs-to relations instantiated on this model, including its embeds.
+    pub relations: Vec<super::RelationInstance>,
+
     /// Uniquely identifies this model within the schema.
     pub id: ModelId,
 
@@ -165,6 +168,14 @@ pub struct ModelRoot {
 }
 
 impl ModelRoot {
+    /// Finds the inverse for a relation at the supplied location.
+    pub fn relation_pair(&self, location: &super::Pair) -> Option<FieldId> {
+        self.relations
+            .iter()
+            .find(|instance| instance.location == *location)?
+            .pair
+    }
+
     /// Builds a `SELECT` query that filters by this model's primary key using
     /// the supplied `input` to resolve argument values.
     pub fn find_by_id(&self, mut input: impl stmt::Input) -> stmt::Query {

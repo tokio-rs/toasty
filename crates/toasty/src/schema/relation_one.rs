@@ -1,6 +1,5 @@
 use super::{Deferred, Load, Model, QueryMany, QueryOne, QueryOptionOne};
 
-use toasty_core::schema::app::ModelId;
 use toasty_core::schema::app::{self, FieldId, FieldTy, ForeignKey};
 use toasty_core::stmt;
 
@@ -55,7 +54,7 @@ pub trait RelationOneField: Load<Output = Self> {
     /// `via` carries the fully resolved [`stmt::Path`] of a
     /// `#[has_one(via = a.b)]` multi-step relation, rooted at the declaring
     /// model. A `via` relation has no pair.
-    fn has_one_relation_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {
+    fn has_one_relation_field_ty(pair: Option<stmt::Path>, via: Option<stmt::Path>) -> FieldTy {
         let target = <Self::Target as Model>::id();
         let expr_ty = stmt::Type::Model(target);
         let cardinality = app::Cardinality::One;
@@ -66,10 +65,11 @@ pub trait RelationOneField: Load<Output = Self> {
                 target,
                 expr_ty,
                 cardinality,
-                pair_id: pair.unwrap_or(FieldId {
-                    model: ModelId(usize::MAX),
+                pair: app::Pair::direct(FieldId {
+                    model: app::ModelId(usize::MAX),
                     index: usize::MAX,
                 }),
+                pair_path: pair,
             }),
         }
     }
@@ -82,8 +82,6 @@ pub trait RelationOneField: Load<Output = Self> {
         FieldTy::BelongsTo(app::BelongsTo {
             target,
             expr_ty: stmt::Type::Model(target),
-            // The pair is populated at runtime.
-            pair: None,
             foreign_key,
         })
     }

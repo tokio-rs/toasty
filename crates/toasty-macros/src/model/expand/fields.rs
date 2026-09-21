@@ -146,6 +146,11 @@ impl Expand<'_> {
 
             #[allow(dead_code)]
             impl<__Origin> #field_struct_ident<__Origin> {
+                #[doc(hidden)]
+                pub fn into_pair_path(self) -> Self {
+                    self
+                }
+
                 #vis fn in_query(self, rhs: impl #toasty::IntoStatement<Returning = #toasty::List<#model_ident>>) -> #toasty::stmt::Expr<bool> {
                     self.path.in_query(rhs)
                 }

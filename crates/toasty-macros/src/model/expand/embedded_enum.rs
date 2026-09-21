@@ -259,8 +259,22 @@ impl Expand<'_> {
                         path: #toasty::Path<__Origin, #model_ident>,
                     }
 
+                    impl<__Origin> From<#variant_handle_ident<__Origin>> for #toasty::Path<__Origin, #model_ident> {
+                        fn from(value: #variant_handle_ident<__Origin>) -> Self {
+                            value.path.into_variant(#toasty::core::schema::app::VariantId {
+                                model: <#model_ident as #toasty::Embed>::id(),
+                                index: #variant_idx,
+                            })
+                        }
+                    }
+
                     #[allow(dead_code)]
                     impl<__Origin> #variant_handle_ident<__Origin> {
+                        #[doc(hidden)]
+                        pub fn into_pair_path(self) -> Self {
+                            self
+                        }
+
                         #vis fn matches(
                             self,
                             f: impl FnOnce(Self) -> #toasty::stmt::Expr<bool>,
@@ -285,6 +299,11 @@ impl Expand<'_> {
 
             #[allow(dead_code)]
             impl<__Origin> #field_struct_ident<__Origin> {
+                #[doc(hidden)]
+                pub fn into_pair_path(self) -> Self {
+                    self
+                }
+
                 #( #is_variant_methods )*
 
                 #( #variant_accessor_methods )*

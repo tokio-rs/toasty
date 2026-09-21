@@ -97,15 +97,11 @@ impl Verify<'_> {
             };
             for field in &root.fields {
                 if let Some(has_many) = field.ty.as_has_many() {
-                    assert_ne!(has_many.pair_id, FieldId::placeholder());
+                    assert_ne!(has_many.pair.field, FieldId::placeholder());
                 }
 
                 if let Some(belongs_to) = field.ty.as_belongs_to() {
                     assert_ne!(belongs_to.target, ModelId::placeholder());
-
-                    if let Some(pair) = belongs_to.pair {
-                        assert_ne!(pair, FieldId::placeholder());
-                    }
 
                     assert_ne!(
                         belongs_to.expr_ty,

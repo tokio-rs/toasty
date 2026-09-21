@@ -224,10 +224,8 @@ impl Edge {
         // on the target-side model and owns the FK; a `BelongsTo` step is the
         // edge itself, on the root-side model.
         let (belongs_to, owner_is_target_side) = match &field.ty {
-            app::FieldTy::Has(_) => {
-                let pair = field
-                    .pair()
-                    .expect("via paths are unfolded into direct steps before edge resolution");
+            app::FieldTy::Has(has) => {
+                let pair = has.pair.field;
                 (schema.app.field(pair).ty.as_belongs_to_unwrap(), true)
             }
             app::FieldTy::BelongsTo(belongs_to) => (belongs_to, false),

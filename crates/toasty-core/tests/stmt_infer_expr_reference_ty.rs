@@ -95,6 +95,7 @@ fn model_root(id: usize, field_types: &[(Type, &str)]) -> ModelRoot {
         .collect();
 
     ModelRoot {
+        relations: vec![],
         id: model_id,
         name: Name::new("T"),
         fields,

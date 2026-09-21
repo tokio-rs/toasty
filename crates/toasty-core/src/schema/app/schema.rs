@@ -422,7 +422,19 @@ impl Builder {
         model_stack.push(model_id);
 
         let model = self.models[&model_id].as_root_unwrap();
-        for field in &model.fields {
+        let embedded = model
+            .relations
+            .iter()
+            .filter(|instance| {
+                !instance.location.steps.is_empty()
+                    && instance.location.steps.iter().all(|step| {
+                        !self.models[&step.field.model].fields()[step.field.index].deferred
+                    })
+            })
+            .map(|instance| {
+                &self.models[&instance.location.field.model].fields()[instance.location.field.index]
+            });
+        for field in model.fields.iter().chain(embedded) {
             let Some(target) = eager_relation_target(field) else {
                 continue;
             };
@@ -449,7 +461,7 @@ impl Builder {
         let mut parts = Vec::new();
         for field_id in fields {
             let model = &self.models[&field_id.model];
-            let field = &model.as_root_unwrap().fields[field_id.index];
+            let field = &model.fields()[field_id.index];
             parts.push(format!(
                 "{}::{}",
                 model.name().upper_camel_case(),
@@ -460,254 +472,199 @@ impl Builder {
         parts.join(" -> ")
     }
 
-    /// Go through all relations and link them to their pairs
+    /// Instantiate relations on each root, then resolve inverse declarations.
     fn link_relations(&mut self) -> crate::Result<()> {
-        // Because arbitrary models will be mutated throughout the linking
-        // process, models cannot be iterated as that would hold a reference to
-        // `self`. Instead, we use index based iteration.
-
-        // First, link all has-many relations. Has-manys are linked first because
-        // linking them may result in converting has-one relations to BelongTo.
-        // We need this conversion to happen before any of the other processing.
-        for curr in 0..self.models.len() {
-            if self.models[curr].is_embedded() {
-                continue;
-            }
-            for index in 0..self.models[curr].as_root_unwrap().fields.len() {
-                let model = &self.models[curr];
-                let src = model.id();
-                let field = &model.as_root_unwrap().fields[index];
-
-                if let FieldTy::Has(has) = &field.ty
-                    && has.is_many()
+        let mut locations = IndexMap::new();
+        for model in self.models.values().filter(|model| model.is_root()) {
+            let mut found = vec![];
+            self.collect_relations(model.id(), &[], stmt::Path::model(model.id()), &mut found);
+            for (location, _) in &found {
+                let field = &self.models[&location.field.model].fields()[location.field.index];
+                let target = field.ty.as_belongs_to_unwrap().target;
+                if !self
+                    .models
+                    .get(&target)
+                    .is_some_and(|model| model.is_root())
                 {
-                    let target = has.target;
-                    let field_name = field.name.app_unwrap().to_string();
-                    let pair = if has.pair_id.is_placeholder() {
-                        self.find_has_many_pair(src, target, &field_name)?
-                    } else {
-                        self.validate_pair(src, target, &field_name, has.pair_id)?;
-                        has.pair_id
-                    };
-                    self.models[curr].as_root_mut_unwrap().fields[index]
-                        .ty
-                        .as_has_mut_unwrap()
-                        .pair_id = pair;
+                    return Err(crate::Error::invalid_schema(format!(
+                        "field `{}::{}` references a model that was not registered with the schema; did you forget to register it with `Db::builder()`?",
+                        model.name().upper_camel_case(),
+                        self.pair_name(location),
+                    )));
                 }
             }
+            locations.insert(model.id(), found);
         }
 
-        // Link has-one relations and compute BelongsTo foreign keys
-        for curr in 0..self.models.len() {
-            if self.models[curr].is_embedded() {
-                continue;
-            }
-            for index in 0..self.models[curr].as_root_unwrap().fields.len() {
-                let model = &self.models[curr];
-                let src = model.id();
-                let field = &model.as_root_unwrap().fields[index];
-
-                match &field.ty {
-                    FieldTy::Has(has) if has.is_one() => {
-                        let target = has.target;
-                        let field_name = field.name.app_unwrap().to_string();
-                        let pair = if has.pair_id.is_placeholder() {
-                            match self.find_belongs_to_pair(src, target, &field_name)? {
-                                Some(pair) => pair,
-                                None => {
-                                    return Err(crate::Error::invalid_schema(format!(
-                                        "field `{}::{}` has no matching `BelongsTo` relation on the target model",
-                                        self.models[curr].name().upper_camel_case(),
-                                        field_name,
-                                    )));
-                                }
-                            }
-                        } else {
-                            self.validate_pair(src, target, &field_name, has.pair_id)?;
-                            has.pair_id
-                        };
-
-                        self.models[curr].as_root_mut_unwrap().fields[index]
-                            .ty
-                            .as_has_mut_unwrap()
-                            .pair_id = pair;
-                    }
-                    FieldTy::BelongsTo(belongs_to) => {
-                        assert!(!belongs_to.foreign_key.is_placeholder());
-                        continue;
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        // Finally, link BelongsTo relations with their pairs
-        for curr in 0..self.models.len() {
-            if self.models[curr].is_embedded() {
-                continue;
-            }
-            for index in 0..self.models[curr].as_root_unwrap().fields.len() {
-                let model = &self.models[curr];
-                let field_id = model.as_root_unwrap().fields[index].id;
-
-                let pair = match &self.models[curr].as_root_unwrap().fields[index].ty {
-                    FieldTy::BelongsTo(belongs_to) => {
-                        let mut pair = None;
-                        let target = match self.models.get_index_of(&belongs_to.target) {
-                            Some(target) => target,
-                            None => {
-                                let model = &self.models[curr];
-                                return Err(crate::Error::invalid_schema(format!(
-                                    "field `{}::{}` references a model that was not registered \
-                                     with the schema; did you forget to register it with `Db::builder()`?",
-                                    model.name().upper_camel_case(),
-                                    model.as_root_unwrap().fields[index].name(),
-                                )));
-                            }
-                        };
-
-                        for target_index in 0..self.models[target].as_root_unwrap().fields.len() {
-                            pair = match &self.models[target].as_root_unwrap().fields[target_index]
-                                .ty
-                            {
-                                FieldTy::Has(has) if has.pair_id == field_id => {
-                                    assert!(pair.is_none());
-                                    Some(
-                                        self.models[target].as_root_unwrap().fields[target_index]
-                                            .id,
-                                    )
-                                }
-                                _ => continue,
-                            }
-                        }
-
-                        if pair.is_none() {
-                            continue;
-                        }
-
-                        pair
-                    }
-                    _ => continue,
+        let mut links = vec![];
+        for model in self.models.values().filter(|model| model.is_root()) {
+            for field in model.fields() {
+                let FieldTy::Has(has) = &field.ty else {
+                    continue;
                 };
-
-                self.models[curr].as_root_mut_unwrap().fields[index]
-                    .ty
-                    .as_belongs_to_mut_unwrap()
-                    .pair = pair;
+                let Some(candidates) = locations.get(&has.target) else {
+                    return Err(crate::Error::invalid_schema(format!(
+                        "field `{}::{}` references a model that was not registered with the schema; did you forget to register it with `Db::builder()`?",
+                        model.name().upper_camel_case(),
+                        field.name(),
+                    )));
+                };
+                let prefix = has.pair_path.as_ref().map(path_segments);
+                let candidates: Vec<_> = candidates
+                    .iter()
+                    .filter(|(pair, path)| {
+                        let target = self.models[&pair.field.model].fields()[pair.field.index]
+                            .ty
+                            .as_belongs_to_unwrap()
+                            .target;
+                        target == model.id()
+                            && prefix
+                                .as_ref()
+                                .is_none_or(|prefix| path_segments(path).starts_with(prefix))
+                            && (has.pair.field.is_placeholder() || has.pair == *pair)
+                    })
+                    .collect();
+                let pair = match candidates.as_slice() {
+                    [(pair, _)] => (*pair).clone(),
+                    [] => {
+                        return Err(crate::Error::invalid_schema(format!(
+                            "field `{}::{}` has no matching `BelongsTo` relation on the target model for its pair path",
+                            model.name().upper_camel_case(),
+                            field.name(),
+                        )));
+                    }
+                    _ => {
+                        return Err(crate::Error::invalid_schema(format!(
+                            "model `{}` has more than one `BelongsTo` relation targeting `{}`; disambiguate by adding `pair = <path>` on `{}::{}`; candidates: {}",
+                            self.models[&has.target].name().upper_camel_case(),
+                            model.name().upper_camel_case(),
+                            model.name().upper_camel_case(),
+                            field.name(),
+                            candidates
+                                .iter()
+                                .map(|(pair, _)| self.pair_name(pair))
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                        )));
+                    }
+                };
+                if links.iter().any(|(_, location)| location == &pair) {
+                    return Err(crate::Error::invalid_schema(format!(
+                        "more than one inverse relation claims `{}`",
+                        self.pair_name(&pair),
+                    )));
+                }
+                links.push((field.id, pair));
             }
         }
-
+        for (field, pair) in &links {
+            self.models[&field.model].as_root_mut_unwrap().fields[field.index]
+                .ty
+                .as_has_mut_unwrap()
+                .pair = pair.clone();
+        }
+        for (host, locations) in locations {
+            self.models[&host].as_root_mut_unwrap().relations = locations
+                .into_iter()
+                .map(|(location, _)| {
+                    let pair = links
+                        .iter()
+                        .find(|(_, paired)| paired == &location)
+                        .map(|(id, _)| *id);
+                    super::RelationInstance { location, pair }
+                })
+                .collect();
+        }
         Ok(())
     }
 
-    fn find_belongs_to_pair(
+    fn collect_relations(
         &self,
-        src: ModelId,
-        target: ModelId,
-        field_name: &str,
-    ) -> crate::Result<Option<FieldId>> {
-        let src_model = &self.models[&src];
-
-        let target = match self.models.get(&target) {
-            Some(target) => target,
-            None => {
-                return Err(crate::Error::invalid_schema(format!(
-                    "field `{}::{}` references a model that was not registered with the schema; \
-                     did you forget to register it with `Db::builder()`?",
-                    src_model.name().upper_camel_case(),
-                    field_name,
-                )));
-            }
+        model: ModelId,
+        steps: &[super::PairStep],
+        path: stmt::Path,
+        output: &mut Vec<(super::Pair, stmt::Path)>,
+    ) {
+        let model = &self.models[&model];
+        let fields: Vec<_> = match &path.root {
+            stmt::PathRoot::Variant { variant_id, .. } if variant_id.model == model.id() => model
+                .as_embedded_enum_unwrap()
+                .variant_fields(variant_id.index)
+                .iter()
+                .collect(),
+            _ => model.fields().iter().collect(),
         };
-
-        // Find all BelongsTo relations that reference the model
-        let belongs_to: Vec<_> = target
-            .as_root_unwrap()
-            .fields
-            .iter()
-            .filter(|field| match &field.ty {
-                FieldTy::BelongsTo(rel) => rel.target == src,
-                _ => false,
-            })
-            .collect();
-
-        match &belongs_to[..] {
-            [field] => Ok(Some(field.id)),
-            [] => Ok(None),
-            _ => Err(crate::Error::invalid_schema(format!(
-                "model `{}` has more than one `BelongsTo` relation targeting `{}`; \
-                 disambiguate by adding `pair = <field>` on the paired `has_many`/`has_one` \
-                 field",
-                target.name().upper_camel_case(),
-                src_model.name().upper_camel_case(),
-            ))),
+        for (index, field) in fields.into_iter().enumerate() {
+            let mut field_path = path.clone();
+            field_path.projection.push(index);
+            match &field.ty {
+                FieldTy::BelongsTo(rel) => {
+                    assert!(!rel.foreign_key.is_placeholder());
+                    output.push((
+                        super::Pair {
+                            steps: steps.to_vec(),
+                            field: field.id,
+                        },
+                        field_path,
+                    ));
+                }
+                FieldTy::Embedded(embed) => {
+                    let mut steps = steps.to_vec();
+                    if let Model::EmbeddedEnum(en) = &self.models[&embed.target] {
+                        for index in 0..en.variants.len() {
+                            let variant = super::VariantId {
+                                model: en.id,
+                                index,
+                            };
+                            steps.push(super::PairStep {
+                                field: field.id,
+                                variant: Some(variant),
+                            });
+                            self.collect_relations(
+                                embed.target,
+                                &steps,
+                                stmt::Path::from_variant(field_path.clone(), variant),
+                                output,
+                            );
+                            steps.pop();
+                        }
+                    } else {
+                        steps.push(super::PairStep {
+                            field: field.id,
+                            variant: None,
+                        });
+                        self.collect_relations(embed.target, &steps, field_path, output);
+                    }
+                }
+                _ => {}
+            }
         }
     }
 
-    fn find_has_many_pair(
-        &mut self,
-        src: ModelId,
-        target: ModelId,
-        field_name: &str,
-    ) -> crate::Result<FieldId> {
-        if let Some(field_id) = self.find_belongs_to_pair(src, target, field_name)? {
-            return Ok(field_id);
-        }
-
-        Err(crate::Error::invalid_schema(format!(
-            "field `{}::{}` has no matching `BelongsTo` relation on the target model",
-            self.models[&src].name().upper_camel_case(),
-            field_name,
-        )))
-    }
-
-    /// Verify that `pair` — resolved from `#[has_many(pair = <field>)]` or
-    /// `#[has_one(pair = <field>)]` via `field_name_to_id` on the target —
-    /// names a `BelongsTo` field on `target` that points back at `src`.
-    fn validate_pair(
-        &self,
-        src: ModelId,
-        target: ModelId,
-        field_name: &str,
-        pair: FieldId,
-    ) -> crate::Result<()> {
-        let src_model = &self.models[&src];
-
-        let target_model = match self.models.get(&target) {
-            Some(target) => target,
-            None => {
-                return Err(crate::Error::invalid_schema(format!(
-                    "field `{}::{}` references a model that was not registered with the schema; \
-                     did you forget to register it with `Db::builder()`?",
-                    src_model.name().upper_camel_case(),
-                    field_name,
-                )));
+    fn pair_name(&self, pair: &super::Pair) -> String {
+        let mut names = vec![];
+        for step in &pair.steps {
+            names.push(
+                self.models[&step.field.model].fields()[step.field.index]
+                    .name()
+                    .to_string(),
+            );
+            if let Some(variant) = step.variant {
+                names.push(
+                    self.models[&variant.model]
+                        .as_embedded_enum_unwrap()
+                        .variants[variant.index]
+                        .name
+                        .snake_case(),
+                );
             }
-        };
-
-        if pair.model != target {
-            return Err(crate::Error::invalid_schema(format!(
-                "field `{}::{}` specifies a `pair` on a model other than its target `{}`",
-                src_model.name().upper_camel_case(),
-                field_name,
-                target_model.name().upper_camel_case(),
-            )));
         }
-
-        let paired = &target_model.as_root_unwrap().fields[pair.index];
-        match &paired.ty {
-            FieldTy::BelongsTo(rel) if rel.target == src => Ok(()),
-            _ => Err(crate::Error::invalid_schema(format!(
-                "field `{}::{}` specifies `pair = {}`, but `{}::{}` is not a `BelongsTo` \
-                 targeting `{}`",
-                src_model.name().upper_camel_case(),
-                field_name,
-                paired.name.app_unwrap(),
-                target_model.name().upper_camel_case(),
-                paired.name.app_unwrap(),
-                src_model.name().upper_camel_case(),
-            ))),
-        }
+        names.push(
+            self.models[&pair.field.model].fields()[pair.field.index]
+                .name()
+                .to_string(),
+        );
+        names.join(".")
     }
 }
 
@@ -717,4 +674,22 @@ fn eager_relation_target(field: &Field) -> Option<ModelId> {
     }
 
     field.relation_target_id()
+}
+
+fn path_segments(path: &stmt::Path) -> Vec<(bool, usize)> {
+    let mut steps = match &path.root {
+        stmt::PathRoot::Model(model) => vec![(false, model.0)],
+        stmt::PathRoot::Variant { parent, variant_id } => {
+            let mut steps = path_segments(parent);
+            steps.push((true, variant_id.index));
+            steps
+        }
+    };
+    steps.extend(
+        path.projection
+            .as_slice()
+            .iter()
+            .map(|index| (false, *index)),
+    );
+    steps
 }

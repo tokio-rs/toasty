@@ -1,5 +1,5 @@
 use crate::{
-    schema::app::{FieldId, FieldTy, ForeignKey, Model, ModelId, Schema},
+    schema::app::{FieldTy, ForeignKey, Model, ModelId, Schema},
     stmt,
 };
 
@@ -25,10 +25,6 @@ pub struct BelongsTo {
     /// The expression type this field evaluates to from the application's
     /// perspective.
     pub expr_ty: stmt::Type,
-
-    /// The inverse [`Has`](super::Has) field on the target model, if one
-    /// exists.
-    pub pair: Option<FieldId>,
 
     /// The foreign key mapping source fields to the target's primary key
     /// fields.

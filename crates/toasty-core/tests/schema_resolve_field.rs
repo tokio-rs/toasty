@@ -171,6 +171,7 @@ fn schema() -> Schema {
     });
 
     let user = Model::Root(ModelRoot {
+        relations: vec![],
         id: USER,
         name: Name::new("User"),
         fields: vec![

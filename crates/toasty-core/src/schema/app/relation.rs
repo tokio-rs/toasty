@@ -13,3 +13,6 @@ pub use has::{Cardinality, Has};
 
 mod via;
 pub use via::Via;
+
+mod pair;
+pub use pair::{Pair, PairStep, RelationInstance};

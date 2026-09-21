@@ -35,7 +35,69 @@ impl Verify<'_> {
         field: &Field,
         rel: &app::Has,
     ) -> Result<()> {
-        self.verify_has_relation_is_indexed(owner, field, rel.target(&self.schema.app), rel.pair_id)
+        if !rel.pair.steps.is_empty() {
+            let mapping = self.schema.mapping.model(rel.target);
+            let mut fields = mapping.fields.as_slice();
+            let mut offset = 0;
+            for step in &rel.pair.steps {
+                let mapped = &fields[step.field.index - offset];
+                match (mapped, step.variant) {
+                    (crate::schema::mapping::Field::Struct(embed), None) => {
+                        fields = &embed.fields;
+                        offset = 0;
+                    }
+                    (crate::schema::mapping::Field::Enum(embed), Some(variant)) => {
+                        fields = &embed.variants[variant.index].fields;
+                        offset = self
+                            .schema
+                            .app
+                            .model(variant.model)
+                            .as_embedded_enum_unwrap()
+                            .variants[variant.index]
+                            .field_range
+                            .start;
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            let belongs_to = rel.pair(&self.schema.app);
+            let columns: Vec<_> = belongs_to
+                .foreign_key
+                .fields
+                .iter()
+                .flat_map(|fk| {
+                    fields[fk.source.index - offset]
+                        .columns()
+                        .map(|(column, _)| column)
+                })
+                .collect();
+            let table = self.schema.db.table(mapping.table);
+            if table.indices.iter().any(|index| {
+                index.columns.len() >= columns.len()
+                    && index
+                        .columns
+                        .iter()
+                        .zip(&columns)
+                        .all(|(indexed, key)| indexed.column == *key)
+                    && (index.columns.len() == columns.len()
+                        || index.columns[columns.len()].scope.is_local())
+            }) {
+                return Ok(());
+            }
+            return Err(self.missing_relation_index_error(
+                owner,
+                field,
+                rel.target(&self.schema.app).as_root_unwrap(),
+                rel.pair.field,
+                belongs_to,
+            ));
+        }
+        self.verify_has_relation_is_indexed(
+            owner,
+            field,
+            rel.target(&self.schema.app),
+            rel.pair.field,
+        )
     }
 
     fn verify_has_relation_is_indexed(

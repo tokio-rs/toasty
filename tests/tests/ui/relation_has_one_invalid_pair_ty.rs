@@ -4,7 +4,7 @@ struct User {
     #[auto]
     id: uuid::Uuid,
 
-    #[has_one]
+    #[has_one(pair = missing)]
     profile: toasty::Deferred<Option<Profile>>,
 }
 

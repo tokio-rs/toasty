@@ -232,6 +232,16 @@ impl Field {
         self.ty.is_relation()
     }
 
+    /// Returns the paired belongs-to location for an inverse relation.
+    ///
+    /// Belongs-to back-links are stored on the host model's relation instances.
+    pub fn pair(&self) -> Option<&super::Pair> {
+        match &self.ty {
+            FieldTy::Has(has) => Some(&has.pair),
+            _ => None,
+        }
+    }
+
     /// If the field is a relation, return the relation's target ModelId.
     pub fn relation_target_id(&self) -> Option<ModelId> {
         match &self.ty {
@@ -253,22 +263,6 @@ impl Field {
             FieldTy::BelongsTo(belongs_to) => &belongs_to.expr_ty,
             FieldTy::Has(has) => &has.expr_ty,
             FieldTy::Via(via) => &via.expr_ty,
-        }
-    }
-
-    /// Returns the paired relation field, if this field is a relation.
-    ///
-    /// For `BelongsTo` this returns the inverse `Has` relation (if linked).
-    /// For `Has` this returns the paired `BelongsTo`.
-    /// Returns `None` for primitive and embedded fields, and for multi-step
-    /// (`via`) relations, which have no pair.
-    pub fn pair(&self) -> Option<FieldId> {
-        match &self.ty {
-            FieldTy::Primitive(_) => None,
-            FieldTy::Embedded(_) => None,
-            FieldTy::BelongsTo(belongs_to) => belongs_to.pair,
-            FieldTy::Has(has) => Some(has.pair_id),
-            FieldTy::Via(_) => None,
         }
     }
 

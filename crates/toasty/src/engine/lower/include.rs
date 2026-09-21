@@ -368,7 +368,7 @@ impl LowerStatement<'_, '_> {
                     rel.target,
                     stmt::Expr::eq(
                         stmt::Expr::ref_parent_model(),
-                        stmt::Expr::ref_self_field(rel.pair_id),
+                        stmt::Expr::ref_self_field(rel.pair.field),
                     ),
                 );
                 if rel.is_one() {

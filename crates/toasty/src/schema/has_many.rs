@@ -1,7 +1,7 @@
 use super::{Deferred, Load, Model, RelationManyField};
 
 use toasty_core::schema::Name;
-use toasty_core::schema::app::{self, FieldId, FieldTy, ModelId};
+use toasty_core::schema::app::{self, FieldId, FieldTy};
 use toasty_core::stmt;
 
 impl<M: Model> RelationManyField for Vec<M> {
@@ -15,7 +15,7 @@ impl<M: Model> RelationManyField for Vec<M> {
 
     fn many_relation_field_ty(
         singular: Name,
-        pair: Option<FieldId>,
+        pair: Option<stmt::Path>,
         via: Option<stmt::Path>,
     ) -> FieldTy {
         many_relation_field_ty::<M>(singular, pair, via)
@@ -34,7 +34,7 @@ impl<M: Model> RelationManyField for Deferred<Vec<M>> {
 
     fn many_relation_field_ty(
         singular: Name,
-        pair: Option<FieldId>,
+        pair: Option<stmt::Path>,
         via: Option<stmt::Path>,
     ) -> FieldTy {
         many_relation_field_ty::<M>(singular, pair, via)
@@ -43,7 +43,7 @@ impl<M: Model> RelationManyField for Deferred<Vec<M>> {
 
 fn many_relation_field_ty<M: Model>(
     singular: Name,
-    pair: Option<FieldId>,
+    pair: Option<stmt::Path>,
     via: Option<stmt::Path>,
 ) -> FieldTy {
     let target = <M as Model>::id();
@@ -56,10 +56,11 @@ fn many_relation_field_ty<M: Model>(
             target,
             expr_ty,
             cardinality,
-            pair_id: pair.unwrap_or(FieldId {
-                model: ModelId(usize::MAX),
+            pair: app::Pair::direct(FieldId {
+                model: app::ModelId(usize::MAX),
                 index: usize::MAX,
             }),
+            pair_path: pair,
         }),
     }
 }

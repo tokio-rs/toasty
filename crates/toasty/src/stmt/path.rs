@@ -509,6 +509,20 @@ where
     }
 }
 
+impl<T, U> Path<T, Option<U>>
+where
+    U: crate::schema::Embed + Field<ExprTarget = U>,
+{
+    /// Expose an optional embed's accessors while resolving a schema pair.
+    #[doc(hidden)]
+    pub fn into_pair_path(self) -> U::Path<T> {
+        U::new_path(Path {
+            untyped: self.untyped,
+            _p: PhantomData,
+        })
+    }
+}
+
 impl<T, U> Path<T, Option<U>> {
     /// Test whether this optional field is `NULL`.
     ///

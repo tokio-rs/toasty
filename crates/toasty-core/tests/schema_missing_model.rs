@@ -31,6 +31,7 @@ fn make_root_model(id: ModelId, name: &str, extra_fields: Vec<Field>) -> Model {
     let mut fields = vec![make_id_field(id)];
     fields.extend(extra_fields);
     Model::Root(ModelRoot {
+        relations: vec![],
         id,
         name: Name::new(name),
         fields,
@@ -98,10 +99,8 @@ fn has_many_target_not_registered() {
                 cardinality: Cardinality::Many {
                     singular: Name::new("talk"),
                 },
-                pair_id: FieldId {
-                    model: MISSING,
-                    index: 0,
-                },
+                pair: toasty_core::schema::app::Pair::direct(MISSING.field(0)),
+                pair_path: None,
             }),
         )],
     )];
@@ -124,10 +123,8 @@ fn has_one_target_not_registered() {
                 target: MISSING,
                 expr_ty: stmt::Type::Unknown,
                 cardinality: Cardinality::One,
-                pair_id: FieldId {
-                    model: MISSING,
-                    index: 0,
-                },
+                pair: toasty_core::schema::app::Pair::direct(MISSING.field(0)),
+                pair_path: None,
             }),
         )],
     )];
@@ -149,7 +146,6 @@ fn belongs_to_target_not_registered() {
             FieldTy::BelongsTo(BelongsTo {
                 target: MISSING,
                 expr_ty: stmt::Type::Unknown,
-                pair: None,
                 foreign_key: ForeignKey {
                     fields: vec![ForeignKeyField {
                         source: model_a.field(0),

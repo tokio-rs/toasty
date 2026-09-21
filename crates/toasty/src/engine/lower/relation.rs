@@ -337,7 +337,7 @@ impl LowerStatement<'_, '_> {
 
     fn plan_mut_has_many(&mut self, field: &Field, op: Mutation, source: &mut dyn RelationSource) {
         let has_many = field.ty.as_has_many_unwrap();
-        let pair = has_many.pair_id;
+        let pair = has_many.pair.field;
         let pair = self.field(pair);
 
         self.plan_mut_has_n(field, pair, op, source);
@@ -345,7 +345,7 @@ impl LowerStatement<'_, '_> {
 
     fn plan_mut_has_one(&mut self, field: &Field, op: Mutation, source: &mut dyn RelationSource) {
         let has_one = field.ty.as_has_one_unwrap();
-        let pair = has_one.pair_id;
+        let pair = has_one.pair.field;
         let pair = self.field(pair);
 
         self.plan_mut_has_n(field, pair, op, source);
@@ -564,7 +564,7 @@ impl LowerStatement<'_, '_> {
 
         let belongs_to = field.ty.as_belongs_to_unwrap();
 
-        if let Some(pair_id) = belongs_to.pair {
+        if let Some(pair_id) = self.relation_pair(field) {
             let pair = self.field(pair_id);
 
             if pair.ty.is_has_one() && !pair.nullable {
@@ -590,7 +590,7 @@ impl LowerStatement<'_, '_> {
     ) {
         let expr = relation_key_expr(&field.ty.as_belongs_to_unwrap().foreign_key, expr);
         let dependencies = self.collect_dependencies(|lower| {
-            if let Some(pair_id) = field.pair()
+            if let Some(pair_id) = lower.relation_pair(field)
                 && lower.field(pair_id).ty.is_has_one()
             {
                 // Disassociate an existing HasOne. This handles the case where
@@ -868,8 +868,21 @@ impl LowerStatement<'_, '_> {
         stmt::Expr::in_subquery(stmt::Expr::ref_self_field(pair), source.selection(1))
     }
 
+    fn relation_pair(&self, field: &Field) -> Option<FieldId> {
+        match &field.ty {
+            FieldTy::Has(has) => Some(has.pair.field),
+            FieldTy::BelongsTo(_) => self
+                .schema()
+                .app
+                .model(field.id.model)
+                .as_root()
+                .and_then(|model| model.relation_pair(&app::Pair::direct(field.id))),
+            _ => None,
+        }
+    }
+
     fn relation_step(&mut self, field: &Field, f: impl FnOnce(&mut LowerStatement)) {
-        if let Some(pair) = field.pair()
+        if let Some(pair) = self.relation_pair(field)
             && self.state.relations.last().copied() == Some(pair)
         {
             return;

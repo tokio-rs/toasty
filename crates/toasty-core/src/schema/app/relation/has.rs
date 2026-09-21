@@ -1,5 +1,5 @@
 use crate::{
-    schema::app::{BelongsTo, FieldId, Model, ModelId, Name, Schema},
+    schema::app::{BelongsTo, Model, ModelId, Name, Pair, Schema},
     stmt,
 };
 
@@ -21,7 +21,10 @@ pub struct Has {
     pub cardinality: Cardinality,
 
     /// The paired `BelongsTo` field on the target model.
-    pub pair_id: FieldId,
+    pub pair: Pair,
+
+    /// Optional prefix supplied by `pair = ...`, resolved by the linker.
+    pub pair_path: Option<stmt::Path>,
 }
 
 /// Cardinality for a relation field that reaches another model.
@@ -60,7 +63,7 @@ impl Has {
     ///
     /// Panics if the paired field is not a `BelongsTo` variant.
     pub fn pair<'a>(&self, schema: &'a Schema) -> &'a BelongsTo {
-        schema.field(self.pair_id).ty.as_belongs_to_unwrap()
+        schema.field(self.pair.field).ty.as_belongs_to_unwrap()
     }
 }
 

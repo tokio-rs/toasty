@@ -1,7 +1,7 @@
 use super::{Load, Model};
 
 use toasty_core::schema::Name;
-use toasty_core::schema::app::{FieldId, FieldTy};
+use toasty_core::schema::app::FieldTy;
 use toasty_core::stmt;
 
 /// A Rust field type that represents a `#[has_many]` relation.
@@ -38,7 +38,7 @@ pub trait RelationManyField: Load<Output = Self> {
     /// model. A `via` relation has no pair.
     fn many_relation_field_ty(
         singular: Name,
-        pair: Option<FieldId>,
+        pair: Option<stmt::Path>,
         via: Option<stmt::Path>,
     ) -> FieldTy;
 }
