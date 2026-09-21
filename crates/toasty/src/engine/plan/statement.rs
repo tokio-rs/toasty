@@ -617,7 +617,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     data_load_input.set(Some(index));
 
                     // If the target statement is a query, then we are in a batch-load scenario.
-                    if target_stmt_info.stmt().is_query() {
+                    if target_stmt_info.stmt().is_query() || target_stmt_info.stmt().is_update() {
                         debug_assert!(insert_row.is_none());
 
                         let (batch_load_table_ref_index, _) =
@@ -655,11 +655,80 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     }
 
     fn rewrite_stmt_for_batch_load(&mut self, stmt: &mut stmt::Statement) {
+        self.filter_batch_load_input(stmt);
         if self.planner.engine.capability().sql() {
             self.rewrite_stmt_query_for_batch_load_sql(stmt);
         } else {
             self.rewrite_stmt_query_for_batch_load_nosql(stmt);
         }
+    }
+
+    // A variant guard depends only on the parent row. Evaluate it before
+    // batching keys so a variant absent from the result causes no query.
+    fn filter_batch_load_input(&mut self, stmt: &mut stmt::Statement) {
+        let Some(stmt::Expr::And(and)) = stmt.filter_expr_mut() else {
+            return;
+        };
+        let (guards, predicates): (Vec<_>, Vec<_>) = std::mem::take(&mut and.operands)
+            .into_iter()
+            .partition(|expr| {
+                let mut parent_only = expr.is_eval();
+                stmt::visit::for_each_expr(expr, |expr| {
+                    if let stmt::Expr::Arg(arg) = expr {
+                        parent_only &=
+                            matches!(self.stmt_info.args[arg.position], hir::Arg::Ref { .. });
+                    }
+                });
+                parent_only
+            });
+        and.operands = predicates;
+        if guards.is_empty() {
+            return;
+        }
+        assert_eq!(self.load_data.batch_load_args.len(), 1);
+        let input = self.load_data.batch_load_args[0];
+        let mut predicate = stmt::Expr::and_from_vec(guards);
+        visit_mut::walk_expr_scoped_mut(&mut predicate, 0, |expr, depth| {
+            if let stmt::Expr::Arg(arg) = expr
+                && arg.nesting == depth
+            {
+                let hir::Arg::Ref {
+                    stmt_id: target_id,
+                    target_expr_ref,
+                    ..
+                } = &self.stmt_info.args[arg.position]
+                else {
+                    unreachable!()
+                };
+                let back_ref = &self.planner.hir[target_id].back_refs[&self.stmt_id];
+                let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
+                *expr = stmt::Expr::project(
+                    stmt::Expr::arg(stmt::ExprArg {
+                        position: 0,
+                        nesting: depth,
+                    }),
+                    [column],
+                );
+                return false;
+            }
+            true
+        });
+        let node = self.load_data.inputs[input];
+        let ty = self.planner.mir[node].ty().clone();
+        let row_ty = ty.as_list_unwrap().clone();
+        let filtered = self.insert_mir_with_deps(mir::Filter {
+            input: node,
+            args: IndexSet::new(),
+            predicate: eval::Func::from_stmt(predicate, vec![row_ty]),
+            ty,
+        });
+        self.load_data.inputs = self
+            .load_data
+            .inputs
+            .iter()
+            .enumerate()
+            .map(|(i, node)| if i == input { filtered } else { *node })
+            .collect();
     }
 
     fn rewrite_stmt_query_for_batch_load_sql(&mut self, stmt: &mut stmt::Statement) {

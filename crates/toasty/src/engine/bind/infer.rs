@@ -183,6 +183,13 @@ fn refine_query(query: &stmt::Query, cx: &Cx<'_>, params: &mut [Param]) {
     match &query.body {
         stmt::ExprSet::Select(select) => {
             refine_filter(&select.filter, &cx, params);
+            // Conditional writes project their guard into a CTE. Comparisons
+            // there need the same column types as predicates in WHERE, notably
+            // PostgreSQL enum discriminants used by polymorphic relations.
+            if let stmt::Returning::Project(expr) | stmt::Returning::Expr(expr) = &select.returning
+            {
+                synthesize(expr, &cx, params);
+            }
         }
         stmt::ExprSet::Values(values) => {
             for row in &values.rows {

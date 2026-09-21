@@ -138,7 +138,7 @@ impl<'a> RewriteVia<'a> {
             // `BelongsTo` against the source query. Via relations were
             // already unfolded, so only direct kinds reach this arm.
             app::FieldTy::Has(has) => stmt::Expr::in_subquery(
-                stmt::Expr::ref_self_field(has.pair.field),
+                has.pair.path(&self.schema().app).into_stmt(),
                 *association.source,
             )
             .into(),

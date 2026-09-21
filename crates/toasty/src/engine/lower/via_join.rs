@@ -43,7 +43,13 @@ impl LowerStatement<'_, '_> {
             _ => unreachable!("build_via_include_subquery called on non-via field"),
         };
         let nullable = model.fields[field_index].nullable();
-        let join = ViaJoin::resolve(schema, model.id, via);
+        let join = match ViaJoin::resolve(schema, model.id, via) {
+            Ok(join) => join,
+            Err(error) => {
+                self.state.errors.push(error);
+                return stmt::Expr::null();
+            }
+        };
 
         // WHERE: the linking column (on the root-adjacent model) equals the
         // parent's referenced key. Use the field's model-level expression
@@ -131,7 +137,11 @@ struct ViaJoin {
 }
 
 impl ViaJoin {
-    fn resolve(schema: &toasty_core::Schema, root: app::ModelId, via: &app::Via) -> ViaJoin {
+    fn resolve(
+        schema: &toasty_core::Schema,
+        root: app::ModelId,
+        via: &app::Via,
+    ) -> crate::Result<ViaJoin> {
         // For a scalar terminal the path's last step is the projected field,
         // not a relation; the relation chain (which the JOIN walks) is
         // everything before it.
@@ -147,12 +157,19 @@ impl ViaJoin {
         let mut edges = Vec::with_capacity(steps.len());
         models.push(root);
         for &field_id in &steps {
+            if let app::FieldTy::Has(has) = &schema.app.field(field_id).ty
+                && !has.pair.steps.is_empty()
+            {
+                return Err(toasty_core::Error::unsupported_feature(
+                    "including a `via` relation through an embedded inverse pair is not supported",
+                ));
+            }
             debug_assert_eq!(field_id.model, *models.last().unwrap());
             models.push(schema.app.field(field_id).relation_target_id().unwrap());
             edges.push(Edge::resolve(schema, field_id));
         }
 
-        ViaJoin { models, edges }
+        Ok(ViaJoin { models, edges })
     }
 
     /// The via target — the model whose rows the include loads.

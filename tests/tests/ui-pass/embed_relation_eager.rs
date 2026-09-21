@@ -1,7 +1,3 @@
-// A relation stored in an embedded type carries no storage; its record slot
-// always decodes from `Null`, which only `toasty::Deferred<..>` represents
-// (as the unloaded state). A bare model type could never load.
-
 #[derive(Debug, toasty::Model)]
 struct Human {
     #[key]

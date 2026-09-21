@@ -96,7 +96,8 @@ impl<'a> LiftInSubquery<'a> {
             .map_or(std::slice::from_ref(&returning), |record| &record.fields)
         {
             let stmt::Expr::Reference(stmt::ExprReference::Field { index, .. }) = field else {
-                unreachable!();
+                select.add_filter(stmt::Expr::is_not_null(field.clone()));
+                continue;
             };
             if self.cx.schema().app.field(target.field(*index)).nullable {
                 select.add_filter(stmt::Expr::is_not_null(field.clone()));
@@ -189,6 +190,7 @@ struct LiftBelongsTo<'a> {
     belongs_to: &'a BelongsTo,
     // TODO: switch to bit field set
     fk_field_matches: Vec<bool>,
+    source_keys: Vec<stmt::Expr>,
     fail: bool,
     operands: Vec<stmt::Expr>,
 }
@@ -274,22 +276,17 @@ fn lift_relation_in_subquery(
 ) -> Option<stmt::Expr> {
     match relation {
         Relation::Field(field) => match &field.ty {
-            FieldTy::BelongsTo(belongs_to) => lift_belongs_to_in_subquery(cx, belongs_to, query),
-            FieldTy::Has(has) => {
-                lift_has_n_in_subquery(has.target, has.pair(&cx.schema().app), query)
+            FieldTy::BelongsTo(belongs_to) => {
+                lift_belongs_to_in_subquery(cx, belongs_to, None, query)
             }
+            FieldTy::Has(has) => lift_has_n_in_subquery(cx, has, query),
             FieldTy::Via(via) => lift_via_in_subquery(cx, via, query),
             _ => None,
         },
         Relation::Embedded {
             belongs_to,
             key_expr,
-        } => lift_fk_in_subquery(
-            belongs_to.target,
-            key_expr.clone(),
-            super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.target)),
-            query,
-        ),
+        } => lift_belongs_to_in_subquery(cx, belongs_to, Some(key_expr.clone()), query),
     }
 }
 
@@ -488,6 +485,9 @@ fn try_fuse_paired_relations(
         FieldTy::Has(has) => has,
         _ => return None,
     };
+    if !inner_has.pair.steps.is_empty() {
+        return None;
+    }
     let inner_pair = inner_has.pair(&cx.schema().app);
 
     // Both FKs must reference the same PK columns in the same order.
@@ -648,6 +648,7 @@ fn lift_fk_in_subquery(
 fn lift_belongs_to_in_subquery(
     cx: &ExprContext,
     belongs_to: &BelongsTo,
+    source_key: Option<stmt::Expr>,
     query: &stmt::Query,
 ) -> Option<stmt::Expr> {
     if belongs_to.target != query.body.as_select_unwrap().source.model_id_unwrap() {
@@ -656,7 +657,16 @@ fn lift_belongs_to_in_subquery(
 
     let select = query.body.as_select_unwrap();
 
+    let source_key = source_key.unwrap_or_else(|| {
+        super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.source))
+    });
+    let source_keys = if belongs_to.foreign_key.fields.len() == 1 {
+        vec![source_key.clone()]
+    } else {
+        source_key.as_record_unwrap().fields.clone()
+    };
     let mut lift = LiftBelongsTo {
+        source_keys,
         cx: cx.scope(&select.source),
         belongs_to,
         fk_field_matches: vec![false; belongs_to.foreign_key.fields.len()],
@@ -677,7 +687,7 @@ fn lift_belongs_to_in_subquery(
     if lift.fail || !all_fks_matched {
         lift_fk_in_subquery(
             belongs_to.target,
-            super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.source)),
+            source_key,
             super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.target)),
             query,
         )
@@ -698,15 +708,32 @@ fn lift_belongs_to_in_subquery(
 /// FKs produce a tuple-form IN that the SQL serializer renders as
 /// `(a, b) IN (SELECT a, b FROM ...)`.
 fn lift_has_n_in_subquery(
-    target: ModelId,
-    pair: &BelongsTo,
+    cx: &ExprContext,
+    has: &app::Has,
     query: &stmt::Query,
 ) -> Option<stmt::Expr> {
+    let pair = has.pair(&cx.schema().app);
+    let mut query = query.clone();
+    let keys = pair
+        .foreign_key
+        .fields
+        .iter()
+        .map(|fk| has.pair.field_path(&cx.schema().app, fk.source).into_stmt())
+        .collect::<Vec<_>>();
+    let keys = if keys.len() == 1 {
+        keys.into_iter().next().unwrap()
+    } else {
+        stmt::Expr::record(keys)
+    };
+    if !has.pair.steps.is_empty() {
+        let relation = has.pair.path(&cx.schema().app).into_stmt();
+        query.add_filter(stmt::Expr::eq(relation.clone(), relation));
+    }
     lift_fk_in_subquery(
-        target,
+        has.target,
         super::key_field_refs(0, pair.foreign_key.fields.iter().map(|fk| fk.target)),
-        super::key_field_refs(0, pair.foreign_key.fields.iter().map(|fk| fk.source)),
-        query,
+        keys,
+        &query,
     )
 }
 
@@ -758,7 +785,7 @@ impl LiftBelongsTo<'_> {
                 }
 
                 self.operands.push(stmt::Expr::binary_op(
-                    stmt::Expr::ref_self_field(fk_field.source),
+                    self.source_keys[i].clone(),
                     op,
                     expr.clone(),
                 ));

@@ -143,6 +143,9 @@ impl LowerStatement<'_, '_> {
                 preserve_returning_projection,
             );
         }
+        let mut value = stmt::Expr::Record(std::mem::take(record));
+        self.process_embedded_relation_includes(&mut value, &[], true);
+        *record = value.into_record();
     }
 
     /// Return the model record for one row of an INSERT's returning value.
@@ -201,7 +204,7 @@ impl LowerStatement<'_, '_> {
     }
 
     /// Make a relation load wait for the database writes that can create its row.
-    fn order_relation_load_after_enclosing_inserts(&mut self, load: &stmt::Expr) {
+    pub(super) fn order_relation_load_after_enclosing_inserts(&mut self, load: &stmt::Expr) {
         let stmt::Expr::Arg(expr_arg) = load else {
             unreachable!("belongs_to subquery lowers to a sub-statement arg");
         };
@@ -220,7 +223,7 @@ impl LowerStatement<'_, '_> {
     }
 
     /// Convert a relation query's row list into one nullable record.
-    fn single_relation_from_load(load: stmt::Expr) -> stmt::Expr {
+    pub(super) fn single_relation_from_load(load: stmt::Expr) -> stmt::Expr {
         stmt::Expr::match_expr(
             load.clone(),
             vec![stmt::MatchArm {

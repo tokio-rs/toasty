@@ -103,9 +103,15 @@ impl LoweringState<'_> {
         // BelongsTo→FK) fires inside the lowering walk itself via
         // `LowerStatement::visit_expr_binary_op_mut`.
         association::RewriteVia::new(expr_cx).rewrite(&mut stmt);
+        if let Err(error) = self.engine.normalize_stmt(&mut stmt) {
+            self.errors.push(error);
+        }
         lift_in_subquery::LiftInSubquery::new(expr_cx, self.engine.capability.sql())
             .rewrite(&mut stmt);
         lift_update_query::LiftUpdateQuery::new().rewrite(&mut stmt);
+        if let Err(error) = self.engine.normalize_stmt(&mut stmt) {
+            self.errors.push(error);
+        }
 
         // Combine compatible IN subqueries after relation lifting and before
         // the lowering walk extracts them into separate NoSQL statements.
@@ -287,6 +293,18 @@ impl LowerStatement<'_, '_> {
 
             self.visit_expr_mut(&mut lowering_expr);
 
+            // Reconstructing an embed can retain existing sibling columns.
+            // Leave those columns untouched instead of emitting `col = col`,
+            // which also avoids a row-dependent assignment on KV backends.
+            // An upsert still needs its assignment to select DO UPDATE and
+            // return the existing row when nothing changes.
+            if !self.cx.is_insert()
+                && lowering_expr.as_expr_column().is_some_and(|source| {
+                    source.nesting == 0 && source.table == 0 && source.column == column.index
+                })
+            {
+                continue;
+            }
             out.set(column, lowering_expr);
         }
     }
@@ -706,6 +724,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
     fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
         self.plan_typed_record_relations(expr);
+        if expr.is_project()
+            && let Some(lowered) = self.lower_primitive_projection(expr)
+        {
+            *expr = lowered;
+        }
         match expr {
             stmt::Expr::BinaryOp(e) => {
                 self.visit_expr_binary_op_mut(e);
@@ -985,7 +1008,26 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         *expr = self.build_relation_subquery(*index);
                     }
                     stmt::ExprReference::Field { nesting, index } => {
-                        *expr = self.lower_expr_field(*nesting, *index);
+                        let index = *index;
+                        let eager_embed = *nesting == 0
+                            && self.cx.is_returning()
+                            && self.model_unwrap().relations.iter().any(|instance| {
+                                instance
+                                    .location
+                                    .steps
+                                    .first()
+                                    .is_some_and(|step| step.field.index == index)
+                                    && !self.schema().app.field(instance.location.field).deferred
+                            });
+                        *expr = self.lower_expr_field(*nesting, index);
+                        if eager_embed {
+                            let mut fields =
+                                vec![stmt::Expr::null(); self.model_unwrap().fields.len()];
+                            fields[index] = expr.take();
+                            let mut record = stmt::Expr::record(fields);
+                            self.process_embedded_relation_includes(&mut record, &[], false);
+                            *expr = record.as_record_mut_unwrap()[index].take();
+                        }
                         self.visit_expr_mut(expr);
                     }
                     stmt::ExprReference::Model { .. } => todo!(),
@@ -1586,7 +1628,11 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     return None;
                 }
 
-                let target_ty = self.capability().native_type_for(&expr_cast.ty);
+                let target_ty = if other.is_value() {
+                    self.cast_storage_type(expr_cast)
+                } else {
+                    self.capability().native_type_for(&expr_cast.ty)
+                };
                 self.cast_expr(lhs, &target_ty);
                 self.cast_expr(rhs, &target_ty);
                 None
@@ -1691,7 +1737,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         let stmt::Expr::Cast(cast) = expr else {
             unreachable!()
         };
-        let target_ty = self.capability().native_type_for(&cast.ty);
+        let target_ty = self.cast_storage_type(cast);
 
         self.cast_expr(expr, &target_ty);
 
@@ -1718,6 +1764,86 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     }
 
     fn apply_lowering_filter_constraint(&self, _filter: &mut stmt::Filter) {}
+
+    /// Decode casts compare constants in the column's actual storage type,
+    /// which may differ from the backend default due to a column override.
+    fn cast_storage_type(&self, cast: &stmt::ExprCast) -> stmt::Type {
+        if cast.from.is_none()
+            && let Some(reference) = cast.expr.as_expr_reference()
+            && let stmt::ResolvedRef::Column(column) =
+                self.expr_cx.resolve_expr_reference(reference)
+        {
+            return column.ty.clone();
+        }
+
+        self.capability().native_type_for(&cast.ty)
+    }
+
+    /// A primitive path reads its column directly. Nullable struct decoders
+    /// are only needed when loading the struct itself: all of its columns are
+    /// already NULL when it is absent. Variant guards remain in the predicate.
+    fn lower_primitive_projection(&self, expr: &stmt::Expr) -> Option<stmt::Expr> {
+        enum Step {
+            Field(usize),
+            Variant(usize),
+        }
+        fn collect(expr: &stmt::Expr, steps: &mut Vec<Step>) -> Option<usize> {
+            match expr {
+                stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index }) => {
+                    steps.push(Step::Field(*index));
+                    Some(*nesting)
+                }
+                stmt::Expr::Project(project) => {
+                    let nesting = collect(&project.base, steps)?;
+                    steps.extend(project.projection.iter().copied().map(Step::Field));
+                    Some(nesting)
+                }
+                stmt::Expr::Variant(variant) => {
+                    let nesting = collect(&variant.base, steps)?;
+                    steps.push(Step::Variant(variant.variant.index));
+                    Some(nesting)
+                }
+                _ => None,
+            }
+        }
+        let mut steps = vec![];
+        let nesting = collect(expr, &mut steps)?;
+        if nesting == 0 && matches!(self.cx, LoweringContext::InsertRow(_)) {
+            return None;
+        }
+        let mut fields = self.mapping_at_unwrap(nesting).fields.as_slice();
+        let mut selected: Option<&mapping::Field> = None;
+        for step in steps {
+            match step {
+                Step::Field(index) => {
+                    if let Some(field) = selected {
+                        let mapping::Field::Struct(embed) = field else {
+                            return None;
+                        };
+                        fields = &embed.fields;
+                    }
+                    selected = Some(fields.get(index)?);
+                }
+                Step::Variant(index) => {
+                    let mapping::Field::Enum(embed) = selected? else {
+                        return None;
+                    };
+                    fields = &embed.variants.get(index)?.fields;
+                    selected = None;
+                }
+            }
+        }
+        let mapping::Field::Primitive(field) = selected? else {
+            return None;
+        };
+        let mut expr = field.column_expr.clone();
+        visit_mut::for_each_expr_mut(&mut expr, |expr| {
+            if let stmt::Expr::Reference(stmt::ExprReference::Column(column)) = expr {
+                column.nesting += nesting;
+            }
+        });
+        Some(expr)
+    }
 
     fn lower_expr_field(&self, nesting: usize, index: usize) -> stmt::Expr {
         match self.cx {
@@ -1882,11 +2008,17 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             // (model→PK, BelongsTo→FK) fires inside the lowering walk via
             // `LowerStatement::visit_expr_binary_op_mut`.
             association::RewriteVia::new(child.expr_cx).rewrite(&mut stmt);
+            if let Err(error) = child.state.engine.normalize_stmt(&mut stmt) {
+                child.state.errors.push(error);
+            }
             lift_in_subquery::LiftInSubquery::new(
                 child.expr_cx,
                 child.state.engine.capability.sql(),
             )
             .rewrite(&mut stmt);
+            if let Err(error) = child.state.engine.normalize_stmt(&mut stmt) {
+                child.state.errors.push(error);
+            }
             // Combine compatible IN subqueries before the lowering walk
             // extracts them into separate NoSQL statements.
             Simplify::with_context(child.expr_cx, child.state.engine.capability)
@@ -2092,6 +2224,9 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     }
 
     fn cast_expr(&mut self, expr: &mut stmt::Expr, target_ty: &stmt::Type) {
+        if expr.is_project() {
+            Simplify::with_context(self.expr_cx, self.state.engine.capability).visit_mut(expr);
+        }
         assert!(!target_ty.is_list(), "TODO");
         match expr {
             stmt::Expr::Cast(expr_cast) => {

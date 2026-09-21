@@ -32,7 +32,7 @@
 //!         └──────────────────────────────────  └── enum   → process_enum_arms
 //! ```
 //!
-//! Relations only live on top-level models.
+//! Embedded relation locations retain their host and variant selections.
 
 use toasty_core::{
     schema::{app, mapping},
@@ -42,7 +42,7 @@ use toasty_core::{
 use crate::engine::lower::LowerStatement;
 use crate::schema::lazy_slot;
 
-struct FlatInclude {
+pub(super) struct FlatInclude {
     projection: stmt::Projection,
     query: Option<stmt::Query>,
 }
@@ -85,6 +85,83 @@ impl LowerStatement<'_, '_> {
         let app_fields = &self.model_unwrap().fields;
         let mapping_fields = &self.mapping_unwrap().fields;
         self.process_fields(record, app_fields, mapping_fields, &flat, is_insert);
+        if !is_insert {
+            self.process_embedded_relation_includes(returning, &flat, false);
+        }
+    }
+
+    pub(super) fn process_embedded_relation_includes(
+        &mut self,
+        returning: &mut stmt::Expr,
+        includes: &[FlatInclude],
+        is_insert: bool,
+    ) {
+        let instances = self.model_unwrap().relations.clone();
+        for instance in instances {
+            let location = &instance.location;
+            if location.steps.is_empty() {
+                continue;
+            }
+            let field = self.schema().app.field(location.field);
+            let path = flatten_path(&location.path(&self.schema().app));
+            let mut included = !field.deferred;
+            let mut explicit = false;
+            let mut nested = vec![];
+            let mut top_query = IncludeQuery::default();
+            for include in includes {
+                if path.as_slice().starts_with(include.projection.as_slice()) {
+                    included = true;
+                    explicit = true;
+                    if path == include.projection {
+                        top_query.filter = query_filter_expr(&include.query);
+                        top_query.order_by = include
+                            .query
+                            .as_ref()
+                            .and_then(|query| query.order_by.clone());
+                    }
+                } else if include.projection.as_slice().starts_with(path.as_slice()) {
+                    included = true;
+                    explicit = true;
+                    nested.push(FlatInclude {
+                        projection: stmt::Projection::from(
+                            &include.projection.as_slice()[path.len()..],
+                        ),
+                        query: include.query.clone(),
+                    });
+                }
+            }
+            if !included
+                || embedded_relation_slot(
+                    returning,
+                    location,
+                    &self.schema().app,
+                    &self.mapping_unwrap().fields,
+                    explicit,
+                )
+                .is_none()
+            {
+                continue;
+            }
+            let deferred = field.deferred;
+            let mut value = self.build_relation_subquery_inner(location, &nested, top_query);
+            if is_insert {
+                self.order_relation_load_after_enclosing_inserts(&value);
+                value = Self::single_relation_from_load(value);
+            }
+            let slot = embedded_relation_slot(
+                returning,
+                location,
+                &self.schema().app,
+                &self.mapping_unwrap().fields,
+                explicit,
+            )
+            .unwrap();
+            *slot = if deferred {
+                lazy_slot::loaded_expr(value)
+            } else {
+                value
+            };
+        }
     }
 
     /// Process the fields of a struct-shaped record (top-level model or
@@ -105,7 +182,7 @@ impl LowerStatement<'_, '_> {
             let field_includes = partition_includes(includes, i);
 
             if field.ty.is_relation() {
-                if field_includes.self_included() {
+                if field.id.model == self.model_unwrap().id && field_includes.self_included() {
                     self.build_include_subquery(
                         returning,
                         i,
@@ -276,9 +353,8 @@ impl LowerStatement<'_, '_> {
                 .zip(&variant_mapping.fields)
                 .enumerate()
             {
-                // A relation in a variant has no include support; its slot
-                // stays `Null` (the unloaded state). The enumeration index is
-                // taken before this skip, so later fields keep their slots.
+                // Embedded relations are populated in the second pass using
+                // their complete location on the host model.
                 if var_field.ty.is_relation() {
                     continue;
                 }
@@ -304,7 +380,11 @@ impl LowerStatement<'_, '_> {
         nested: &[FlatInclude],
         top_query: IncludeQuery,
     ) {
-        let value = self.build_relation_subquery_inner(field_index, nested, top_query);
+        let value = self.build_relation_subquery_inner(
+            &app::Pair::direct(self.model_unwrap().id.field(field_index)),
+            nested,
+            top_query,
+        );
         returning[field_index] = if self.model_unwrap().fields[field_index].deferred {
             lazy_slot::loaded_expr(value)
         } else {
@@ -319,16 +399,21 @@ impl LowerStatement<'_, '_> {
     /// `.include(...)` goes through [`build_relation_subquery_inner`] so it
     /// can pass its nested includes and filter down.
     pub(super) fn build_relation_subquery(&mut self, field_index: usize) -> stmt::Expr {
-        self.build_relation_subquery_inner(field_index, &[], IncludeQuery::default())
+        self.build_relation_subquery_inner(
+            &app::Pair::direct(self.model_unwrap().id.field(field_index)),
+            &[],
+            IncludeQuery::default(),
+        )
     }
 
     fn build_relation_subquery_inner(
         &mut self,
-        field_index: usize,
+        location: &app::Pair,
         nested: &[FlatInclude],
         top_query: IncludeQuery,
     ) -> stmt::Expr {
-        let field = &self.model_unwrap().fields[field_index];
+        let field_index = location.field.index;
+        let field = self.schema().app.field(location.field);
 
         // A multi-step (`via`) relation reaches its target through a path of
         // existing relations. Build the child query as a single JOIN through
@@ -368,7 +453,7 @@ impl LowerStatement<'_, '_> {
                     rel.target,
                     stmt::Expr::eq(
                         stmt::Expr::ref_parent_model(),
-                        stmt::Expr::ref_self_field(rel.pair.field),
+                        rel.pair.path(&self.schema().app).into_stmt(),
                     ),
                 );
                 if rel.is_one() {
@@ -383,27 +468,17 @@ impl LowerStatement<'_, '_> {
             // returns a single record and not a list. This matters for the
             // type system.
             app::FieldTy::BelongsTo(rel) => {
-                let source_fk;
-                let target_pk;
-
-                if let [fk_field] = &rel.foreign_key.fields[..] {
-                    source_fk = stmt::Expr::ref_parent_field(fk_field.source);
-                    target_pk = stmt::Expr::ref_self_field(fk_field.target);
-                } else {
-                    let mut source_fk_fields = vec![];
-                    let mut target_pk_fields = vec![];
-
-                    for fk_field in &rel.foreign_key.fields {
-                        source_fk_fields.push(stmt::Expr::ref_parent_field(fk_field.source));
-                        target_pk_fields.push(stmt::Expr::ref_self_field(fk_field.target));
+                let mut relation = location.path(&self.schema().app).into_stmt();
+                stmt::visit_mut::for_each_expr_mut(&mut relation, |expr| {
+                    if let stmt::Expr::Reference(stmt::ExprReference::Field { nesting, .. }) = expr
+                    {
+                        *nesting += 1;
                     }
-
-                    source_fk = stmt::Expr::record_from_vec(source_fk_fields);
-                    target_pk = stmt::Expr::record_from_vec(target_pk_fields);
-                }
-
-                let mut query =
-                    stmt::Query::new_select(rel.target, stmt::Expr::eq(source_fk, target_pk));
+                });
+                let mut query = stmt::Query::new_select(
+                    rel.target,
+                    stmt::Expr::eq(relation, stmt::Expr::ref_ancestor_model(0)),
+                );
                 query.single = true;
                 (query, rel.target)
             }
@@ -551,4 +626,62 @@ fn loaded_form(field: &app::Field, mapping: &mapping::Field) -> stmt::Expr {
         (app::FieldTy::Embedded(_), mapping::Field::Enum(e)) => e.default_returning.clone(),
         _ => unreachable!("deferred field has unexpected mapping shape"),
     }
+}
+
+/// Reach a relation slot in the host's returning expression, including nullable
+/// structs, deferred embeds, and enum arm records.
+fn embedded_relation_slot<'a>(
+    mut value: &'a mut stmt::Expr,
+    location: &app::Pair,
+    schema: &app::Schema,
+    mut mappings: &[mapping::Field],
+    activate: bool,
+) -> Option<&'a mut stmt::Expr> {
+    let mut offset = 0;
+    let mut discriminant = 0;
+    for step in &location.steps {
+        let stmt::Expr::Record(record) = value else {
+            return None;
+        };
+        let mapping = &mappings[step.field.index - offset];
+        value = &mut record[step.field.index - offset + discriminant];
+        let field = schema.field(step.field);
+        if field.deferred {
+            if activate && value.is_value_null() {
+                *value = lazy_slot::loaded_expr(loaded_form(field, mapping));
+            }
+            let stmt::Expr::Record(record) = value else {
+                return None;
+            };
+            value = &mut record[0];
+        }
+        match step.variant {
+            Some(variant) => {
+                mappings = &mapping.as_enum().unwrap().variants[variant.index].fields;
+                let stmt::Expr::Match(expr) = value else {
+                    return None;
+                };
+                value = &mut expr.arms[variant.index].expr;
+                offset = schema
+                    .model(variant.model)
+                    .as_embedded_enum_unwrap()
+                    .variants[variant.index]
+                    .field_range
+                    .start;
+                discriminant = 1;
+            }
+            None => {
+                mappings = &mapping.as_struct().unwrap().fields;
+                if let stmt::Expr::Match(expr) = value {
+                    value = &mut expr.arms.first_mut()?.expr;
+                }
+                offset = 0;
+                discriminant = 0;
+            }
+        }
+    }
+    let stmt::Expr::Record(record) = value else {
+        return None;
+    };
+    Some(&mut record[location.field.index - offset + discriminant])
 }
