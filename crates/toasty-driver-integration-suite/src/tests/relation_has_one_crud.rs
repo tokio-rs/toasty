@@ -90,8 +90,13 @@ pub async fn crud_has_one_bi_direction_optional(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+// Historically `#[should_panic]`: the final `User::create()` (missing the
+// required has_one) trips the engine's lowering assertion inside the
+// connection worker, and the caller only "panicked" because the
+// reply-channel `unwrap()` re-raised it. Since worker-gone channel errors
+// map to `connection_lost`, the caller now observes an error, which is
+// exactly what `assert_err!` below checks — the attribute is removed.
 #[driver_test]
-#[should_panic]
 pub async fn crud_has_one_required_belongs_to_optional(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -137,7 +142,8 @@ pub async fn crud_has_one_required_belongs_to_optional(test: &mut Test) -> Resul
     let profile_reloaded = Profile::get_by_id(&mut db, &profile.id).await?;
     assert_none!(profile_reloaded.user_id);
 
-    // Try creating a user **without** a user: error
+    // Try creating a user **without** a profile: error (the lowering
+    // assertion fires in the worker; the caller sees an error, not a panic)
     assert_err!(User::create().exec(&mut db).await);
     Ok(())
 }
