@@ -24,14 +24,14 @@ impl Exec<'_> {
         let db_table = self.engine.schema.db.table(table);
         let cx = self.engine.expr_cx_for(db_table);
 
-        let capability = &*self.engine.capability;
+        let capability = self.engine.capability;
         match filter {
             stmt::Expr::Any(any) => Self::split_filter_any_map(*any.expr, cx, capability),
             stmt::Expr::InList(in_list) => {
                 Self::split_filter_in_list(*in_list.expr, *in_list.list, cx, capability)
             }
             mut other => {
-                simplify::simplify_expr(cx, &self.engine.capability, &mut other);
+                simplify::simplify_expr(cx, self.engine.capability, &mut other);
                 if other.is_unsatisfiable() {
                     vec![]
                 } else {

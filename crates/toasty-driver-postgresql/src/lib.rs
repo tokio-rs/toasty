@@ -234,7 +234,7 @@ impl Driver for PostgreSQL {
         Cow::Borrowed(&self.url)
     }
 
-    fn capability(&self) -> &Capability {
+    fn capability(&self) -> &'static Capability {
         &Capability::POSTGRESQL
     }
 

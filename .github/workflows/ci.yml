@@ -101,6 +101,8 @@ jobs:
             extra_args: ""
           - package: toasty-driver-mysql
             extra_args: ""
+          - package: toasty-driver-mariadb
+            extra_args: ""
           - package: toasty-driver-postgresql
             extra_args: ""
     steps:
@@ -197,11 +199,14 @@ jobs:
 
   test-mariadb:
     needs: check
-    name: Run tests for MariaDB
+    name: Run tests for MariaDB (${{ matrix.version }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        version: ["11.8", "12.3"]
     services:
       mariadb:
-        image: mariadb:12.3
+        image: mariadb:${{ matrix.version }}
         env:
           MARIADB_ROOT_PASSWORD: toasty
           MARIADB_USER: toasty
@@ -223,6 +228,8 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: cargo test
         run: cargo test --no-default-features --features mariadb
+      - name: cargo test -p toasty-driver-mariadb
+        run: cargo test -p toasty-driver-mariadb
 
   test-postgresql:
     needs: check

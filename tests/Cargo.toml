@@ -13,7 +13,7 @@ pulldown-cmark = { workspace = true }
 
 [features]
 default = ["sqlite"]
-sql = ["sqlite", "mysql", "postgresql"]
+sql = ["sqlite", "mysql", "mariadb", "postgresql"]
 sqlite = ["toasty/sqlite", "dep:toasty-driver-sqlite"]
 turso = ["toasty/turso", "dep:toasty-driver-turso"]
 mysql = [
@@ -23,8 +23,8 @@ mysql = [
     "dep:sqlx-mysql",
 ]
 mariadb = [
-    "toasty/mysql",
-    "dep:toasty-driver-mysql",
+    "toasty/mariadb",
+    "dep:toasty-driver-mariadb",
     "dep:sqlx-core",
     "dep:sqlx-mysql",
 ]
@@ -52,6 +52,7 @@ toasty-driver-integration-suite.workspace = true
 toasty-driver-sqlite = { workspace = true, optional = true }
 toasty-driver-turso = { workspace = true, optional = true }
 toasty-driver-mysql = { workspace = true, optional = true }
+toasty-driver-mariadb = { workspace = true, optional = true }
 toasty-driver-postgresql = { workspace = true, optional = true }
 toasty-driver-dynamodb = { workspace = true, optional = true }
 

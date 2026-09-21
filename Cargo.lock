@@ -5023,6 +5023,7 @@ dependencies = [
  "toasty-core",
  "toasty-driver-dynamodb",
  "toasty-driver-integration-suite",
+ "toasty-driver-mariadb",
  "toasty-driver-mysql",
  "toasty-driver-postgresql",
  "toasty-driver-sqlite",
@@ -5178,6 +5179,7 @@ dependencies = [
  "tempfile",
  "toasty-core",
  "toasty-driver-dynamodb",
+ "toasty-driver-mariadb",
  "toasty-driver-mysql",
  "toasty-driver-postgresql",
  "toasty-driver-sqlite",
@@ -5280,6 +5282,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.5",
+]
+
+[[package]]
+name = "toasty-driver-mariadb"
+version = "0.10.0"
+dependencies = [
+ "async-trait",
+ "toasty-core",
+ "toasty-driver-mysql",
 ]
 
 [[package]]

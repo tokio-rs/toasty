@@ -31,12 +31,10 @@ impl Connect {
     /// |---|---|---|
     /// | `sqlite` | SQLite | `sqlite` |
     /// | `postgresql` / `postgres` | PostgreSQL | `postgresql` |
-    /// | `mysql` / `mariadb` | MySQL and MariaDB | `mysql` |
+    /// | `mysql` | MySQL | `mysql` |
+    /// | `mariadb` | MariaDB | `mariadb` |
     /// | `dynamodb` | DynamoDB | `dynamodb` |
     /// | `turso` | Turso | `turso` |
-    ///
-    /// `mysql` and `mariadb` are interchangeable. The driver identifies the
-    /// server it connects to; the scheme you write does not change that.
     ///
     /// # Errors
     ///
@@ -47,6 +45,7 @@ impl Connect {
             not(any(
                 feature = "dynamodb",
                 feature = "mysql",
+                feature = "mariadb",
                 feature = "postgresql",
                 feature = "sqlite",
                 feature = "turso"
@@ -73,14 +72,21 @@ impl Connect {
                 ));
             }
 
-            // `mariadb` is an alias; the driver identifies the server
-            // rather than trusting the scheme.
             #[cfg(feature = "mysql")]
-            "mysql" | "mariadb" => Box::new(toasty_driver_mysql::MySQL::new(url.as_str()).await?),
+            "mysql" => Box::new(toasty_driver_mysql::MySQL::new(url.as_str())?),
             #[cfg(not(feature = "mysql"))]
-            "mysql" | "mariadb" => {
+            "mysql" => {
                 return Err(toasty_core::Error::unsupported_feature(
                     "`mysql` feature not enabled",
+                ));
+            }
+
+            #[cfg(feature = "mariadb")]
+            "mariadb" => Box::new(toasty_driver_mariadb::MariaDb::new(url.as_str())?),
+            #[cfg(not(feature = "mariadb"))]
+            "mariadb" => {
+                return Err(toasty_core::Error::unsupported_feature(
+                    "`mariadb` feature not enabled",
                 ));
             }
 
@@ -130,7 +136,7 @@ impl Driver for Connect {
         self.driver.url()
     }
 
-    fn capability(&self) -> &Capability {
+    fn capability(&self) -> &'static Capability {
         self.driver.capability()
     }
 

@@ -680,7 +680,7 @@ impl Driver for Turso {
         }
     }
 
-    fn capability(&self) -> &Capability {
+    fn capability(&self) -> &'static Capability {
         &Capability::TURSO
     }
 

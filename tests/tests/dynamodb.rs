@@ -53,7 +53,7 @@ impl DynamoDbSetup {
 
 #[async_trait::async_trait]
 impl toasty_driver_integration_suite::Setup for DynamoDbSetup {
-    async fn driver(&self) -> Box<dyn toasty_core::driver::Driver> {
+    fn driver(&self) -> Box<dyn toasty_core::driver::Driver> {
         let client = self.get_client();
         Box::new(DynamoDb::new("dynamodb://".to_string(), client.clone()))
     }

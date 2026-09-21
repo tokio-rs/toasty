@@ -105,7 +105,7 @@ impl Driver for Sqlite {
         }
     }
 
-    fn capability(&self) -> &Capability {
+    fn capability(&self) -> &'static Capability {
         &Capability::SQLITE
     }
 

@@ -34,14 +34,10 @@ impl MySqlSetup {
 
 #[async_trait::async_trait]
 impl toasty_driver_integration_suite::Setup for MySqlSetup {
-    async fn driver(&self) -> Box<dyn toasty_core::driver::Driver> {
+    fn driver(&self) -> Box<dyn toasty_core::driver::Driver> {
         let url = std::env::var("TOASTY_TEST_MYSQL_URL")
             .unwrap_or_else(|_| "mysql://toasty:toasty@localhost/toasty".to_string());
-        Box::new(
-            MySQL::new(url.as_str())
-                .await
-                .expect("Failed to create MySQL driver"),
-        )
+        Box::new(MySQL::new(url.as_str()).expect("Failed to create MySQL driver"))
     }
 
     async fn delete_table(&self, name: &str) {

@@ -75,7 +75,7 @@ impl Driver for MockDriver {
         self.inner.url()
     }
 
-    fn capability(&self) -> &Capability {
+    fn capability(&self) -> &'static Capability {
         self.inner.capability()
     }
 

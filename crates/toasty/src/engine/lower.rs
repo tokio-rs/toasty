@@ -109,7 +109,7 @@ impl LoweringState<'_> {
 
         // Combine compatible IN subqueries after relation lifting and before
         // the lowering walk extracts them into separate NoSQL statements.
-        Simplify::with_context(expr_cx, &self.engine.capability).visit_mut(&mut stmt);
+        Simplify::with_context(expr_cx, self.engine.capability).visit_mut(&mut stmt);
 
         let stmt_id = self.hir.new_statement_info(
             self.dependencies
@@ -1889,7 +1889,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             .rewrite(&mut stmt);
             // Combine compatible IN subqueries before the lowering walk
             // extracts them into separate NoSQL statements.
-            Simplify::with_context(child.expr_cx, &child.state.engine.capability)
+            Simplify::with_context(child.expr_cx, child.state.engine.capability)
                 .visit_mut(&mut *stmt);
             // Lowering walk.
             child.visit_stmt_mut(&mut stmt);

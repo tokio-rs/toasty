@@ -43,7 +43,7 @@ impl Engine {
         let mut error = None;
         Verify {
             schema: &self.schema,
-            capability: &self.capability,
+            capability: self.capability,
             error: &mut error,
         }
         .visit(stmt);

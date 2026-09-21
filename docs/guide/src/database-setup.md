@@ -50,6 +50,7 @@ requires its corresponding feature flag in `Cargo.toml`.
 | `turso` | Turso (SQLite-compatible, async-native) | `turso` |
 | `postgresql` or `postgres` | PostgreSQL | `postgresql` |
 | `mysql` | MySQL | `mysql` |
+| `mariadb` | MariaDB 11.8+ | `mariadb` |
 | `dynamodb` | DynamoDB | `dynamodb` |
 
 Examples:
@@ -67,9 +68,23 @@ Examples:
 // MySQL
 .connect("mysql://user:pass@localhost:3306/mydb")
 
+// MariaDB
+.connect("mariadb://user:pass@localhost:3306/mydb")
+
 // DynamoDB (uses AWS config from environment)
 .connect("dynamodb://us-east-1")
 ```
+
+The `mariadb` feature uses the `toasty-driver-mariadb` crate. MariaDB stores
+UUIDs in native `UUID` columns and supports `INSERT ... RETURNING`, including
+generated IDs from batch inserts. `UPDATE ... RETURNING` uses the same
+follow-up query as MySQL. Both drivers accept the
+[MySQL connection parameters](./mysql.md#connection-url-options).
+
+The URL scheme selects the driver; Toasty does not detect the server type.
+Using `mysql://` with MariaDB retains MySQL's behavior, including
+`VARCHAR(36)` UUID storage. Switching an existing database to `mariadb://`
+changes the default UUID column type and requires a schema migration.
 
 For per-backend details — URL query parameters, TLS, type mapping,
 and per-driver behavior — see the

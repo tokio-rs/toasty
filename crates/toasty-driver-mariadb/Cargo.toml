@@ -1,0 +1,31 @@
+[package]
+name = "toasty-driver-mariadb"
+version = "0.10.0"
+description = "MariaDB driver for Toasty"
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+categories.workspace = true
+readme.workspace = true
+documentation = "https://docs.rs/toasty-driver-mariadb"
+
+[features]
+default = ["rustls"]
+native-tls = ["toasty-driver-mysql/native-tls"]
+rustls = ["toasty-driver-mysql/rustls"]
+rust_decimal = ["toasty-driver-mysql/rust_decimal"]
+bigdecimal = ["toasty-driver-mysql/bigdecimal"]
+jiff = ["toasty-driver-mysql/jiff"]
+net = ["toasty-driver-mysql/net"]
+
+[dependencies]
+async-trait.workspace = true
+toasty-core.workspace = true
+toasty-driver-mysql.workspace = true
+
+[lints]
+workspace = true

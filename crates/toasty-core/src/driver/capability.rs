@@ -22,7 +22,7 @@ use crate::{schema::db, stmt};
 /// assert!(cap.returning_from_insert);
 /// assert!(!cap.select_for_update);
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Capability {
     /// Human-readable driver name used in diagnostics.
     pub driver_name: &'static str,
@@ -418,7 +418,7 @@ pub struct Capability {
 /// // PostgreSQL stores UUIDs natively
 /// assert!(matches!(st.default_uuid_type, toasty_core::schema::db::Type::Uuid));
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct StorageTypes {
     /// The default storage type for a string.
     pub default_string_type: db::Type,
@@ -498,7 +498,7 @@ pub struct StorageTypes {
 /// assert!(cap.schema_mutations.alter_column_type);
 /// assert!(!cap.schema_mutations.alter_column_properties_atomic);
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SchemaMutations {
     /// Whether the database can change the type of an existing column.
     pub alter_column_type: bool,
@@ -885,14 +885,10 @@ impl Capability {
         ..Self::SQLITE
     };
 
-    /// MariaDB capabilities.
+    /// MariaDB 11.8 and later capabilities.
     ///
     /// MariaDB speaks MySQL's SQL, so this starts from [`MYSQL`](Self::MYSQL)
     /// and differs only where MariaDB accepts more.
-    ///
-    /// One set covers every MariaDB, deliberately not gated on the server
-    /// version. It needs MariaDB 10.7 for the `UUID` type; `INSERT ...
-    /// RETURNING` arrived in 10.5.
     pub const MARIADB: Self = Self {
         driver_name: "MariaDB",
         sql: Some(Dialect::MariaDb),
