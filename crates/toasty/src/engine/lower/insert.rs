@@ -5,6 +5,8 @@ use crate::engine::lower::LowerStatement;
 
 /// Process the scope component of an insert statement.
 struct ApplyInsertScope<'a> {
+    schema: &'a app::Schema,
+    model: app::ModelId,
     expr: &'a mut stmt::Expr,
 }
 
@@ -51,7 +53,12 @@ impl LowerStatement<'_, '_> {
 
         if let Some(filter) = &scope.filter.expr {
             for expr in &mut values.rows {
-                ApplyInsertScope { expr }.apply_expr(filter)
+                ApplyInsertScope {
+                    expr,
+                    schema: &self.schema().app,
+                    model: scope.source.model_id_unwrap(),
+                }
+                .apply_expr(filter)
             }
         }
 
@@ -507,7 +514,17 @@ impl ApplyInsertScope<'_> {
                     self.apply_expr(expr);
                 }
             }
+            stmt::Expr::IsVariant(variant) => {
+                self.apply_path(
+                    &stmt::Expr::variant(*variant.expr.clone(), variant.variant),
+                    None,
+                );
+            }
             stmt::Expr::BinaryOp(e) if e.op.is_eq() => match (&*e.lhs, &*e.rhs) {
+                (path @ (stmt::Expr::Project(_) | stmt::Expr::Variant(_)), value)
+                | (value, path @ (stmt::Expr::Project(_) | stmt::Expr::Variant(_))) => {
+                    self.apply_path(path, Some(value));
+                }
                 (
                     stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Field { .. }),
                     rhs @ stmt::Expr::Value(..),
@@ -543,6 +560,73 @@ impl ApplyInsertScope<'_> {
             // Constants are ignored
             stmt::Expr::Value(_) => {}
             _ => todo!("EXPR = {:#?}", stmt),
+        }
+    }
+
+    fn apply_path(&mut self, path: &stmt::Expr, value: Option<&stmt::Expr>) {
+        enum Step {
+            Field(usize),
+            Variant(app::VariantId),
+        }
+        fn collect(expr: &stmt::Expr, steps: &mut Vec<Step>) {
+            match expr {
+                stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }) => {
+                    steps.push(Step::Field(*index))
+                }
+                stmt::Expr::Project(project) => {
+                    collect(&project.base, steps);
+                    steps.extend(
+                        project
+                            .projection
+                            .as_slice()
+                            .iter()
+                            .map(|index| Step::Field(*index)),
+                    );
+                }
+                stmt::Expr::Variant(variant) => {
+                    collect(&variant.base, steps);
+                    steps.push(Step::Variant(variant.variant));
+                }
+                _ => unreachable!("insert scope path: {expr:?}"),
+            }
+        }
+        fn record(expr: &mut stmt::Expr, len: usize) -> &mut stmt::ExprRecord {
+            if expr.is_value_null() || expr.is_default() {
+                *expr = stmt::Expr::record(vec![stmt::Expr::null(); len]);
+            } else if !expr.is_record() {
+                *expr = stmt::Expr::record(expr.take().into_record_items().unwrap());
+            }
+            expr.as_record_mut_unwrap()
+        }
+        let mut steps = vec![];
+        collect(path, &mut steps);
+        let mut model = self.schema.model(self.model);
+        let mut fields = model.fields();
+        let mut offset = 0;
+        let mut expr = &mut *self.expr;
+        for step in steps {
+            match step {
+                Step::Field(index) => {
+                    let field = &fields[index];
+                    let row = record(expr, fields.len() + offset);
+                    expr = &mut row[index + offset];
+                    if let app::FieldTy::Embedded(embed) = &field.ty {
+                        model = self.schema.model(embed.target);
+                        fields = model.fields();
+                        offset = 0;
+                    }
+                }
+                Step::Variant(variant) => {
+                    let model = model.as_embedded_enum_unwrap();
+                    fields = model.variant_fields(variant.index);
+                    let row = record(expr, fields.len() + 1);
+                    row[0] = model.variants[variant.index].discriminant.clone().into();
+                    offset = 1;
+                }
+            }
+        }
+        if let Some(value) = value {
+            *expr = value.clone();
         }
     }
 

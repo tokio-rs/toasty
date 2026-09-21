@@ -182,7 +182,7 @@ struct LoweringState<'a> {
     /// Planning a query can require walking relations to maintain data
     /// consistency. This field tracks the current relation edge being traversed
     /// so the planner doesn't walk it backwards.
-    relations: Vec<app::FieldId>,
+    relations: Vec<app::Pair>,
 
     /// All new statements should include these as part of its dependencies
     dependencies: IndexSet<hir::StmtId>,
