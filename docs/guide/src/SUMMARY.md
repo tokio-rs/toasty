@@ -31,6 +31,7 @@
 - [HasMany](./has-many.md)
 - [Many-to-Many](./many-to-many.md)
 - [HasOne](./has-one.md)
+- [Polymorphic Relations](./polymorphic-relations.md)
 - [Preloading Associations](./preloading-associations.md)
 
 # Advanced Queries

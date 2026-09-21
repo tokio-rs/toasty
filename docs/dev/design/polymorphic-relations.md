@@ -485,9 +485,10 @@ the index.
 
 This is sufficient because the index never carries correctness — the
 discriminant gate is fused into every lowered filter, so rows of the wrong
-variant cannot match regardless of indexing. On speed, a key-only index
-over-matches exactly the rows of other variants holding the same key
-value, bounded by the number of sharing variants. A per-variant key column
+variant cannot match regardless of indexing. A key-only index also reads
+rows of other variants holding the same key value. For `has_many`, the
+extra work depends on the number of child rows for those owners, not just
+the number of sharing variants. A per-variant key column
 does not even pay that: it is NULL outside its variant, so a key-only
 index on it is already variant-scoped. Because the discriminant is never
 required in an index, no syntax exists or is needed to name it in an index

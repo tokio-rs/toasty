@@ -1260,11 +1260,13 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// (see [`Model`][`derive@Model`]). The differences:
 ///
 /// - `key` references a sibling field of the same struct or variant.
-/// - The field type must be `toasty::Deferred<..>`; the always-loaded
-///   form is not supported.
-/// - There is no `.include()`: load the referenced model with an
-///   ordinary `get_by_*` / `find_by_*` on the stored key.
-/// - A `has_many` on the target cannot pair with it.
+/// - `.include()` on the embed loads its deferred relations. Plain model
+///   fields load eagerly, as they do at model level.
+/// - `has_many` and `has_one` search the target's embed tree for a matching
+///   relation. Use a dotted `pair` prefix to disambiguate multiple matches,
+///   for example `#[has_many(pair = owner.human)]`.
+/// - Inverse queries include the variant predicate even when variants share
+///   a foreign-key column. Creating through an inverse constructs that variant.
 ///
 /// ```no_run
 /// # #[derive(Debug, toasty::Model)]
