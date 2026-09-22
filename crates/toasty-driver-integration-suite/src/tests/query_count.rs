@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn count_empty_table(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -10,7 +10,7 @@ pub async fn count_empty_table(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn count_after_inserts(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -28,7 +28,7 @@ pub async fn count_after_inserts(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn count_with_filter(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

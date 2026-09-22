@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 /// Use an array of create builders to create multiple nested HasMany records
 /// in a single parent create statement.
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn batch_as_nested_has_many_create(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

@@ -38,7 +38,7 @@ impl Error {
     /// Creates a connection-lost error from an underlying driver error.
     ///
     /// Drivers MUST map their backend's "connection is gone" errors (a
-    /// closed `tokio_postgres` socket, `mysql_async::Error::Io`, an
+    /// closed `tokio_postgres` socket, `sqlx_core::Error::Io`, an
     /// end-of-stream during the wire protocol, etc.) to this
     /// constructor. The pool's recycle path branches on this variant:
     ///

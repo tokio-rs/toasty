@@ -2,8 +2,6 @@ use crate::prelude::*;
 use serde::{Deserialize, Serialize};
 
 scenario! {
-    #![id(ID)]
-
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
     struct Payload {
         name: String,
@@ -14,7 +12,7 @@ scenario! {
     struct Repository {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         name: String,
         #[column(type = text)]

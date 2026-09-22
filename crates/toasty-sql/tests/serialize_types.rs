@@ -68,6 +68,7 @@ fn serialize_migration(stmts: &[MigrationStatement<'_>], flavor: &str) -> Vec<St
                 "sqlite" => Serializer::sqlite(ms.schema()),
                 "postgresql" => Serializer::postgresql(ms.schema()),
                 "mysql" => Serializer::mysql(ms.schema()),
+                "mariadb" => Serializer::mariadb(ms.schema()),
                 _ => panic!("unknown flavor: {flavor}"),
             };
             serializer.serialize(ms.statement())
@@ -80,6 +81,7 @@ fn capability_for(flavor: &str) -> &'static Capability {
         "sqlite" => &Capability::SQLITE,
         "postgresql" => &Capability::POSTGRESQL,
         "mysql" => &Capability::MYSQL,
+        "mariadb" => &Capability::MARIADB,
         _ => panic!("unknown flavor: {flavor}"),
     }
 }
@@ -532,6 +534,18 @@ fn uuid_mysql_panics() {
     render_type("mysql", Type::Uuid);
 }
 
+/// MariaDB has a native UUID type (10.7+); MySQL does not.
+#[test]
+fn uuid_mariadb_renders_native_type() {
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` UUID NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mariadb", Type::Uuid).join("\n"));
+}
+
 #[test]
 #[should_panic(expected = "Unsupported type UUID")]
 fn uuid_sqlite_panics() {
@@ -786,17 +800,39 @@ fn datetime_sqlite_panics() {
 }
 
 // ---------------------------------------------------------------------------
+// Network address types
+// ---------------------------------------------------------------------------
+
+#[test]
+fn network_types_postgresql() {
+    let cases = [
+        (Type::Cidr, "CIDR"),
+        (Type::Inet, "INET"),
+        (Type::MacAddr, "MACADDR"),
+        (Type::MacAddr8, "MACADDR8"),
+    ];
+
+    for (ty, sql_type) in cases {
+        let ddl = render_type("postgresql", ty).join("\n");
+        assert!(
+            ddl.contains(&format!("\"col\" {sql_type} NOT NULL")),
+            "unexpected DDL: {ddl}"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Enum
 // ---------------------------------------------------------------------------
 
 #[test]
 fn enum_postgresql_named_type() {
-    let status = make_enum_type(Some("status"), &["pending", "active", "done"]);
+    let status = make_enum_type(Some("TaskStatus"), &["pending", "active", "done"]);
     expect![[r#"
-        CREATE TYPE "status" AS ENUM ('pending', 'active', 'done');
+        CREATE TYPE "TaskStatus" AS ENUM ('pending', 'active', 'done');
         CREATE TABLE "t" (
             "id" BIGINT NOT NULL,
-            "col" status NOT NULL,
+            "col" "TaskStatus" NOT NULL,
             PRIMARY KEY ("id")
         );"#]]
     .assert_eq(&render_type("postgresql", Type::Enum(status)).join("\n"));

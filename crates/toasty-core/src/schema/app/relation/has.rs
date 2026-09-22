@@ -49,11 +49,6 @@ impl Has {
         self.cardinality.is_one()
     }
 
-    /// Returns the singular item name for a one-to-many relation.
-    pub fn singular(&self) -> Option<&Name> {
-        self.cardinality.singular()
-    }
-
     /// Resolves the target [`Model`] from the given schema.
     pub fn target<'a>(&self, schema: &'a Schema) -> &'a Model {
         schema.model(self.target)
@@ -78,13 +73,5 @@ impl Cardinality {
     /// Returns `true` when this relation yields at most one item.
     pub fn is_one(&self) -> bool {
         matches!(self, Cardinality::One)
-    }
-
-    /// Returns the singular item name for a one-to-many relation.
-    pub fn singular(&self) -> Option<&Name> {
-        match self {
-            Cardinality::Many { singular } => Some(singular),
-            Cardinality::One => None,
-        }
     }
 }

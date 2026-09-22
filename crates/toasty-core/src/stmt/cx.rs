@@ -2,12 +2,12 @@ use crate::{
     Schema,
     schema::{
         app::{Field, Model, ModelId, ModelRoot},
-        db::{self, Column, ColumnId, Table, TableId},
+        db::{self, Column, Table, TableId},
     },
     stmt::{
-        Delete, Expr, ExprArg, ExprColumn, ExprFunc, ExprReference, ExprSet, Insert, InsertTarget,
-        Query, Returning, Select, Source, SourceTable, Statement, TableDerived, TableFactor,
-        TableRef, Type, TypeUnion, Update, UpdateTarget,
+        Delete, Expr, ExprArg, ExprFunc, ExprReference, ExprSet, Insert, InsertTarget, Query,
+        Returning, Select, Source, SourceTable, Statement, TableDerived, TableFactor, TableRef,
+        Type, TypeUnion, Update, UpdateTarget,
     },
 };
 
@@ -461,6 +461,25 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             }
             Expr::IsNull(_) => Type::Bool,
             Expr::IsVariant(_) => Type::Bool,
+            Expr::Variant(e) => {
+                // The selected variant's payload: its fields, without the
+                // discriminant.
+                let base = self.infer_expr_ty2(args, &e.base, returning_expr);
+                let Type::Model(id) = base else {
+                    todo!("variant selection on non-enum type {base:#?}")
+                };
+                assert_eq!(id, e.variant.model, "variant selection on the wrong enum");
+                let Some(Model::EmbeddedEnum(embedded)) = self.schema.model(id) else {
+                    todo!("variant selection on non-enum model {id:?}")
+                };
+                Type::Record(
+                    embedded
+                        .variant_fields(e.variant.index)
+                        .iter()
+                        .map(|field| field.expr_ty().clone())
+                        .collect(),
+                )
+            }
             Expr::List(e) => {
                 debug_assert!(!e.items.is_empty());
                 Type::list(self.infer_expr_ty2(args, &e.items[0], returning_expr))
@@ -485,6 +504,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 // The mapped type is a list
                 Type::list(ty)
             }
+            Expr::Not(_) => Type::Bool,
             Expr::Or(_) => Type::Bool,
             Expr::Project(e) => {
                 if returning_expr {
@@ -615,49 +635,6 @@ impl<'a> ExprContext<'a, Schema> {
     pub fn target_as_model(&self) -> Option<&'a ModelRoot> {
         self.target.as_model()
     }
-
-    /// Creates an `ExprReference::Column` for the given column ID.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the context has no table target (`ExprTarget::Free`), if the column does not
-    /// belong to the table associated with the current target, or if the target's model has no
-    /// mapped database table.
-    pub fn expr_ref_column(&self, column_id: impl Into<ColumnId>) -> ExprReference {
-        let column_id = column_id.into();
-
-        match self.target {
-            ExprTarget::Free => {
-                panic!("Cannot create ExprColumn in free context - no table target available")
-            }
-            ExprTarget::Model(model) => {
-                let Some(table) = self.schema.table_for_model(model) else {
-                    panic!(
-                        "Failed to find database table for model '{:?}' - model may not be mapped to a table",
-                        model.name
-                    )
-                };
-
-                assert_eq!(table.id, column_id.table);
-            }
-            ExprTarget::Table(table) => assert_eq!(table.id, column_id.table),
-            ExprTarget::Source(source_table) => {
-                let [TableRef::Table(table_id)] = source_table.tables[..] else {
-                    panic!(
-                        "Expected exactly one table reference, found {} tables",
-                        source_table.tables.len()
-                    );
-                };
-                assert_eq!(table_id, column_id.table);
-            }
-        }
-
-        ExprReference::Column(ExprColumn {
-            nesting: 0,
-            table: 0,
-            column: column_id.index,
-        })
-    }
 }
 
 impl<'a, T> Clone for ExprContext<'a, T> {
@@ -760,30 +737,11 @@ impl<'a> ExprTarget<'a> {
     }
 
     /// Returns the model ID if this target is [`ExprTarget::Model`], or `None`.
-    pub fn model_id(self) -> Option<ModelId> {
+    fn model_id(self) -> Option<ModelId> {
         Some(match self {
             ExprTarget::Model(model) => model.id,
             _ => return None,
         })
-    }
-
-    /// Returns the table if this target is [`ExprTarget::Table`], or `None`.
-    pub fn as_table(self) -> Option<&'a Table> {
-        match self {
-            ExprTarget::Table(table) => Some(table),
-            _ => None,
-        }
-    }
-
-    /// Returns the table, panicking if not [`ExprTarget::Table`].
-    ///
-    /// # Panics
-    ///
-    /// Panics if the target is not `Table`.
-    #[track_caller]
-    pub fn as_table_unwrap(self) -> &'a Table {
-        self.as_table()
-            .unwrap_or_else(|| panic!("expected ExprTarget::Table; was {self:#?}"))
     }
 }
 

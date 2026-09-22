@@ -1,11 +1,12 @@
+use super::Dialect;
 use crate::{schema::db, stmt};
 
 /// Describes what a database driver supports.
 ///
 /// The query planner reads these flags to decide which [`Operation`](super::Operation)
-/// variants to generate. For example, a SQL driver sets `sql: true` and
-/// receives `QuerySql` operations, while DynamoDB sets `sql: false` and
-/// receives key-value operations like `GetByKey` and `QueryPk`.
+/// variants to generate. For example, a SQL driver names its dialect in `sql`
+/// and receives `QuerySql` operations, while DynamoDB leaves `sql` as `None`
+/// and receives key-value operations like `GetByKey` and `QueryPk`.
 ///
 /// Pre-built configurations are available as associated constants:
 /// [`SQLITE`](Self::SQLITE), [`POSTGRESQL`](Self::POSTGRESQL),
@@ -17,8 +18,8 @@ use crate::{schema::db, stmt};
 /// use toasty_core::driver::Capability;
 ///
 /// let cap = &Capability::SQLITE;
-/// assert!(cap.sql);
-/// assert!(cap.returning_from_mutation);
+/// assert!(cap.sql());
+/// assert!(cap.returning_from_insert);
 /// assert!(!cap.select_for_update);
 /// ```
 #[derive(Debug)]
@@ -26,9 +27,14 @@ pub struct Capability {
     /// Human-readable driver name used in diagnostics.
     pub driver_name: &'static str,
 
-    /// When `true`, the database uses a SQL-based query language and the
-    /// planner will emit [`QuerySql`](super::operation::QuerySql) operations.
-    pub sql: bool,
+    /// The SQL dialect this driver speaks, selecting how statements are
+    /// rendered.
+    ///
+    /// `Some` means the database uses a SQL-based query language, so the
+    /// planner emits [`QuerySql`](super::operation::QuerySql) operations.
+    /// Non-SQL drivers set this to `None` and receive key-value operations
+    /// instead. [`sql()`](Self::sql) is the boolean view of this field.
+    pub sql: Option<Dialect>,
 
     /// Placeholder syntax accepted by the driver's SQL bind layer.
     ///
@@ -52,8 +58,18 @@ pub struct Capability {
     /// to serializable transaction-level isolation.
     pub select_for_update: bool,
 
-    /// SQL: Mysql doesn't support returning clauses from insert / update queries
-    pub returning_from_mutation: bool,
+    /// SQL: whether the backend accepts `RETURNING` on `INSERT`. When
+    /// `false`, the planner falls back to the backend's last-insert-id,
+    /// which reports a single column of a single row.
+    ///
+    /// Separate from `returning_from_update`: MariaDB has one and not the
+    /// other.
+    pub returning_from_insert: bool,
+
+    /// SQL: whether the backend accepts `RETURNING` on `UPDATE`. When
+    /// `false`, the engine rewrites it as `UPDATE` then `SELECT`, which is
+    /// not atomic relative to concurrent writers.
+    pub returning_from_update: bool,
 
     /// Whether an upsert may target the table's primary key.
     ///
@@ -134,6 +150,18 @@ pub struct Capability {
 
     /// Whether the database has native support for DateTime types.
     pub native_datetime: bool,
+
+    /// Whether the database has a native CIDR network type.
+    pub native_cidr: bool,
+
+    /// Whether the database has a native INET address type.
+    pub native_inet: bool,
+
+    /// Whether the database has a native six-byte MACADDR type.
+    pub native_macaddr: bool,
+
+    /// Whether the database has a native eight-byte MACADDR8 type.
+    pub native_macaddr8: bool,
 
     /// Whether the database supports native enum types.
     ///
@@ -268,6 +296,13 @@ pub struct Capability {
     /// all.
     pub backward_pagination: bool,
 
+    /// Whether ascending SQL ordering places `NULL` before non-null values.
+    ///
+    /// Cursor pagination uses this to generate predicates that match the
+    /// backend's native `ORDER BY` behavior. Descending ordering uses the
+    /// opposite placement.
+    pub sql_nulls_first_on_asc: bool,
+
     /// Whether the backend supports `BOOL` as a key attribute type.
     ///
     /// DynamoDB only allows `S`, `N`, or `B` for primary-key and GSI key
@@ -306,6 +341,14 @@ pub struct Capability {
     /// list attribute, ...). Used by the schema builder as the gate for
     /// accepting `stmt::Type::List(_)` fields.
     pub vec_scalar: bool,
+
+    /// Whether the database can enforce a unique constraint on the complete
+    /// ordered value of a native list column.
+    ///
+    /// This is narrower than [`Self::native_array`]: storing a list as an
+    /// array does not by itself guarantee that the backend has an index type
+    /// whose equality semantics preserve element order and multiplicity.
+    pub unique_list_index: bool,
 
     /// Whether the driver can store a `#[document]` collection field — a
     /// `Vec<T>` of an embedded struct — as a single document column
@@ -411,6 +454,18 @@ pub struct StorageTypes {
     /// The default storage type for a DateTime (civil datetime).
     pub default_datetime_type: db::Type,
 
+    /// The default storage type for an IP network prefix.
+    pub default_cidr_type: db::Type,
+
+    /// The default storage type for an IP host address and prefix.
+    pub default_inet_type: db::Type,
+
+    /// The default storage type for a six-byte MAC address.
+    pub default_macaddr_type: db::Type,
+
+    /// The default storage type for an eight-byte MAC address.
+    pub default_macaddr8_type: db::Type,
+
     /// Maximum value for unsigned integers. When `Some`, unsigned integers
     /// are limited to this value. When `None`, full u64 range is supported.
     pub max_unsigned_integer: Option<u64>,
@@ -472,6 +527,23 @@ pub enum SqlPlaceholder {
 }
 
 impl Capability {
+    /// Whether the database uses a SQL-based query language.
+    ///
+    /// The boolean view of [`sql`](Self::sql), for the callers that only need
+    /// to know whether SQL is spoken at all and not which dialect.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::driver::Capability;
+    ///
+    /// assert!(Capability::SQLITE.sql());
+    /// assert!(!Capability::DYNAMODB.sql());
+    /// ```
+    pub const fn sql(&self) -> bool {
+        self.sql.is_some()
+    }
+
     /// Validates the consistency of the capability configuration.
     ///
     /// This performs sanity checks to ensure the capability fields are
@@ -519,15 +591,21 @@ impl Capability {
             ));
         }
 
-        if self.sql && self.sql_placeholder.is_none() {
+        if self.sql() && self.sql_placeholder.is_none() {
             return Err(crate::Error::invalid_driver_configuration(
-                "sql is true but sql_placeholder is None",
+                "sql is Some but sql_placeholder is None",
             ));
         }
 
-        if !self.sql && self.sql_placeholder.is_some() {
+        if !self.sql() && self.sql_placeholder.is_some() {
             return Err(crate::Error::invalid_driver_configuration(
-                "sql is false but sql_placeholder is Some",
+                "sql is None but sql_placeholder is Some",
+            ));
+        }
+
+        if self.unique_list_index && !self.native_array {
+            return Err(crate::Error::invalid_driver_configuration(
+                "unique_list_index is true but native_array is false",
             ));
         }
 
@@ -566,6 +644,14 @@ impl Capability {
             stmt::Type::Time => self.storage_types.default_time_type.bridge_type(ty),
             #[cfg(feature = "jiff")]
             stmt::Type::DateTime => self.storage_types.default_datetime_type.bridge_type(ty),
+            #[cfg(feature = "net")]
+            stmt::Type::Cidr => self.storage_types.default_cidr_type.bridge_type(ty),
+            #[cfg(feature = "net")]
+            stmt::Type::Inet => self.storage_types.default_inet_type.bridge_type(ty),
+            #[cfg(feature = "net")]
+            stmt::Type::MacAddr => self.storage_types.default_macaddr_type.bridge_type(ty),
+            #[cfg(feature = "net")]
+            stmt::Type::MacAddr8 => self.storage_types.default_macaddr8_type.bridge_type(ty),
             _ => ty.clone(),
         }
     }
@@ -573,13 +659,14 @@ impl Capability {
     /// SQLite capabilities.
     pub const SQLITE: Self = Self {
         driver_name: "SQLite",
-        sql: true,
+        sql: Some(Dialect::Sqlite),
         sql_placeholder: Some(SqlPlaceholder::NumberedQuestionMark),
         storage_types: StorageTypes::SQLITE,
         schema_mutations: SchemaMutations::SQLITE,
         cte_with_update: false,
         select_for_update: false,
-        returning_from_mutation: true,
+        returning_from_insert: true,
+        returning_from_update: true,
         upsert_primary_key: true,
         upsert_unique: true,
         upsert_branch_assignments: true,
@@ -604,6 +691,11 @@ impl Capability {
         native_date: false,
         native_time: false,
         native_datetime: false,
+
+        native_cidr: false,
+        native_inet: false,
+        native_macaddr: false,
+        native_macaddr8: false,
 
         // SQLite does not have native decimal types
         native_decimal: false,
@@ -633,6 +725,7 @@ impl Capability {
         transaction_lock_mode: true,
 
         backward_pagination: true,
+        sql_nulls_first_on_asc: true,
 
         // `Vec<scalar>` model fields land in a `TEXT` column holding a JSON
         // document (JSON1 extension). The driver serializes `Value::List`
@@ -649,6 +742,7 @@ impl Capability {
         // model fields are stored as a JSON document in a `TEXT` column.
         native_array: false,
         vec_scalar: true,
+        unique_list_index: false,
         document_collections: true,
 
         // SQLite renders `IsSuperset` / `Intersects` as `json_each`
@@ -667,6 +761,7 @@ impl Capability {
     pub const POSTGRESQL: Self = Self {
         driver_name: "PostgreSQL",
         cte_with_update: true,
+        sql: Some(Dialect::Postgresql),
         sql_placeholder: Some(SqlPlaceholder::DollarNumber),
         storage_types: StorageTypes::POSTGRESQL,
         schema_mutations: SchemaMutations::POSTGRESQL,
@@ -696,6 +791,12 @@ impl Capability {
         native_time: true,
         native_datetime: true,
 
+        // PostgreSQL has native network address types.
+        native_cidr: true,
+        native_inet: true,
+        native_macaddr: true,
+        native_macaddr8: true,
+
         // PostgreSQL has native NUMERIC type with arbitrary precision
         native_decimal: true,
         decimal_arbitrary_precision: true,
@@ -704,6 +805,7 @@ impl Capability {
 
         // PostgreSQL has no SQLite-style lock-mode keyword on BEGIN.
         transaction_lock_mode: false,
+        sql_nulls_first_on_asc: false,
 
         // PostgreSQL accepts a single array-valued bind param and supports
         // `expr <op> ANY(array)` / `<op> ALL(array)` predicates.
@@ -714,6 +816,7 @@ impl Capability {
         // representation for `Vec<scalar>` model fields.
         native_array: true,
         vec_scalar: true,
+        unique_list_index: true,
         document_collections: true,
 
         // PostgreSQL: all three collection removals are atomic via native
@@ -729,11 +832,13 @@ impl Capability {
     pub const MYSQL: Self = Self {
         driver_name: "MySQL",
         cte_with_update: false,
+        sql: Some(Dialect::Mysql),
         sql_placeholder: Some(SqlPlaceholder::QuestionMark),
         storage_types: StorageTypes::MYSQL,
         schema_mutations: SchemaMutations::MYSQL,
         select_for_update: true,
-        returning_from_mutation: false,
+        returning_from_insert: false,
+        returning_from_update: false,
         upsert_primary_key: false,
         upsert_unique: false,
         upsert_branch_assignments: false,
@@ -780,6 +885,24 @@ impl Capability {
         ..Self::SQLITE
     };
 
+    /// MariaDB 11.8 and later capabilities.
+    ///
+    /// MariaDB speaks MySQL's SQL, so this starts from [`MYSQL`](Self::MYSQL)
+    /// and differs only where MariaDB accepts more.
+    pub const MARIADB: Self = Self {
+        driver_name: "MariaDB",
+        sql: Some(Dialect::MariaDb),
+        storage_types: StorageTypes {
+            default_uuid_type: db::Type::Uuid,
+            ..StorageTypes::MYSQL
+        },
+
+        // 10.5+. The UPDATE form is still missing upstream (MDEV-5092).
+        returning_from_insert: true,
+
+        ..Self::MYSQL
+    };
+
     /// Turso capabilities.
     ///
     /// Identical to [`SQLITE`](Self::SQLITE) at the flag level. The driver
@@ -804,13 +927,14 @@ impl Capability {
     /// DynamoDB capabilities
     pub const DYNAMODB: Self = Self {
         driver_name: "DynamoDB",
-        sql: false,
+        sql: None,
         sql_placeholder: None,
         storage_types: StorageTypes::DYNAMODB,
         schema_mutations: SchemaMutations::DYNAMODB,
         cte_with_update: false,
         select_for_update: false,
-        returning_from_mutation: false,
+        returning_from_insert: false,
+        returning_from_update: false,
         upsert_primary_key: true,
         upsert_unique: false,
         upsert_branch_assignments: false,
@@ -835,6 +959,11 @@ impl Capability {
         native_time: false,
         native_datetime: false,
 
+        native_cidr: false,
+        native_inet: false,
+        native_macaddr: false,
+        native_macaddr8: false,
+
         // DynamoDB does not have native decimal types
         native_decimal: false,
         decimal_arbitrary_precision: false,
@@ -857,6 +986,7 @@ impl Capability {
         transaction_lock_mode: false,
 
         backward_pagination: false,
+        sql_nulls_first_on_asc: false,
 
         // DynamoDB: not SQL-based; the array-bind/`ANY`-predicate features do
         // not apply.
@@ -869,6 +999,7 @@ impl Capability {
         // `AttributeValue` encoding.
         native_array: false,
         vec_scalar: true,
+        unique_list_index: false,
         // `#[document]` embeds store as a native Map `M` attribute (a
         // `Vec<embed>` collection as a List `L` of Maps). DynamoDB caps
         // attribute nesting at 32 levels; documents deeper than that are not
@@ -922,6 +1053,12 @@ impl StorageTypes {
         default_time_type: db::Type::Text,
         default_datetime_type: db::Type::Text,
 
+        // SQLite stores network address values as canonical text.
+        default_cidr_type: db::Type::Text,
+        default_inet_type: db::Type::Text,
+        default_macaddr_type: db::Type::Text,
+        default_macaddr8_type: db::Type::Text,
+
         // SQLite INTEGER is a signed 64-bit integer, so unsigned integers
         // are limited to i64::MAX to prevent overflow
         max_unsigned_integer: Some(i64::MAX as u64),
@@ -952,6 +1089,11 @@ impl StorageTypes {
         default_date_type: db::Type::Date,
         default_time_type: db::Type::Time(6),
         default_datetime_type: db::Type::DateTime(6),
+
+        default_cidr_type: db::Type::Cidr,
+        default_inet_type: db::Type::Inet,
+        default_macaddr_type: db::Type::MacAddr,
+        default_macaddr8_type: db::Type::MacAddr8,
 
         // PostgreSQL BIGINT is signed 64-bit, so unsigned integers are limited
         // to i64::MAX. While NUMERIC could theoretically support larger values,
@@ -991,6 +1133,13 @@ impl StorageTypes {
         default_time_type: db::Type::Time(6),
         default_datetime_type: db::Type::DateTime(6),
 
+        // MySQL has no native network address types. Bounded text keeps
+        // indexes compact while accommodating IPv6 prefixes and EUI-64.
+        default_cidr_type: db::Type::VarChar(43),
+        default_inet_type: db::Type::VarChar(43),
+        default_macaddr_type: db::Type::VarChar(17),
+        default_macaddr8_type: db::Type::VarChar(23),
+
         // MySQL supports full u64 range via BIGINT UNSIGNED
         max_unsigned_integer: None,
     };
@@ -1016,6 +1165,12 @@ impl StorageTypes {
         default_date_type: db::Type::Text,
         default_time_type: db::Type::Text,
         default_datetime_type: db::Type::Text,
+
+        // DynamoDB stores network address values as canonical strings.
+        default_cidr_type: db::Type::Text,
+        default_inet_type: db::Type::Text,
+        default_macaddr_type: db::Type::Text,
+        default_macaddr8_type: db::Type::Text,
 
         // DynamoDB supports full u64 range (numbers stored as strings)
         max_unsigned_integer: None,
@@ -1091,7 +1246,7 @@ mod tests {
             result
                 .unwrap_err()
                 .to_string()
-                .contains("sql is true but sql_placeholder is None")
+                .contains("sql is Some but sql_placeholder is None")
         );
     }
 
@@ -1108,7 +1263,24 @@ mod tests {
             result
                 .unwrap_err()
                 .to_string()
-                .contains("sql is false but sql_placeholder is Some")
+                .contains("sql is None but sql_placeholder is Some")
+        );
+    }
+
+    #[test]
+    fn test_validate_fails_when_unique_list_index_has_no_native_array() {
+        let invalid = Capability {
+            unique_list_index: true,
+            ..Capability::SQLITE
+        };
+
+        let result = invalid.validate();
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("unique_list_index is true but native_array is false")
         );
     }
 

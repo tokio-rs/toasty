@@ -1,6 +1,6 @@
-use super::{Field, Load, lazy_slot};
+use super::{Field, Load};
 use crate::stmt::{self, Expr, IntoExpr};
-use toasty_core::schema::app::ModelSet;
+use toasty_core::{Error, schema::app::ModelSet, stmt::Value};
 
 use std::fmt;
 
@@ -12,6 +12,11 @@ use std::fmt;
 /// value.
 ///
 /// `Deferred<Option<T>>` is supported when the column is nullable.
+///
+/// Equality and hashing include the load state and, when loaded, the value.
+/// Two unloaded fields compare equal. An unloaded field is unequal to a loaded
+/// field, including a loaded `None`. These traits require the corresponding
+/// trait on `T`.
 ///
 /// # Serde
 ///
@@ -47,7 +52,7 @@ use std::fmt;
 /// #[serde(deserialize_with = "load_notes", default)]
 /// notes: Deferred<Option<String>>,
 /// ```
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Deferred<T> {
     value: Option<Box<T>>,
 }
@@ -142,11 +147,14 @@ impl<T: Load<Output = T>> Load for Deferred<T> {
         // and emits a bare Null when unloaded, so the two states are
         // distinguishable even when the inner value is NULL (i.e. the
         // `Deferred<Option<T>>` case).
-        match lazy_slot::decode(value, "deferred field", T::load)? {
-            lazy_slot::LazySlot::Unloaded => Ok(Self { value: None }),
-            lazy_slot::LazySlot::Loaded(value) => Ok(Self {
-                value: Some(Box::new(value)),
-            }),
+        match value {
+            Value::Null => Ok(Self::default()),
+            Value::Record(mut record) if record.fields.len() == 1 => {
+                Ok(Self::from(T::load(record.fields.pop().unwrap())?))
+            }
+            value => Err(Error::from_args(format_args!(
+                "deferred field decoder expected Null or single-field Record, got {value:?}"
+            ))),
         }
     }
 

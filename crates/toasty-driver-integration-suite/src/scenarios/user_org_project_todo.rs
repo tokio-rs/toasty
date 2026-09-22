@@ -11,13 +11,11 @@ scenario! {
     //! where `Organization::todos` is itself a via — a via-of-via, used to test
     //! recursive flattening of a via path whose step names another via.
 
-    #![id(ID)]
-
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         name: String,
 
@@ -44,12 +42,12 @@ scenario! {
     struct Organization {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         name: String,
 
         #[index]
-        user_id: ID,
+        user_id: uuid::Uuid,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::Deferred<User>,
@@ -67,12 +65,12 @@ scenario! {
     struct Project {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         name: String,
 
         #[index]
-        organization_id: ID,
+        organization_id: uuid::Uuid,
 
         #[belongs_to(key = organization_id, references = id)]
         organization: toasty::Deferred<Organization>,
@@ -85,12 +83,12 @@ scenario! {
     struct Todo {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         title: String,
 
         #[index]
-        project_id: ID,
+        project_id: uuid::Uuid,
 
         #[belongs_to(key = project_id, references = id)]
         project: toasty::Deferred<Project>,

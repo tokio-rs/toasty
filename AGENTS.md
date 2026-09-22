@@ -19,6 +19,7 @@ cargo test -p tests <test_name>
 
 # Run tests with specific database drivers (requires running external services)
 cargo test -p tests --features mysql
+cargo test -p tests --features mariadb
 cargo test -p tests --features postgresql
 
 # DynamoDB only (requires local DynamoDB running)
@@ -26,6 +27,9 @@ cargo test --features dynamodb --no-default-features -- --test-threads=1
 
 # DynamoDB + SQLite
 cargo test --features dynamodb -- --test-threads=1
+
+# Check the WASM build (backend-agnostic crates only; no driver builds for wasm)
+cargo check --target wasm32-unknown-unknown -p toasty -p toasty-core -p toasty-sql
 
 # Lint
 cargo clippy

@@ -12,18 +12,27 @@
 //!   foreign-key column.  For `HasOne`/`HasMany` it always rewrites to a
 //!   foreign-key IN subquery against the related table.
 //!
-//! - [`try_lift_relation_path_comparison`] fires on `Expr::BinaryOp` where
-//!   one side walks a relation field. For example, filtering profiles by
-//!   their user's name (`profile.user.name = 'alice'`) rewrites to:
+//! - [`try_lift_relation_path_predicate`] fires on a comparison
+//!   (`Expr::BinaryOp`), a `LIKE`/`ILIKE` (`Expr::Like`), or a variant
+//!   check (`Expr::IsVariant`) whose subject walks a relation field. For
+//!   example, filtering profiles by their user's name
+//!   (`profile.user.name = 'alice'`) rewrites to:
 //!
 //!   ```text
 //!   Profile.user_id IN (SELECT User.id FROM User WHERE User.name = 'alice')
 //!   ```
 //!
-//! - [`try_lift_relation_path_like`] does the same for `LIKE`/`ILIKE`
-//!   (`profile.user.name LIKE 'al%'`). These are `Expr::Like`, not
-//!   `Expr::BinaryOp`, so they need their own entry point. Both rewrites
-//!   share [`lift_relation_path_predicate`].
+//!   Simplification combines compatible subqueries after this pass, before
+//!   lowering extracts subqueries into separate statements.
+//!
+//! The relation a path walks may be a field of the model or a `belongs_to`
+//! inside one of its embedded types (`v.human.name = 'alice'`, where
+//! `human` is a field of the `Human` variant of `v`). [`resolve_relation_path`]
+//! resolves either to a [`Relation`]; the rewrites above are the same for
+//! both, differing only in how the relation's foreign-key `IN` subquery
+//! names the key on the host side. A predicate *at* an embedded relation
+//! (`v.human = alice`, `v.human IN list`) compares keys and is not lifted:
+//! `LowerStatement`'s operand hooks substitute the key projection.
 //!
 //! A pre-pass is necessary (rather than folding into
 //! `LowerStatement::visit_expr_mut` per #823's pattern) because not every
@@ -33,14 +42,16 @@
 //! recursion and would panic on an unlifted relation `IN` subquery.
 //!
 //! The free functions [`lift_in_subquery`] and
-//! [`try_lift_relation_path_comparison`] are exposed on `&ExprContext` so
+//! [`try_lift_relation_path_predicate`] are exposed on `&ExprContext` so
 //! the visitor and the unit tests can both call them without constructing
 //! a `LiftInSubquery`.
 
 use toasty_core::{
     schema::app::{self, BelongsTo, FieldId, FieldTy, ModelId},
-    stmt::{self, Expr, ExprContext, IntoExprTarget, ResolvedRef, Visit, VisitMut},
+    stmt::{self, Expr, ExprContext, IntoExprTarget, Visit, VisitMut},
 };
+
+use super::relation_expr;
 
 /// Pre-lowering pass that lifts relation references out of `IN`-subquery
 /// and projection comparisons into direct foreign-key forms.  Runs as a
@@ -49,11 +60,12 @@ use toasty_core::{
 /// `ApplyInsertScope::apply_expr`) see the already-lifted form.
 pub(super) struct LiftInSubquery<'a> {
     cx: ExprContext<'a>,
+    exclude_nulls: bool,
 }
 
 impl<'a> LiftInSubquery<'a> {
-    pub(super) fn new(cx: ExprContext<'a>) -> Self {
-        Self { cx }
+    pub(super) fn new(cx: ExprContext<'a>, exclude_nulls: bool) -> Self {
+        Self { cx, exclude_nulls }
     }
 
     pub(super) fn rewrite(&mut self, stmt: &mut stmt::Statement) {
@@ -63,6 +75,32 @@ impl<'a> LiftInSubquery<'a> {
     fn scope<'scope>(&'scope self, target: impl IntoExprTarget<'scope>) -> LiftInSubquery<'scope> {
         LiftInSubquery {
             cx: self.cx.scope(target),
+            exclude_nulls: self.exclude_nulls,
+        }
+    }
+
+    fn exclude_nulls(&self, expr: &mut stmt::Expr) {
+        if !self.exclude_nulls {
+            return;
+        }
+
+        let stmt::Expr::InSubquery(expr) = expr else {
+            return;
+        };
+        let select = expr.query.body.as_select_mut_unwrap();
+        let target = select.source.model_id_unwrap();
+        let returning = select.returning.as_project_unwrap().clone();
+
+        for field in returning
+            .as_record()
+            .map_or(std::slice::from_ref(&returning), |record| &record.fields)
+        {
+            let stmt::Expr::Reference(stmt::ExprReference::Field { index, .. }) = field else {
+                unreachable!();
+            };
+            if self.cx.schema().app.field(target.field(*index)).nullable {
+                select.add_filter(stmt::Expr::is_not_null(field.clone()));
+            }
         }
     }
 }
@@ -72,30 +110,22 @@ impl VisitMut for LiftInSubquery<'_> {
         // Apply lifts pre-children: the rewrites pattern-match on app-
         // level `Reference::Field` to a relation, and the children walk
         // would not introduce relation references that were not there.
-        match expr {
-            stmt::Expr::InSubquery(e) => {
-                if let Some(lifted) = lift_in_subquery(&self.cx, &e.expr, &e.query) {
-                    *expr = lifted;
-                }
+        let lifted = match expr {
+            // Normalization expands `NOT IN` to `Not(InSubquery(..))`, so the
+            // lift below fires on the inner membership and keeps the
+            // negation outside.
+            stmt::Expr::InSubquery(e) if !e.negated => {
+                lift_in_subquery(&self.cx, &e.expr, &e.query)
             }
-            stmt::Expr::BinaryOp(e) => {
-                if let Some(lifted) =
-                    try_lift_relation_path_comparison(&self.cx, e.op, &e.lhs, &e.rhs)
-                {
-                    *expr = lifted;
-                } else if let Some(commuted) = e.op.commute()
-                    && let Some(lifted) =
-                        try_lift_relation_path_comparison(&self.cx, commuted, &e.rhs, &e.lhs)
-                {
-                    *expr = lifted;
-                }
+            stmt::Expr::BinaryOp(_) | stmt::Expr::Like(_) | stmt::Expr::IsVariant(_) => {
+                try_lift_relation_path_predicate(&self.cx, expr)
             }
-            stmt::Expr::Like(e) => {
-                if let Some(lifted) = try_lift_relation_path_like(&self.cx, e) {
-                    *expr = lifted;
-                }
-            }
-            _ => {}
+            _ => None,
+        };
+
+        if let Some(mut lifted) = lifted {
+            self.exclude_nulls(&mut lifted);
+            *expr = lifted;
         }
 
         // Walk children (which may themselves be expressions needing
@@ -177,31 +207,89 @@ pub(super) fn lift_in_subquery(
     query: &stmt::Query,
 ) -> Option<stmt::Expr> {
     // The expression is a path expression referencing a relation.
-    let field = match expr {
+    match expr {
         // `Project(Ref(rel), [head, ...tail])` — the path traverses through a
         // relation field (`rel`) before reaching the relation the subquery
-        // targets. Re-root the path at `rel`'s target model and rebuild as a
-        // nested IN-subquery on that model, then recurse to lift the outer
-        // `rel` hop.
-        stmt::Expr::Project(project_expr) => {
-            return lift_projection_in_subquery(cx, project_expr, query);
+        // targets, or reaches a relation inside an embedded type. Re-root
+        // the path at the relation's target model and rebuild as a nested
+        // IN-subquery on that model, then recurse to lift the outer hop.
+        stmt::Expr::Project(_) | stmt::Expr::Variant(_) => {
+            lift_projection_in_subquery(cx, expr, query)
         }
         stmt::Expr::Reference(expr_reference @ stmt::ExprReference::Field { .. }) => {
-            cx.resolve_expr_reference(expr_reference).as_field_unwrap()
+            let field = cx.resolve_expr_reference(expr_reference).as_field_unwrap();
+            lift_relation_in_subquery(cx, &Relation::Field(field), query)
         }
-        _ => {
-            return None;
-        }
-    };
-
-    // If the field is not a relation, abort. Direct relations lift through
-    // their paired foreign keys. A `via` has no single pair, so normalize its
-    // relation chain into a projected path and use the projection lift.
-    match &field.ty {
-        FieldTy::BelongsTo(belongs_to) => lift_belongs_to_in_subquery(cx, belongs_to, query),
-        FieldTy::Has(has) => lift_has_n_in_subquery(has.target, has.pair(&cx.schema().app), query),
-        FieldTy::Via(via) => lift_via_in_subquery(cx, via, query),
         _ => None,
+    }
+}
+
+/// A resolved relation with the expressions needed for subquery lifting.
+struct RelationPath<'a> {
+    relation: Relation<'a>,
+    target: ModelId,
+    target_expr: Option<Expr>,
+}
+
+/// The relation a path walks. Both lift to a foreign-key `IN` subquery on
+/// the target model; they differ in how the host side names the key.
+enum Relation<'a> {
+    /// A relation field of the model: `BelongsTo`, `Has`, or `Via`.
+    Field(&'a app::Field),
+
+    /// A `belongs_to` inside an embedded type, with the expression
+    /// projecting its key field(s) out of the host row.
+    Embedded {
+        belongs_to: &'a BelongsTo,
+        key_expr: Expr,
+    },
+}
+
+fn resolve_relation_path<'a>(cx: &ExprContext<'a>, expr: &Expr) -> Option<RelationPath<'a>> {
+    let resolved = relation_expr::resolve(cx, expr)?;
+    let relation = match resolved.embedded() {
+        Some(belongs_to) => Relation::Embedded {
+            belongs_to,
+            key_expr: resolved.key_expr()?,
+        },
+        None => Relation::Field(resolved.field),
+    };
+    Some(RelationPath {
+        relation,
+        target: resolved.target,
+        target_expr: resolved.target_expr(),
+    })
+}
+
+/// Lift `relation IN (subquery)` for a resolved relation.
+///
+/// Direct relations lift through their paired foreign keys. A `via` has no
+/// single pair, so normalize its relation chain into a projected path and
+/// use the projection lift. An embedded relation's foreign key is projected
+/// out of the host row. Returns `None` when the field is not a relation.
+fn lift_relation_in_subquery(
+    cx: &ExprContext,
+    relation: &Relation<'_>,
+    query: &stmt::Query,
+) -> Option<stmt::Expr> {
+    match relation {
+        Relation::Field(field) => match &field.ty {
+            FieldTy::BelongsTo(belongs_to) => lift_belongs_to_in_subquery(cx, belongs_to, query),
+            FieldTy::Has(has) => {
+                lift_has_n_in_subquery(has.target, has.pair(&cx.schema().app), query)
+            }
+            FieldTy::Via(via) => lift_via_in_subquery(cx, via, query),
+            _ => None,
+        },
+        Relation::Embedded {
+            belongs_to,
+            key_expr,
+        } => lift_fk_in_subquery(
+            belongs_to.target,
+            key_expr.clone(),
+            super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.target)),
+            query,
+        ),
     }
 }
 
@@ -294,45 +382,40 @@ fn lift_via_in_subquery(
 /// The recursive call lifts the outer `Release.project` hop via the standard
 /// `BelongsTo` branch; the inner `Project.topics` hop is lifted on the next
 /// visitor pass when [`LiftInSubquery`]'s children walk reaches it.
+///
+/// A path may instead reach a relation inside an embedded type
+/// (`v.human` or `v.human.posts`). The steps through the embed resolve to
+/// that relation, whose foreign key is projected out of the host row; any
+/// steps past it are re-rooted at its target as above.
 fn lift_projection_in_subquery(
     cx: &ExprContext,
-    project_expr: &stmt::ExprProject,
+    path: &stmt::Expr,
     query: &stmt::Query,
 ) -> Option<stmt::Expr> {
-    let Expr::Reference(expr_ref) = &*project_expr.base else {
-        return None;
+    let RelationPath {
+        relation,
+        target,
+        target_expr,
+    } = resolve_relation_path(cx, path)?;
+
+    let Some(inner_lhs) = target_expr else {
+        // The path ends at the relation (`v.human IN (subquery)`).
+        return lift_relation_in_subquery(cx, &relation, query);
     };
-    let ResolvedRef::Field(field) = cx.resolve_expr_reference(expr_ref) else {
-        return None;
-    };
 
-    let target_model_id = field.relation_target_id()?;
-
-    let (head_idx, tail) = project_expr.projection.as_slice().split_first()?;
-
-    if tail.is_empty()
-        && let Some(direct) =
-            try_fuse_paired_relations(cx, field, target_model_id, *head_idx, query)
+    if let Some(index) = inner_lhs.as_self_field_index()
+        && let Relation::Field(field) = relation
+        && let Some(direct) = try_fuse_paired_relations(cx, field, target, index, query)
     {
         return Some(direct);
     }
 
-    let target_field = Expr::ref_self_field(FieldId {
-        model: target_model_id,
-        index: *head_idx,
-    });
-    let inner_lhs = if tail.is_empty() {
-        target_field
-    } else {
-        Expr::project(target_field, stmt::Projection::from(tail))
-    };
-
     let new_subquery = stmt::Query::new_select(
-        stmt::Source::from(target_model_id),
+        stmt::Source::from(target),
         Expr::in_subquery(inner_lhs, query.clone()),
     );
 
-    lift_in_subquery(cx, &project_expr.base, &new_subquery)
+    lift_relation_in_subquery(cx, &relation, &new_subquery)
 }
 
 /// Fuses a `BelongsTo → Has` chain into a single FK-on-FK `IN` when both
@@ -437,110 +520,102 @@ fn try_fuse_paired_relations(
     )
 }
 
-/// Rewrites a comparison that walks a relation field into a foreign-key
+/// Rewrites a predicate whose subject walks a relation into a foreign-key
 /// subquery.
 ///
 /// `Profile::filter(Profile::fields().user().name().eq("alice"))` starts as
 /// the filter `profile.user.name = 'alice'`, where the left side projects
 /// through the `user` relation. This moves the comparison into a subquery on
-/// the target model and defers to [`lift_in_subquery`]:
+/// the target model and defers to [`lift_relation_in_subquery`]:
 ///
 /// ```text
 /// Profile.user_id IN (SELECT User.id FROM User WHERE User.name = 'alice')
 /// ```
 ///
-/// Returns `None` when `project_side` does not walk a relation field.
-pub(super) fn try_lift_relation_path_comparison(
+/// The same applies to `LIKE`/`ILIKE` (`profile.user.name LIKE 'al%'`) and
+/// to a variant check on an enum reached through the relation
+/// (`link.item.state IS Selected`, the guard the typed layer fixes next to
+/// `link.item.state.selected.value == x`).
+///
+/// Returns `None` when `expr` is not one of those predicates or its subject
+/// does not walk a relation.
+pub(super) fn try_lift_relation_path_predicate(
     cx: &ExprContext,
-    op: stmt::BinaryOp,
-    project_side: &stmt::Expr,
-    other_side: &stmt::Expr,
+    expr: &stmt::Expr,
 ) -> Option<stmt::Expr> {
-    lift_relation_path_predicate(cx, project_side, |target_lhs| {
-        Expr::binary_op(target_lhs, op, other_side.clone())
-    })
+    let (path, filter) = resolve_relation_predicate(cx, expr)?;
+    lift_relation_predicate(cx, &path, filter)
 }
 
-/// Rewrites a `LIKE`/`ILIKE` that walks a relation field into a foreign-key
-/// subquery — [`try_lift_relation_path_comparison`] for pattern matches.
+/// Resolve a predicate whose subject walks a relation to that relation and
+/// the predicate re-rooted at the relation's target model — the subquery
+/// filter [`lift_relation_predicate`] wraps.
 ///
-/// `Profile::filter(Profile::fields().user().name().like("al%"))` rewrites to:
-///
-/// ```text
-/// Profile.user_id IN (SELECT User.id FROM User WHERE User.name LIKE 'al%')
-/// ```
-///
-/// `LIKE`/`ILIKE` are `Expr::Like`, not `Expr::BinaryOp`, so they never reach
-/// [`try_lift_relation_path_comparison`] and need this entry point. Without
-/// it the `user.name` path stays a projection through the relation, which the
-/// rest of lowering cannot turn into a column and so panics.
-///
-/// Returns `None` when the pattern's subject does not walk a relation field.
-pub(super) fn try_lift_relation_path_like(
-    cx: &ExprContext,
-    like: &stmt::ExprLike,
-) -> Option<stmt::Expr> {
-    lift_relation_path_predicate(cx, &like.expr, |target_lhs| {
-        stmt::ExprLike {
-            expr: Box::new(target_lhs),
-            pattern: like.pattern.clone(),
-            escape: like.escape,
-            case_insensitive: like.case_insensitive,
+/// A comparison's subject may be either operand: `'alice' = profile.user.name`
+/// resolves with the operator commuted.
+fn resolve_relation_predicate<'a>(
+    cx: &ExprContext<'a>,
+    expr: &stmt::Expr,
+) -> Option<(RelationPath<'a>, stmt::Expr)> {
+    match expr {
+        Expr::BinaryOp(e) => {
+            let comparison = |op: stmt::BinaryOp, subject: &Expr, other: &Expr| {
+                resolve_relation_path_predicate(cx, subject, |target_lhs| {
+                    Expr::binary_op(target_lhs, op, other.clone())
+                })
+            };
+            comparison(e.op, &e.lhs, &e.rhs).or_else(|| comparison(e.op.commute()?, &e.rhs, &e.lhs))
         }
-        .into()
-    })
+        Expr::Like(e) => resolve_relation_path_predicate(cx, &e.expr, |target_lhs| {
+            stmt::ExprLike {
+                expr: Box::new(target_lhs),
+                pattern: e.pattern.clone(),
+                escape: e.escape,
+                case_insensitive: e.case_insensitive,
+            }
+            .into()
+        }),
+        Expr::IsVariant(e) => resolve_relation_path_predicate(cx, &e.expr, |target_lhs| {
+            Expr::is_variant(target_lhs, e.variant)
+        }),
+        _ => None,
+    }
 }
 
-/// Shared core of the relation-path lifts.
+/// Shared core of [`resolve_relation_predicate`].
 ///
-/// `project_side` is the side of the predicate that walks a relation — the
-/// `profile.user.name` in `profile.user.name = 'alice'`. It is a projection
-/// whose first step names the `user` relation field on `Profile` and whose
-/// remaining steps index into `User`. This re-roots the path at the target
-/// model (so it reads `User.name`), builds a `SELECT` over `User` whose filter
-/// `make_filter` produces from the re-rooted path, and defers to
-/// [`lift_in_subquery`] to turn the relation reference into the foreign-key
-/// `IN` form.
+/// `subject` is the side of the predicate that walks a relation — the
+/// `profile.user.name` in `profile.user.name = 'alice'`. Its steps up to the
+/// relation name the `user` relation on `Profile` (through an embedded type,
+/// when the relation sits in one); the remaining steps index into `User`.
+/// This re-roots the remainder at the target model (so it reads `User.name`)
+/// and hands it to `make_filter`, the only difference between predicate
+/// forms.
 ///
-/// `make_filter` is the only difference between callers: a binary op for
-/// comparisons, a `LIKE` for pattern matches.
-///
-/// Returns `None` when `project_side` does not walk a relation field.
-fn lift_relation_path_predicate(
-    cx: &ExprContext,
-    project_side: &stmt::Expr,
+/// Returns `None` when `subject` does not walk into a relation's target —
+/// including a path that ends *at* the relation, which is a key comparison
+/// rather than a predicate on the target.
+fn resolve_relation_path_predicate<'a>(
+    cx: &ExprContext<'a>,
+    subject: &stmt::Expr,
     make_filter: impl FnOnce(stmt::Expr) -> stmt::Expr,
+) -> Option<(RelationPath<'a>, stmt::Expr)> {
+    let path = resolve_relation_path(cx, subject)?;
+
+    let filter = make_filter(path.target_expr.clone()?);
+
+    Some((path, filter))
+}
+
+/// Lift `filter`, a predicate on the target model of `path`'s relation,
+/// into a foreign-key `IN` subquery on that relation.
+fn lift_relation_predicate(
+    cx: &ExprContext,
+    path: &RelationPath<'_>,
+    filter: stmt::Expr,
 ) -> Option<stmt::Expr> {
-    let Expr::Project(project_expr) = project_side else {
-        return None;
-    };
-    let Expr::Reference(expr_ref) = &*project_expr.base else {
-        return None;
-    };
-    let ResolvedRef::Field(field) = cx.resolve_expr_reference(expr_ref) else {
-        return None;
-    };
-
-    let target_model_id = field.relation_target_id()?;
-
-    // The first step names the relation field on the source model; the
-    // rest index into the target model. Drop the first step and re-root the
-    // remainder at the target model.
-    let (head_idx, tail) = project_expr.projection.as_slice().split_first()?;
-    let target_field = Expr::ref_self_field(FieldId {
-        model: target_model_id,
-        index: *head_idx,
-    });
-    let target_lhs = if tail.is_empty() {
-        target_field
-    } else {
-        Expr::project(target_field, stmt::Projection::from(tail))
-    };
-
-    let subquery =
-        stmt::Query::new_select(stmt::Source::from(target_model_id), make_filter(target_lhs));
-
-    lift_in_subquery(cx, &project_expr.base, &subquery)
+    let subquery = stmt::Query::new_select(stmt::Source::from(path.target), filter);
+    lift_relation_in_subquery(cx, &path.relation, &subquery)
 }
 
 /// Build a foreign-key `IN` subquery for one direct relation edge.

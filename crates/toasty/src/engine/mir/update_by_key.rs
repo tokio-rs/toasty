@@ -1,13 +1,7 @@
 use indexmap::IndexSet;
-use toasty_core::{
-    schema::db::{ColumnId, TableId},
-    stmt,
-};
+use toasty_core::{schema::db::TableId, stmt};
 
-use crate::engine::{
-    exec,
-    mir::{self, LogicalPlan},
-};
+use crate::engine::mir;
 
 /// Updates records by primary key.
 ///
@@ -15,6 +9,8 @@ use crate::engine::{
 ///
 /// Keys are always specified as an input node, whether a [`Const`] or the
 /// output of a dependent operation.
+///
+/// [`Const`]: super::Const
 #[derive(Debug)]
 pub(crate) struct UpdateByKey {
     /// The node producing the list of primary keys to update.
@@ -33,59 +29,11 @@ pub(crate) struct UpdateByKey {
     pub(crate) condition: Option<stmt::Expr>,
 
     /// The columns to return for each updated row. Empty when the update
-    /// returns only an affected-row count.
+    /// returns only an affected-row count (the type is then `Unit`).
     pub(crate) columns: IndexSet<stmt::ExprReference>,
 
     /// The return type.
     pub(crate) ty: stmt::Type,
-}
-
-impl UpdateByKey {
-    pub(crate) fn to_exec(
-        &self,
-        logical_plan: &LogicalPlan,
-        node: &mir::Node,
-        var_table: &mut exec::VarDecls,
-    ) -> exec::UpdateByKey {
-        let input = logical_plan[self.input].var.get().unwrap();
-        let output = var_table.register_var(node.ty().clone());
-        node.var.set(Some(output));
-
-        let returning = if self.ty.is_unit() {
-            None
-        } else {
-            Some(
-                self.columns
-                    .iter()
-                    .map(|expr_reference| {
-                        let stmt::ExprReference::Column(expr_column) = expr_reference else {
-                            todo!()
-                        };
-                        debug_assert_eq!(expr_column.nesting, 0);
-                        debug_assert_eq!(expr_column.table, 0);
-
-                        ColumnId {
-                            table: self.table,
-                            index: expr_column.column,
-                        }
-                    })
-                    .collect(),
-            )
-        };
-
-        exec::UpdateByKey {
-            input,
-            output: exec::Output {
-                var: output,
-                num_uses: node.num_uses.get(),
-            },
-            table: self.table,
-            assignments: self.assignments.clone(),
-            filter: self.filter.clone(),
-            condition: self.condition.clone(),
-            returning,
-        }
-    }
 }
 
 impl From<UpdateByKey> for mir::Node {

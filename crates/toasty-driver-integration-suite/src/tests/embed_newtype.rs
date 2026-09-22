@@ -21,7 +21,7 @@ pub async fn basic_newtype_embed(test: &mut Test) {
 
 /// Tests that a newtype field produces a single column whose name matches the
 /// parent field — `email: Email` where `struct Email(String)` produces column
-/// `email`, not `email_0`.
+/// `email`, not `email_inner`.
 #[driver_test(requires(sql), scenario(crate::scenarios::user_with_email))]
 pub async fn newtype_column_name(test: &mut Test) {
     let db = setup(test).await;
@@ -63,7 +63,7 @@ pub async fn newtype_column_name(test: &mut Test) {
 
 /// Tests create, read-back, eq filter, update, delete-by-filter, and batch
 /// create — all with the same `Email(String)` newtype model.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(requires(sql))]
 pub async fn crud_newtype_embed(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Email(String);
@@ -72,7 +72,7 @@ pub async fn crud_newtype_embed(t: &mut Test) -> Result<()> {
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
         email: Email,
     }
@@ -147,12 +147,9 @@ pub async fn crud_newtype_embed(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-// TODO: ne(), gt(), lt(), ge(), le() are not yet generated for newtype field
-// structs. Add comparison operator tests once codegen is extended.
-
 /// Tests `#[unique]` on a newtype field generates `get_by_*` and enforces
 /// uniqueness.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(requires(sql))]
 pub async fn newtype_unique_constraint(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Email(String);
@@ -161,7 +158,7 @@ pub async fn newtype_unique_constraint(t: &mut Test) -> Result<()> {
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
         #[unique]
         email: Email,
@@ -194,7 +191,7 @@ pub async fn newtype_unique_constraint(t: &mut Test) -> Result<()> {
 }
 
 /// Tests `#[index]` on a newtype field generates `filter_by_*`.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(requires(sql))]
 pub async fn newtype_index(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Email(String);
@@ -203,7 +200,7 @@ pub async fn newtype_index(t: &mut Test) -> Result<()> {
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
         #[index]
         email: Email,
@@ -236,7 +233,7 @@ pub async fn newtype_index(t: &mut Test) -> Result<()> {
 }
 
 /// Tests a newtype wrapping a numeric type with CRUD and eq filter.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(requires(sql))]
 pub async fn newtype_numeric(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Score(i64);
@@ -245,7 +242,7 @@ pub async fn newtype_numeric(t: &mut Test) -> Result<()> {
     struct Player {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
         score: Score,
     }
@@ -438,7 +435,7 @@ pub async fn newtype_uuid_get_by_id(t: &mut Test) -> Result<()> {
 
 /// Tests newtype nested inside an embedded struct: create, read-back, and
 /// filter by the nested newtype field.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(requires(sql))]
 pub async fn nested_newtype(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct ZipCode(String);
@@ -453,7 +450,7 @@ pub async fn nested_newtype(t: &mut Test) -> Result<()> {
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
         address: Address,
     }
@@ -492,6 +489,102 @@ pub async fn nested_newtype(t: &mut Test) -> Result<()> {
 
     assert_eq!(users.len(), 1);
     assert_eq!(users[0].name, "Alice");
+
+    Ok(())
+}
+
+/// Tests ordering operations directly on a newtype field path: `ne`,
+/// `gt`, `ge`, `lt`, and `le` accept the wrapper value and compare the
+/// single underlying column, and `asc`/`desc` sort by it, so no `.inner()`
+/// step is needed. These methods are generated only for canonical
+/// newtypes — a newtype is a pass-through to its inner column, so each
+/// backend keeps its own ordering semantics for the inner type.
+#[driver_test(requires(sql))]
+pub async fn newtype_ordering_comparisons(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct TimestampMillis(i64);
+
+    #[derive(Debug, toasty::Model)]
+    struct Credit {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        timestamp: TimestampMillis,
+    }
+
+    let mut db = t.setup_db(models!(Credit)).await;
+
+    for ts in [100, 200, 300] {
+        toasty::create!(Credit {
+            timestamp: TimestampMillis(ts),
+        })
+        .exec(&mut db)
+        .await?;
+    }
+
+    async fn timestamps(db: &mut toasty::Db, filter: toasty::stmt::Expr<bool>) -> Result<Vec<i64>> {
+        let credits = Credit::filter(filter).exec(db).await?;
+        let mut ts: Vec<i64> = credits.iter().map(|c| c.timestamp.0).collect();
+        ts.sort();
+        Ok(ts)
+    }
+
+    let fields = Credit::fields();
+    let hits = timestamps(&mut db, fields.timestamp().ne(TimestampMillis(200))).await?;
+    assert_eq!(hits, [100, 300]);
+
+    let hits = timestamps(&mut db, fields.timestamp().gt(TimestampMillis(200))).await?;
+    assert_eq!(hits, [300]);
+
+    let hits = timestamps(&mut db, fields.timestamp().ge(TimestampMillis(200))).await?;
+    assert_eq!(hits, [200, 300]);
+
+    let hits = timestamps(&mut db, fields.timestamp().lt(TimestampMillis(200))).await?;
+    assert_eq!(hits, [100]);
+
+    let hits = timestamps(&mut db, fields.timestamp().le(TimestampMillis(200))).await?;
+    assert_eq!(hits, [100, 200]);
+
+    async fn ordered(db: &mut toasty::Db, order: toasty::stmt::OrderByExpr) -> Result<Vec<i64>> {
+        let credits = Credit::all().order_by(order).exec(db).await?;
+        Ok(credits.iter().map(|c| c.timestamp.0).collect())
+    }
+
+    let ts = ordered(&mut db, Credit::fields().timestamp().desc()).await?;
+    assert_eq!(ts, [300, 200, 100]);
+
+    let ts = ordered(&mut db, Credit::fields().timestamp().asc()).await?;
+    assert_eq!(ts, [100, 200, 300]);
+
+    // A nested newtype chain lowers to one single-element record per
+    // layer; ordering must unwrap every layer to reach the column.
+    #[derive(Debug, toasty::Embed)]
+    struct Wrapped(TimestampMillis);
+
+    #[derive(Debug, toasty::Model)]
+    struct Event {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        at: Wrapped,
+    }
+
+    let mut db = t.setup_db(models!(Event)).await;
+
+    for ts in [200, 100, 300] {
+        toasty::create!(Event {
+            at: Wrapped(TimestampMillis(ts)),
+        })
+        .exec(&mut db)
+        .await?;
+    }
+
+    let events = Event::all()
+        .order_by(Event::fields().at().desc())
+        .exec(&mut db)
+        .await?;
+    let ts: Vec<i64> = events.iter().map(|e| e.at.0.0).collect();
+    assert_eq!(ts, [300, 200, 100]);
 
     Ok(())
 }

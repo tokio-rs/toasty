@@ -13,13 +13,13 @@ use toasty_core::{
 /// (as a JSON-serialized string). Covers both SQL (bind parameter at `pos`)
 /// and non-SQL (inline value) representations.
 fn assert_insert_serialized(t: &Test, op: &Operation, pos: usize, expected: &str) {
-    let sql = t.capability().sql;
+    let sql = t.capability().sql();
     let val_pat = if sql {
         ArgOr::Arg(pos)
     } else {
         ArgOr::Value(expected)
     };
-    assert_struct!(op, Operation::QuerySql({
+    assert_struct!(op, Operation::Insert({
         stmt: Statement::Insert({
             source.body: ExprSet::Values({
                 rows: [=~ (Any, val_pat)],
@@ -27,7 +27,7 @@ fn assert_insert_serialized(t: &Test, op: &Operation, pos: usize, expected: &str
         }),
     }));
     if sql {
-        assert_struct!(op, Operation::QuerySql({
+        assert_struct!(op, Operation::Insert({
             params[pos].value: == expected,
         }));
     }
@@ -39,7 +39,7 @@ fn assert_native_json_insert(
     storage_ty: db::Type,
     expected: &str,
 ) {
-    assert_struct!(op, Operation::QuerySql({
+    assert_struct!(op, Operation::Insert({
         stmt: Statement::Insert({
             target: InsertTarget::Table({
                 table: == table,
@@ -124,7 +124,7 @@ pub async fn json_vec_string(t: &mut Test) -> Result<(), BoxError> {
     record.update().tags(new_tags.clone()).exec(&mut db).await?;
 
     let (op, resp) = t.log().pop();
-    if t.capability().sql {
+    if t.capability().sql() {
         assert_struct!(op, Operation::QuerySql({
             stmt: Statement::Update({
                 assignments: #{ [1]: Assignment::Set(Expr::Arg({ position: 0 }))},
@@ -182,7 +182,7 @@ pub async fn json_option_outside_sql_null(t: &mut Test) -> Result<(), BoxError> 
     let empty_record = Item::create().data(None).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql({
+    assert_struct!(op, Operation::Insert({
         stmt: Statement::Insert({
             source.body: ExprSet::Values({
                 rows: [=~ (Any, Value::Null)],
@@ -551,7 +551,7 @@ pub async fn json_value_jsonb_native_round_trip(t: &mut Test) -> Result<(), BoxE
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn json_data_enum_field(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Payload {
@@ -566,7 +566,7 @@ pub async fn json_data_enum_field(t: &mut Test) -> Result<(), BoxError> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         payload: Payload,
     }
 

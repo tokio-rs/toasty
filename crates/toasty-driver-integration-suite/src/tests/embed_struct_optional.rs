@@ -60,7 +60,7 @@ pub async fn option_embed_crud(test: &mut Test) -> Result<()> {
     .await?;
 
     let with = Document::get_by_id(&mut db, "with").await?;
-    assert_struct!(with.metadata, Some(_ {
+    assert_struct!(with.metadata, Some({
         author: "alice",
         note: "hi",
     }));
@@ -95,12 +95,12 @@ pub async fn option_embed_filter_presence(test: &mut Test) -> Result<()> {
     let present = Document::filter(Document::fields().metadata().is_some())
         .exec(&mut db)
         .await?;
-    assert_struct!(present, [_ { id: "with", .. }]);
+    assert_struct!(present, [{ id: "with" }]);
 
     let absent = Document::filter(Document::fields().metadata().is_none())
         .exec(&mut db)
         .await?;
-    assert_struct!(absent, [_ { id: "without", .. }]);
+    assert_struct!(absent, [{ id: "without" }]);
 
     Ok(())
 }
@@ -141,7 +141,7 @@ pub async fn option_embed_filter_eq(test: &mut Test) -> Result<()> {
     })))
     .exec(&mut db)
     .await?;
-    assert_struct!(matches, [_ { id: "alice", .. }]);
+    assert_struct!(matches, [{ id: "alice" }]);
 
     Ok(())
 }
@@ -184,7 +184,7 @@ pub async fn option_embed_update(test: &mut Test) -> Result<()> {
         }))
         .exec(&mut db)
         .await?;
-    assert_struct!(Document::get_by_id(&mut db, "b").await?.metadata, Some(_ {
+    assert_struct!(Document::get_by_id(&mut db, "b").await?.metadata, Some({
         author: "bob",
         note: "yo",
     }));
@@ -385,12 +385,12 @@ pub async fn option_newtype_filter_presence(test: &mut Test) -> Result<()> {
     let present = Document::filter(Document::fields().code().is_some())
         .exec(&mut db)
         .await?;
-    assert_struct!(present, [_ { id: "with", .. }]);
+    assert_struct!(present, [{ id: "with" }]);
 
     let absent = Document::filter(Document::fields().code().is_none())
         .exec(&mut db)
         .await?;
-    assert_struct!(absent, [_ { id: "without", .. }]);
+    assert_struct!(absent, [{ id: "without" }]);
 
     Ok(())
 }
@@ -505,7 +505,7 @@ pub async fn option_newtype_filter_eq(test: &mut Test) -> Result<()> {
     let matches = Document::filter(Document::fields().code().eq(Some(Code("abc".to_string()))))
         .exec(&mut db)
         .await?;
-    assert_struct!(matches, [_ { id: "alice", .. }]);
+    assert_struct!(matches, [{ id: "alice" }]);
 
     Ok(())
 }
@@ -587,7 +587,7 @@ pub async fn option_struct_nullable_inner_disambiguates(test: &mut Test) -> Resu
 
     assert_struct!(
         Document::get_by_id(&mut db, "some_none").await?.wrapper,
-        Some(_ { value: None })
+        Some({ value: None })
     );
     assert_none!(Document::get_by_id(&mut db, "none").await?.wrapper);
 

@@ -95,7 +95,14 @@ impl<M> Paginate<M> {
     ///
     /// Records returned will come **after** `key` in the current sort order.
     /// Obtain `key` from [`Page::next_cursor`](super::Page::next_cursor) of a
-    /// previous page.
+    /// previous page. Toasty-generated cursors include any internal
+    /// primary-key fields needed to distinguish rows with equal ordering
+    /// values.
+    ///
+    /// A caller-provided cursor may contain only a prefix of the ordering
+    /// fields. Such a cursor cannot select a position within rows that tie on
+    /// that prefix. Pages fetched from it produce complete cursors for
+    /// subsequent navigation.
     ///
     /// # Panics
     ///
@@ -132,6 +139,13 @@ impl<M> Paginate<M> {
     /// The result set is still returned in the original sort order (not
     /// reversed). Obtain `key` from
     /// [`Page::prev_cursor`](super::Page::prev_cursor) of a previous page.
+    /// Toasty-generated cursors include any internal primary-key fields needed
+    /// to distinguish rows with equal ordering values.
+    ///
+    /// A caller-provided cursor may contain only a prefix of the ordering
+    /// fields. Such a cursor cannot select a position within rows that tie on
+    /// that prefix. Pages fetched from it produce complete cursors for
+    /// subsequent navigation.
     ///
     /// # Panics
     ///
@@ -233,6 +247,8 @@ impl<M: Load> Paginate<M> {
         } else {
             (response.next_cursor, response.prev_cursor)
         };
+        let next_cursor = next_cursor.map(|cursor| *cursor);
+        let prev_cursor = prev_cursor.map(|cursor| *cursor);
 
         // Store the original query (not the reversed one) in the Page so that
         // subsequent .next() and .prev() calls use the correct ORDER BY direction

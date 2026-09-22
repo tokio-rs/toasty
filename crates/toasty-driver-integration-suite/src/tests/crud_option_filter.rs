@@ -2,7 +2,7 @@
 
 use crate::prelude::*;
 
-#[driver_test(id(ID), scenario(crate::scenarios::in_list_item), requires(scan))]
+#[driver_test(scenario(crate::scenarios::in_list_item), requires(scan))]
 pub async fn filter_option_is_none(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -34,7 +34,7 @@ pub async fn filter_option_is_none(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::in_list_item), requires(scan))]
+#[driver_test(scenario(crate::scenarios::in_list_item), requires(scan))]
 pub async fn filter_option_is_some(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -68,7 +68,7 @@ pub async fn filter_option_is_some(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::in_list_item), requires(scan))]
+#[driver_test(scenario(crate::scenarios::in_list_item), requires(scan))]
 pub async fn filter_option_combined_with_other_filters(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -119,13 +119,13 @@ pub async fn filter_option_combined_with_other_filters(t: &mut Test) -> Result<(
     Ok(())
 }
 
-#[driver_test(id(ID), requires(scan))]
+#[driver_test(requires(scan))]
 pub async fn filter_option_multiple_nullable_fields(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Article {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         title: String,
 
@@ -288,17 +288,17 @@ pub async fn filter_option_with_partition_key(test: &mut Test) -> Result<()> {
 /// `is_none()` on an `Option<ID>` field panics because the lowering phase
 /// does not strip the `ExprCast` wrapper from the column expression inside
 /// `IsNull`. The cast leaks into the SQL serializer which does not handle it.
-#[driver_test(id(ID), requires(scan))]
+#[driver_test(requires(scan))]
 pub async fn filter_option_id_is_none(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Player {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         name: String,
 
-        user_id: Option<ID>,
+        user_id: Option<uuid::Uuid>,
     }
 
     let mut db = test.setup_db(models!(Player)).await;

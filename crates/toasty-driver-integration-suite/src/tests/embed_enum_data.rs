@@ -14,12 +14,10 @@ pub async fn data_carrying_enum_schema(t: &mut Test) {
             {
                 name.upper_camel_case(): "Email",
                 discriminant: toasty_core::stmt::Value::I64(1),
-                ..
             },
             {
                 name.upper_camel_case(): "Phone",
                 discriminant: toasty_core::stmt::Value::I64(2),
-                ..
             },
         ],
         fields: [
@@ -43,17 +41,14 @@ pub async fn mixed_enum_schema(t: &mut Test) {
             {
                 name.upper_camel_case(): "Pending",
                 discriminant: toasty_core::stmt::Value::I64(1),
-                ..
             },
             {
                 name.upper_camel_case(): "Failed",
                 discriminant: toasty_core::stmt::Value::I64(2),
-                ..
             },
             {
                 name.upper_camel_case(): "Done",
                 discriminant: toasty_core::stmt::Value::I64(3),
-                ..
             },
         ],
         fields: [
@@ -619,4 +614,67 @@ pub async fn global_field_indices(test: &mut Test) {
             { id.index: 3, name.app: Some("amount") },
         ],
     }));
+}
+
+/// A data-carrying variant named `Create` keeps its `create()` field
+/// accessor on the enum's fields handle: `create!` and `update!` obtain the
+/// construction builder from the enum itself, through `EmbedCreate`, so the
+/// handle carries no method of the same name.
+#[driver_test]
+pub async fn variant_named_create(test: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Action {
+        Create { name: String },
+        Delete,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = group, local = id)]
+    struct Event {
+        #[auto]
+        id: uuid::Uuid,
+        group: String,
+        action: Action,
+    }
+
+    let mut db = test.setup_db(models!(Event)).await;
+
+    let mut event = toasty::create!(Event {
+        group: "audit",
+        action: Action::Create {
+            name: "alpha".to_string()
+        },
+    })
+    .exec(&mut db)
+    .await?;
+
+    let found = Event::filter(
+        Event::fields().group().eq("audit").and(
+            Event::fields()
+                .action()
+                .create()
+                .matches(|c| c.name().eq("alpha")),
+        ),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_struct!(found, [{ id: == event.id }]);
+
+    toasty::update!(event {
+        action: Action::Create {
+            name: "beta".to_string()
+        },
+    })
+    .exec(&mut db)
+    .await?;
+
+    let reloaded = Event::get_by_group_and_id(&mut db, "audit", &event.id).await?;
+    assert_eq!(
+        reloaded.action,
+        Action::Create {
+            name: "beta".to_string()
+        }
+    );
+
+    Ok(())
 }

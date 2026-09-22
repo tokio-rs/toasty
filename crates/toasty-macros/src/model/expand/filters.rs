@@ -1,7 +1,7 @@
 use super::Expand;
 use crate::model::schema::{FieldTy, Index, Model};
 
-use hashbrown::HashMap;
+use indexmap::IndexMap;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
 
@@ -29,7 +29,7 @@ pub(super) struct Filter {
 
 struct BuildModelFilters<'a> {
     model: &'a Model,
-    filters: HashMap<Vec<usize>, Filter>,
+    filters: IndexMap<Vec<usize>, Filter>,
 }
 
 impl Expand<'_> {
@@ -181,7 +181,7 @@ impl Expand<'_> {
                 _ => todo!(),
             };
 
-            quote!(#name: impl #toasty::IntoExpr<#ty>)
+            quote!(#name: impl #toasty::IntoExpr<#toasty::FieldExprTarget<#ty>>)
         })
     }
 
@@ -211,7 +211,7 @@ impl Filter {
     pub(super) fn build_model_filters(model: &Model) -> Vec<Self> {
         BuildModelFilters {
             model,
-            filters: HashMap::new(),
+            filters: IndexMap::new(),
         }
         .build()
     }
@@ -220,6 +220,8 @@ impl Filter {
 impl<'a> BuildModelFilters<'a> {
     fn build(mut self) -> Vec<Filter> {
         self.recurse(&[]);
+        // `IndexMap` yields filters in insertion order, keeping generated
+        // method order stable so unrelated rebuilds retain incremental results.
         self.filters.into_values().collect()
     }
 
@@ -310,5 +312,31 @@ impl<'a> BuildModelFilters<'a> {
         }
 
         syn::Ident::new(&name, Span::call_site())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn model_filter_expansion_is_deterministic() {
+        let input = quote::quote! {
+            struct User {
+                #[key]
+                id: i64,
+                #[index]
+                email: String,
+                #[index]
+                name: String,
+            }
+        };
+        let expected = crate::model::generate_model(input.clone())
+            .unwrap()
+            .to_string();
+        for _ in 0..32 {
+            let actual = crate::model::generate_model(input.clone())
+                .unwrap()
+                .to_string();
+            assert_eq!(actual, expected);
+        }
     }
 }

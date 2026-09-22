@@ -11,6 +11,7 @@ fn cast_is_stripped_from_is_null() {
             expr: Box::new(Expr::arg(0)),
             ty: Type::String,
         })),
+        negated: false,
     };
     let result = fold_expr_is_null(&mut expr);
 
@@ -23,6 +24,7 @@ fn non_cast_expr_not_simplified() {
     // `is_null(arg(0))`, non-cast, not simplified
     let mut expr = ExprIsNull {
         expr: Box::new(Expr::arg(0)),
+        negated: false,
     };
     let result = fold_expr_is_null(&mut expr);
 
@@ -35,6 +37,7 @@ fn null_is_null_becomes_true() {
     // `null is null` → `true`
     let mut expr = ExprIsNull {
         expr: Box::new(Expr::null()),
+        negated: false,
     };
     let result = fold_expr_is_null(&mut expr);
 
@@ -46,6 +49,7 @@ fn non_null_const_is_null_becomes_false() {
     // `5 is null` → `false`
     let mut expr = ExprIsNull {
         expr: Box::new(Expr::from(5i64)),
+        negated: false,
     };
     let result = fold_expr_is_null(&mut expr);
 
@@ -54,7 +58,7 @@ fn non_null_const_is_null_becomes_false() {
 
 #[test]
 fn null_is_not_null_becomes_false() {
-    // `not(is_null(null))` → `not(true)` → `false`
+    // `is_not_null(null)` → `false`
     let mut expr = Expr::is_not_null(Expr::null());
     fold_stmt(&mut expr);
 
@@ -63,7 +67,7 @@ fn null_is_not_null_becomes_false() {
 
 #[test]
 fn non_null_const_is_not_null_becomes_true() {
-    // `not(is_null(5))` → `not(false)` → `true`
+    // `is_not_null(5)` → `true`
     let mut expr = Expr::is_not_null(Expr::from(5i64));
     fold_stmt(&mut expr);
 

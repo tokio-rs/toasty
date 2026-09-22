@@ -20,7 +20,8 @@ pub struct Placeholder(pub usize);
 
 impl ToSql for Placeholder {
     fn to_sql(self, f: &mut Formatter<'_>) {
-        write_sql_placeholder(&mut f.dst, f.serializer.flavor.sql_placeholder(), self.0).unwrap();
+        let placeholder = super::dialect::sql_placeholder(f.serializer.dialect);
+        write_sql_placeholder(&mut f.dst, placeholder, self.0).unwrap();
     }
 }
 

@@ -1,4 +1,4 @@
-use super::{Field, FieldId, Schema};
+use super::FieldId;
 
 /// A foreign key linking one model's fields to another model's primary key.
 ///
@@ -53,17 +53,5 @@ pub struct ForeignKeyField {
 impl ForeignKey {
     pub(crate) fn is_placeholder(&self) -> bool {
         self.fields.is_empty()
-    }
-}
-
-impl ForeignKeyField {
-    /// Resolves the source [`Field`] from the given schema.
-    pub fn source<'a>(&self, schema: &'a Schema) -> &'a Field {
-        schema.field(self.source)
-    }
-
-    /// Resolves the target [`Field`] from the given schema.
-    pub fn target<'a>(&self, schema: &'a Schema) -> &'a Field {
-        schema.field(self.target)
     }
 }

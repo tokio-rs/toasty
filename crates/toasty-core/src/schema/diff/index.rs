@@ -49,7 +49,7 @@ impl<'a> Index<'a> {
                 return true;
             }
 
-            for (previous_col, next_col) in previous.columns.iter().zip(next.columns.iter()) {
+            for (previous_col, next_col) in previous.columns.iter().zip(&next.columns) {
                 if previous_col.op != next_col.op || previous_col.scope != next_col.scope {
                     return true;
                 }
@@ -73,7 +73,6 @@ impl<'a> Index<'a> {
 
         let mut changes = vec![];
         let mut create_ids: HashSet<_> = next.iter().map(|to| to.id).collect();
-
         let next_map =
             HashMap::<&str, &'a db::Index>::from_iter(next.iter().map(|to| (to.name.as_str(), to)));
 

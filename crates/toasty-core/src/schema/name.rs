@@ -1,10 +1,6 @@
-use heck::{ToLowerCamelCase, ToShoutySnakeCase, ToSnakeCase, ToUpperCamelCase};
+use heck::{ToSnakeCase, ToUpperCamelCase};
 
-/// A multi-part identifier that can be rendered in various casing conventions.
-///
-/// `Name` stores the identifier as individual lowercase words (parts). It is
-/// created from a string in any common casing style (snake_case, camelCase,
-/// PascalCase) and can be converted back to any of those forms.
+/// A multi-part identifier that can be rendered in snake case or upper camel case.
 ///
 /// # Examples
 ///
@@ -14,8 +10,6 @@ use heck::{ToLowerCamelCase, ToShoutySnakeCase, ToSnakeCase, ToUpperCamelCase};
 /// let name = Name::new("UserProfile");
 /// assert_eq!(name.snake_case(), "user_profile");
 /// assert_eq!(name.upper_camel_case(), "UserProfile");
-/// assert_eq!(name.camel_case(), "userProfile");
-/// assert_eq!(name.upper_snake_case(), "USER_PROFILE");
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Name {
@@ -39,21 +33,8 @@ impl Name {
     pub fn new(src: &str) -> Self {
         // TODO: make better
         let snake = src.to_snake_case();
-        let parts = snake.split("_").map(String::from).collect();
+        let parts = snake.split('_').map(String::from).collect();
         Self { parts }
-    }
-
-    /// Returns this name in `camelCase`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use toasty_core::schema::Name;
-    ///
-    /// assert_eq!(Name::new("user_id").camel_case(), "userId");
-    /// ```
-    pub fn camel_case(&self) -> String {
-        self.snake_case().to_lower_camel_case()
     }
 
     /// Returns this name in `UpperCamelCase` (PascalCase).
@@ -80,19 +61,6 @@ impl Name {
     /// ```
     pub fn snake_case(&self) -> String {
         self.parts.join("_")
-    }
-
-    /// Returns this name in `UPPER_SNAKE_CASE`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use toasty_core::schema::Name;
-    ///
-    /// assert_eq!(Name::new("user_id").upper_snake_case(), "USER_ID");
-    /// ```
-    pub fn upper_snake_case(&self) -> String {
-        self.snake_case().to_shouty_snake_case()
     }
 }
 

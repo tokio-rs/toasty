@@ -233,7 +233,7 @@ pub(super) fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [Param]) -
         // Column reference — authoritative from schema
         stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Column(_)) => {
             match cx.resolve_expr_reference(expr_ref) {
-                stmt::ResolvedRef::Column(col) => Ty::Column(col.storage_ty.clone()),
+                stmt::ResolvedRef::Column(col) => ty_from_column(col.storage_ty.clone()),
                 _ => Ty::Unknown,
             }
         }

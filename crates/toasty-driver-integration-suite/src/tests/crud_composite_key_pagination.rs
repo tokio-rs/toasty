@@ -41,7 +41,7 @@ pub async fn paginate_composite_key(test: &mut Test) -> Result<()> {
 
     // Verify the driver operation type
     let (op, resp) = test.log().pop();
-    if test.capability().sql {
+    if test.capability().sql() {
         assert_struct!(op, Operation::QuerySql(_));
     } else {
         assert_struct!(op, Operation::QueryPk(_));
@@ -95,7 +95,7 @@ pub async fn paginate_composite_key_asc(test: &mut Test) -> Result<()> {
     }
 
     let (op, _) = test.log().pop();
-    if test.capability().sql {
+    if test.capability().sql() {
         assert_struct!(op, Operation::QuerySql(_));
     } else {
         assert_struct!(op, Operation::QueryPk(_));
@@ -148,7 +148,7 @@ pub async fn limit_offset_composite_key(test: &mut Test) -> Result<()> {
     // plain `.limit()` — a future refactor accidentally producing a different
     // operation type for the offset path would be silent without this assert.
     let (op, _) = test.log().pop();
-    if test.capability().sql {
+    if test.capability().sql() {
         assert_struct!(op, Operation::QuerySql(_));
     } else {
         assert_struct!(op, Operation::QueryPk(_));
@@ -244,7 +244,7 @@ pub async fn limit_composite_key(test: &mut Test) -> Result<()> {
     assert_eq!(events.len(), 7);
 
     let (op, _) = test.log().pop();
-    if test.capability().sql {
+    if test.capability().sql() {
         assert_struct!(op, Operation::QuerySql(_));
     } else {
         assert_struct!(op, Operation::QueryPk(_));
@@ -306,7 +306,7 @@ pub async fn sort_composite_key(test: &mut Test) -> Result<()> {
     }
 
     let (op, resp) = test.log().pop();
-    if test.capability().sql {
+    if test.capability().sql() {
         assert_struct!(op, Operation::QuerySql(_));
     } else {
         assert_struct!(op, Operation::QueryPk(_));
@@ -327,7 +327,7 @@ pub async fn sort_composite_key(test: &mut Test) -> Result<()> {
     }
 
     let (op, resp) = test.log().pop();
-    if test.capability().sql {
+    if test.capability().sql() {
         assert_struct!(op, Operation::QuerySql(_));
     } else {
         assert_struct!(op, Operation::QueryPk(_));

@@ -13,10 +13,29 @@ pulldown-cmark = { workspace = true }
 
 [features]
 default = ["sqlite"]
-sql = ["sqlite", "mysql", "postgresql"]
+sql = ["sqlite", "mysql", "mariadb", "postgresql"]
 sqlite = ["toasty/sqlite", "dep:toasty-driver-sqlite"]
 turso = ["toasty/turso", "dep:toasty-driver-turso"]
-mysql = ["toasty/mysql", "dep:toasty-driver-mysql", "dep:mysql_async"]
+turso-sync = ["turso", "toasty/turso-sync"]
+turso-serverless = [
+    "turso",
+    "toasty/turso-serverless",
+    "dep:turso_serverless",
+    "dep:reqwest",
+    "dep:serde_json",
+]
+mysql = [
+    "toasty/mysql",
+    "dep:toasty-driver-mysql",
+    "dep:sqlx-core",
+    "dep:sqlx-mysql",
+]
+mariadb = [
+    "toasty/mariadb",
+    "dep:toasty-driver-mysql",
+    "dep:sqlx-core",
+    "dep:sqlx-mysql",
+]
 dynamodb = ["toasty/dynamodb", "dep:toasty-driver-dynamodb", "dep:aws-config", "dep:aws-sdk-dynamodb"]
 postgresql = ["toasty/postgresql", "dep:toasty-driver-postgresql", "dep:tokio-postgres"]
 
@@ -26,11 +45,13 @@ rust_decimal.workspace = true
 bigdecimal.workspace = true
 hashbrown.workspace = true
 jiff.workspace = true
-toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff", "migration"] }
+toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff", "net", "migration"] }
 toasty-cli.workspace = true
 toasty-core.workspace = true
 toasty-macros.workspace = true
-tokio.workspace = true
+# `tokio::runtime::Runtime::new` builds a multi-thread runtime, which the lean
+# workspace tokio feature set (kept wasm-compatible for `toasty`) omits.
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 # Integration test suite
 toasty-driver-integration-suite.workspace = true
@@ -38,13 +59,21 @@ toasty-driver-integration-suite.workspace = true
 # Database drivers
 toasty-driver-sqlite = { workspace = true, optional = true }
 toasty-driver-turso = { workspace = true, optional = true }
+turso_serverless = { workspace = true, optional = true }
+reqwest = { version = "0.13", default-features = false, features = [
+	"blocking",
+	"json",
+	"rustls",
+], optional = true }
+serde_json = { workspace = true, optional = true }
 toasty-driver-mysql = { workspace = true, optional = true }
 toasty-driver-postgresql = { workspace = true, optional = true }
 toasty-driver-dynamodb = { workspace = true, optional = true }
 
 # Database clients used directly by per-driver integration test binaries
 tokio-postgres = { workspace = true, optional = true }
-mysql_async = { workspace = true, optional = true }
+sqlx-core = { workspace = true, optional = true }
+sqlx-mysql = { workspace = true, optional = true }
 aws-config = { workspace = true, optional = true }
 aws-sdk-dynamodb = { workspace = true, optional = true }
 

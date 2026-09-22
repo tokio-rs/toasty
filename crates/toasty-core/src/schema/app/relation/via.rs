@@ -1,5 +1,5 @@
 use crate::{
-    schema::app::{Cardinality, Model, ModelId, Name, Schema},
+    schema::app::{Cardinality, Model, ModelId, Schema},
     stmt,
 };
 
@@ -88,13 +88,8 @@ impl Via {
         self.cardinality.is_one()
     }
 
-    /// Returns the singular item name for a one-to-many relation.
-    pub fn singular(&self) -> Option<&Name> {
-        self.cardinality.singular()
-    }
-
     /// Resolves the target [`Model`] from the given schema.
-    pub fn target<'a>(&self, schema: &'a Schema) -> &'a Model {
+    pub(crate) fn target<'a>(&self, schema: &'a Schema) -> &'a Model {
         schema.model(self.target)
     }
 }

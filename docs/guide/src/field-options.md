@@ -84,6 +84,10 @@ Supported type values:
 | `date` | Date |
 | `time(P)` | Time with precision |
 | `datetime(P)` | Date and time with precision |
+| `cidr` | IP network prefix |
+| `inet` | IP host address with a network prefix |
+| `macaddr` | Six-byte MAC address |
+| `macaddr8` | Eight-byte MAC address |
 
 Not all databases support all column types. Toasty validates explicit column
 types against the database's capabilities when you call `db.push_schema()`. If a
@@ -331,9 +335,11 @@ fields:
 | Rust type | Description |
 |---|---|
 | `jiff::Timestamp` | An instant in time (UTC) |
+| `jiff::Zoned` | An instant in time together with its time zone |
 | `jiff::civil::Date` | A date without time |
 | `jiff::civil::Time` | A time of day without date |
 | `jiff::civil::DateTime` | A date and time without timezone |
+| `jiff::tz::TimeZone` | A time zone on its own, not a point in time |
 
 You can control the storage precision with `#[column(type = ...)]`:
 

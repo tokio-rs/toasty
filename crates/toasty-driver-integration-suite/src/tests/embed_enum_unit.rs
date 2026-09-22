@@ -53,7 +53,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
     // Position: id_u64 uses Expr::Default (no param), so status is at
     // params[1] (name, status). id_uuid adds the uuid at params[0], shifting
     // status to params[2].
-    let sql = t.capability().sql;
+    let sql = t.capability().sql();
     let status_pos = if driver_test_cfg!(id_u64) { 1 } else { 2 };
     let status_pat = if sql {
         ArgOr::Arg(status_pos)
@@ -61,7 +61,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
         ArgOr::Value(1i64)
     };
     let op = t.log().pop_op();
-    assert_struct!(op, Operation::QuerySql({
+    assert_struct!(op, Operation::Insert({
         stmt: Statement::Insert({
             source.body: ExprSet::Values({
                 rows: [=~ (Any, Any, status_pat)],
@@ -73,7 +73,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
         }),
     }));
     if sql {
-        assert_struct!(op, Operation::QuerySql({
+        assert_struct!(op, Operation::Insert({
             params[status_pos].value: == 1i64,
         }));
     }
@@ -88,7 +88,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
 
     // Verify the status column receives the new discriminant as I64
     // Column index 2 is "status"; value I64(2) = Active discriminant
-    if t.capability().sql {
+    if t.capability().sql() {
         assert_struct!(t.log().pop_op(), Operation::QuerySql({
             stmt: Statement::Update({
                 target: toasty_core::stmt::UpdateTarget::Table(== user_table),
@@ -160,7 +160,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
     assert_eq!(active.len(), 2);
     {
         let (op, _) = t.log().pop();
-        if t.capability().sql {
+        if t.capability().sql() {
             assert_struct!(op, Operation::QuerySql({
                 stmt: Statement::Query({
                     body: ExprSet::Select({
@@ -192,7 +192,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
     assert_eq!(pending[0].name, "Task A");
     {
         let (op, _) = t.log().pop();
-        if t.capability().sql {
+        if t.capability().sql() {
             assert_struct!(op, Operation::QuerySql({
                 stmt: Statement::Query({
                     body: ExprSet::Select({
@@ -224,7 +224,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
     assert_eq!(done[0].name, "Task D");
     {
         let (op, _) = t.log().pop();
-        if t.capability().sql {
+        if t.capability().sql() {
             assert_struct!(op, Operation::QuerySql({
                 stmt: Statement::Query({
                     body: ExprSet::Select({
@@ -263,9 +263,9 @@ pub async fn basic_embedded_enum(test: &mut Test) {
     assert_struct!(status, toasty::schema::app::Model::EmbeddedEnum({
         name.upper_camel_case(): "Status",
         variants: [
-            _ { name.upper_camel_case(): "Pending", discriminant: toasty_core::stmt::Value::I64(1), .. },
-            _ { name.upper_camel_case(): "Active", discriminant: toasty_core::stmt::Value::I64(2), .. },
-            _ { name.upper_camel_case(): "Done", discriminant: toasty_core::stmt::Value::I64(3), .. },
+            { name.upper_camel_case(): "Pending", discriminant: toasty_core::stmt::Value::I64(1) },
+            { name.upper_camel_case(): "Active", discriminant: toasty_core::stmt::Value::I64(2) },
+            { name.upper_camel_case(): "Done", discriminant: toasty_core::stmt::Value::I64(3) },
         ],
     }));
 }

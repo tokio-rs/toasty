@@ -32,10 +32,10 @@ pub struct Page<M> {
     /// Base query (without cursors/offsets).
     query: Query<List<M>>,
 
-    /// Cursor for fetching next page (opaque value from driver)
+    /// Opaque cursor for fetching the next page.
     pub next_cursor: Option<stmt::Value>,
 
-    /// Cursor for fetching previous page (opaque value from driver)
+    /// Opaque cursor for fetching the previous page.
     pub prev_cursor: Option<stmt::Value>,
 }
 

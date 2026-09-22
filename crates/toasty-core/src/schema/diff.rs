@@ -44,8 +44,6 @@ use crate::schema::db::{ColumnId, IndexId, Schema as DbSchema, TableId};
 ///
 /// let mut hints = diff::RenameHints::new();
 /// hints.add_table_hint(TableId(0), TableId(1));
-/// assert_eq!(hints.get_table(TableId(0)), Some(TableId(1)));
-/// assert_eq!(hints.get_table(TableId(2)), None);
 /// ```
 #[derive(Default)]
 pub struct RenameHints {
@@ -76,17 +74,17 @@ impl RenameHints {
     }
 
     /// Returns the new [`TableId`] if a rename hint exists for `from`.
-    pub fn get_table(&self, from: TableId) -> Option<TableId> {
+    pub(super) fn get_table(&self, from: TableId) -> Option<TableId> {
         self.tables.get(&from).copied()
     }
 
     /// Returns the new [`ColumnId`] if a rename hint exists for `from`.
-    pub fn get_column(&self, from: ColumnId) -> Option<ColumnId> {
+    pub(super) fn get_column(&self, from: ColumnId) -> Option<ColumnId> {
         self.columns.get(&from).copied()
     }
 
     /// Returns the new [`IndexId`] if a rename hint exists for `from`.
-    pub fn get_index(&self, from: IndexId) -> Option<IndexId> {
+    pub(super) fn get_index(&self, from: IndexId) -> Option<IndexId> {
         self.indices.get(&from).copied()
     }
 }
@@ -105,7 +103,7 @@ impl RenameHints {
 /// let next = db::Schema::default();
 /// let hints = diff::RenameHints::new();
 /// let cx = diff::Context::new(&previous, &next, &hints);
-/// assert!(cx.previous().tables.is_empty());
+/// assert!(cx.next().tables.is_empty());
 /// ```
 pub struct Context<'a> {
     previous: &'a DbSchema,
@@ -115,6 +113,16 @@ pub struct Context<'a> {
 }
 
 impl<'a> Context<'a> {
+    /// Returns the rename hints for this diff.
+    pub(super) fn rename_hints(&self) -> &'a RenameHints {
+        self.rename_hints
+    }
+
+    /// Returns the schema before the change.
+    pub(super) fn previous(&self) -> &'a DbSchema {
+        self.previous
+    }
+
     /// Creates a new diff context from the previous schema, the next schema,
     /// and the rename hints that map old IDs to new IDs.
     pub fn new(previous: &'a DbSchema, next: &'a DbSchema, rename_hints: &'a RenameHints) -> Self {
@@ -123,16 +131,6 @@ impl<'a> Context<'a> {
             next,
             rename_hints,
         }
-    }
-
-    /// Returns the rename hints for this diff.
-    pub fn rename_hints(&self) -> &'a RenameHints {
-        self.rename_hints
-    }
-
-    /// Returns the schema before the change.
-    pub fn previous(&self) -> &'a DbSchema {
-        self.previous
     }
 
     /// Returns the schema after the change.

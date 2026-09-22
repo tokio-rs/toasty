@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 /// Tests basic CRUD with a unit enum using explicit string discriminants.
-#[driver_test(id(ID), scenario(crate::scenarios::task_with_string_status))]
+#[driver_test(scenario(crate::scenarios::task_with_string_status))]
 pub async fn string_discriminant_unit_enum(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -26,7 +26,7 @@ pub async fn string_discriminant_unit_enum(t: &mut Test) -> Result<()> {
 }
 
 /// Tests unit enum with default labels (variant ident used as string label).
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn default_string_labels(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Priority {
@@ -39,7 +39,7 @@ pub async fn default_string_labels(t: &mut Test) -> Result<()> {
     struct Task {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         title: String,
         priority: Priority,
     }
@@ -61,7 +61,7 @@ pub async fn default_string_labels(t: &mut Test) -> Result<()> {
 }
 
 /// Tests mixing explicit string labels with default labels.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn mixed_explicit_and_default_labels(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Status {
@@ -75,7 +75,7 @@ pub async fn mixed_explicit_and_default_labels(t: &mut Test) -> Result<()> {
     struct Task {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         status: Status,
     }
 
@@ -105,7 +105,7 @@ pub async fn mixed_explicit_and_default_labels(t: &mut Test) -> Result<()> {
 }
 
 /// Tests data-carrying enum with string discriminants.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn string_discriminant_data_enum(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum ContactMethod {
@@ -120,7 +120,7 @@ pub async fn string_discriminant_data_enum(t: &mut Test) -> Result<()> {
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
         contact: ContactMethod,
     }
@@ -165,7 +165,7 @@ pub async fn string_discriminant_data_enum(t: &mut Test) -> Result<()> {
 }
 
 /// Tests data-carrying enum with default string labels (variant ident as discriminant).
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn default_string_labels_data_enum(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum ContactMethod {
@@ -178,7 +178,7 @@ pub async fn default_string_labels_data_enum(t: &mut Test) -> Result<()> {
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
         contact: ContactMethod,
     }
@@ -223,7 +223,7 @@ pub async fn default_string_labels_data_enum(t: &mut Test) -> Result<()> {
 }
 
 /// Tests data-carrying enum mixing explicit string labels with defaults.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn mixed_string_labels_data_enum(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum ContactMethod {
@@ -241,7 +241,7 @@ pub async fn mixed_string_labels_data_enum(t: &mut Test) -> Result<()> {
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
         contact: ContactMethod,
     }
@@ -305,10 +305,7 @@ pub async fn mixed_string_labels_data_enum(t: &mut Test) -> Result<()> {
 }
 
 /// Tests filtering by variant with string discriminants.
-#[driver_test(
-    requires(scan),
-    scenario(crate::scenarios::task_with_string_status::id_uuid)
-)]
+#[driver_test(requires(scan), scenario(crate::scenarios::task_with_string_status))]
 pub async fn filter_by_string_variant(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -336,7 +333,7 @@ pub async fn filter_by_string_variant(t: &mut Test) -> Result<()> {
 }
 
 /// Verifies the schema registers string discriminants with the correct type.
-#[driver_test(scenario(crate::scenarios::task_with_string_status::id_uuid))]
+#[driver_test(scenario(crate::scenarios::task_with_string_status))]
 pub async fn string_discriminant_schema_registration(t: &mut Test) {
     let db = setup(t).await;
     let schema = db.schema();

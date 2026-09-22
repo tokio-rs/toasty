@@ -60,10 +60,9 @@ pub async fn option_enum_crud(test: &mut Test) -> Result<()> {
     .await?;
 
     let full = Account::get_by_id(&mut db, "full").await?;
-    assert_struct!(full, _ {
+    assert_struct!(full, {
         contact: Some(== Contact::Email { address: "a@x.com".to_string() }),
         status: Some(== Status::Active),
-        ..
     });
 
     let empty = Account::get_by_id(&mut db, "empty").await?;
@@ -103,18 +102,18 @@ pub async fn option_enum_filter_presence(test: &mut Test) -> Result<()> {
     let present = Account::filter(Account::fields().contact().is_some())
         .exec(&mut db)
         .await?;
-    assert_struct!(present, [_ { id: "full", .. }]);
+    assert_struct!(present, [{ id: "full" }]);
 
     let absent = Account::filter(Account::fields().contact().is_none())
         .exec(&mut db)
         .await?;
-    assert_struct!(absent, [_ { id: "empty", .. }]);
+    assert_struct!(absent, [{ id: "empty" }]);
 
     // Unit enum.
     let status_absent = Account::filter(Account::fields().status().is_none())
         .exec(&mut db)
         .await?;
-    assert_struct!(status_absent, [_ { id: "empty", .. }]);
+    assert_struct!(status_absent, [{ id: "empty" }]);
 
     Ok(())
 }
@@ -159,12 +158,12 @@ pub async fn option_enum_filter_eq(test: &mut Test) -> Result<()> {
     })))
     .exec(&mut db)
     .await?;
-    assert_struct!(email, [_ { id: "alice", .. }]);
+    assert_struct!(email, [{ id: "alice" }]);
 
     let active = Account::filter(Account::fields().status().eq(Some(Status::Active)))
         .exec(&mut db)
         .await?;
-    assert_struct!(active, [_ { id: "alice", .. }]);
+    assert_struct!(active, [{ id: "alice" }]);
 
     Ok(())
 }

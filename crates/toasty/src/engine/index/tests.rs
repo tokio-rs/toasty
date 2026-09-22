@@ -541,6 +541,62 @@ fn composite_pk_or_becomes_any_map_for_dynamodb() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn chooses_lowest_cost_index_and_first_on_ties() -> Result<()> {
+    #[allow(dead_code)]
+    #[derive(toasty::Model)]
+    struct Indexed {
+        #[key]
+        id: String,
+        #[unique]
+        name: String,
+    }
+
+    let app_schema = app::Schema::from_macro([Indexed::schema()])?;
+    let cx = TestCx {
+        schema: Builder::new().build(app_schema, &Capability::SQLITE)?,
+        capability: &Capability::SQLITE,
+    };
+
+    for op in [stmt::BinaryOp::Gt, stmt::BinaryOp::Eq] {
+        let filter = stmt::Expr::and(
+            stmt::Expr::binary_op(
+                stmt::Expr::Reference(stmt::ExprReference::column(0, 0)),
+                op,
+                "a",
+            ),
+            stmt::Expr::eq(
+                stmt::Expr::Reference(stmt::ExprReference::column(0, 1)),
+                "b",
+            ),
+        );
+        let plan = cx.plan_basic_query_with_filter(filter)?;
+        assert_eq!(plan.index.primary_key, op.is_eq());
+    }
+    Ok(())
+}
+
+#[test]
+fn no_matching_index_respects_scan_capability() -> Result<()> {
+    let cx = sqlite_test_cx();
+    let stmt = cx.basic_query_with_filter(stmt::Expr::eq(
+        stmt::Expr::Reference(stmt::ExprReference::column(0, 1)),
+        "name",
+    ));
+    assert!(plan_index_path(&cx.schema, cx.capability, &stmt)?.is_none());
+
+    let capability = Capability {
+        scan: false,
+        ..Capability::SQLITE
+    };
+    assert!(
+        plan_index_path(&cx.schema, &capability, &stmt)
+            .unwrap_err()
+            .is_unsupported_feature()
+    );
+    Ok(())
+}
+
 struct TestCx {
     schema: toasty_core::Schema,
     capability: &'static Capability,

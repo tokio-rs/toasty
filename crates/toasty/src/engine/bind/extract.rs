@@ -317,6 +317,14 @@ fn infer_ty(value: &stmt::Value) -> Ty {
         Value::Time(_) => Ty::Inferred(db::Type::Time(6)),
         #[cfg(feature = "jiff")]
         Value::DateTime(_) => Ty::Inferred(db::Type::DateTime(6)),
+        #[cfg(feature = "net")]
+        Value::Cidr(_) => Ty::Inferred(db::Type::Cidr),
+        #[cfg(feature = "net")]
+        Value::Inet(_) => Ty::Inferred(db::Type::Inet),
+        #[cfg(feature = "net")]
+        Value::MacAddr(_) => Ty::Inferred(db::Type::MacAddr),
+        #[cfg(feature = "net")]
+        Value::MacAddr8(_) => Ty::Inferred(db::Type::MacAddr8),
         Value::List(items) => {
             let elem = items
                 .iter()

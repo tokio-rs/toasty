@@ -1,9 +1,8 @@
 use crate::prelude::*;
 
-/// Filtering by a data-carrying enum value using a SQL WHERE clause.
-/// DynamoDB does not support arbitrary filter predicates, so this is SQL-only.
+/// Filter a data-carrying enum by its value, variant, and variant fields.
 #[driver_test(requires(scan), scenario(crate::scenarios::user_contact_info))]
-pub async fn filter_data_enum(t: &mut Test) -> Result<()> {
+pub async fn filter_data_enum_value_and_variant(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
     User::create()
@@ -31,29 +30,13 @@ pub async fn filter_data_enum(t: &mut Test) -> Result<()> {
     assert_eq!(emails.len(), 1);
     assert_eq!(emails[0].name, "Alice");
 
-    Ok(())
-}
-
-/// Filtering by variant alone (discriminant-only check) using `is_{variant}()`.
-#[driver_test(requires(scan), scenario(crate::scenarios::user_contact_info))]
-pub async fn filter_data_enum_by_variant(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
-
-    User::create()
-        .name("Alice")
-        .contact(ContactInfo::Email {
-            address: "alice@example.com".to_string(),
-        })
-        .exec(&mut db)
-        .await?;
-
-    User::create()
-        .name("Bob")
-        .contact(ContactInfo::Phone {
-            number: "555-1234".to_string(),
-        })
-        .exec(&mut db)
-        .await?;
+    let not_alice_email = User::filter(User::fields().contact().ne(ContactInfo::Email {
+        address: "alice@example.com".to_string(),
+    }))
+    .exec(&mut db)
+    .await?;
+    assert_eq!(not_alice_email.len(), 1);
+    assert_eq!(not_alice_email[0].name, "Bob");
 
     User::create()
         .name("Carol")
@@ -76,37 +59,80 @@ pub async fn filter_data_enum_by_variant(t: &mut Test) -> Result<()> {
     assert_eq!(phones.len(), 1);
     assert_eq!(phones[0].name, "Bob");
 
+    let results = User::filter(
+        User::fields()
+            .contact()
+            .email()
+            .matches(|e| e.address().eq("alice@example.com")),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].name, "Alice");
+
+    let results = User::filter(
+        User::fields()
+            .contact()
+            .phone()
+            .matches(|e| e.number().eq("555-1234")),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].name, "Bob");
+
+    let results = User::filter(
+        User::fields()
+            .contact()
+            .email()
+            .matches(|e| e.address().eq("nobody@example.com")),
+    )
+    .exec(&mut db)
+    .await?;
+    assert!(results.is_empty());
+
+    // A phone row can share the email's string value. The implicit variant
+    // gate must still exclude it from a variant-rooted field comparison.
+    User::create()
+        .name("Dave")
+        .contact(ContactInfo::Phone {
+            number: "alice@example.com".to_string(),
+        })
+        .exec(&mut db)
+        .await?;
+
+    let results = User::filter(
+        User::fields()
+            .contact()
+            .email()
+            .address()
+            .eq("alice@example.com"),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].name, "Alice");
+
     Ok(())
 }
 
-/// Filtering a unit-only enum by variant using `is_{variant}()`.
+/// Filter a unit enum by its variant, inequality, and a value list.
 #[driver_test(requires(scan), scenario(crate::scenarios::task_name_status))]
-pub async fn filter_unit_enum_by_variant(t: &mut Test) -> Result<()> {
+pub async fn filter_unit_enum(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
-    Task::create()
-        .name("A")
-        .status(Status::Pending)
-        .exec(&mut db)
-        .await?;
-
-    Task::create()
-        .name("B")
-        .status(Status::Active)
-        .exec(&mut db)
-        .await?;
-
-    Task::create()
-        .name("C")
-        .status(Status::Active)
-        .exec(&mut db)
-        .await?;
-
-    Task::create()
-        .name("D")
-        .status(Status::Done)
-        .exec(&mut db)
-        .await?;
+    for (name, status) in [
+        ("A", Status::Pending),
+        ("B", Status::Active),
+        ("C", Status::Active),
+        ("D", Status::Done),
+    ] {
+        Task::create()
+            .name(name)
+            .status(status)
+            .exec(&mut db)
+            .await?;
+    }
 
     let active = Task::filter(Task::fields().status().is_active())
         .exec(&mut db)
@@ -124,6 +150,22 @@ pub async fn filter_unit_enum_by_variant(t: &mut Test) -> Result<()> {
         .await?;
     assert_eq!(done.len(), 1);
     assert_eq!(done[0].name, "D");
+
+    let not_active = Task::filter(Task::fields().status().ne(Status::Active))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(not_active.len(), 2);
+    assert_eq_unordered!(not_active.iter().map(|t| &*t.name), ["A", "D"]);
+
+    let pending_or_done = Task::filter(
+        Task::fields()
+            .status()
+            .in_list([Status::Pending, Status::Done]),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(pending_or_done.len(), 2);
+    assert_eq_unordered!(pending_or_done.iter().map(|t| &*t.name), ["A", "D"]);
 
     Ok(())
 }

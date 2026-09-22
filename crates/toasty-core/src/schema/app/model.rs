@@ -49,8 +49,8 @@ pub enum Model {
 /// ```
 /// use toasty_core::schema::app::{Model, ModelSet};
 ///
-/// let mut set = ModelSet::new();
-/// assert_eq!(set.iter().len(), 0);
+/// let set = ModelSet::new();
+/// assert_eq!((&set).into_iter().len(), 0);
 /// ```
 #[derive(Debug, Clone, Default)]
 pub struct ModelSet {
@@ -83,11 +83,6 @@ impl ModelSet {
     /// If a model with the same ID already exists, it is replaced.
     pub fn add(&mut self, model: Model) {
         self.models.insert(model.id(), model);
-    }
-
-    /// Returns an iterator over the models in insertion order.
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = &Model> {
-        self.models.values()
     }
 }
 
@@ -229,7 +224,7 @@ impl ModelRoot {
             // Only SQL drivers can evaluate them today; key-value drivers
             // would need a separate per-step batched fetch strategy that
             // is not yet implemented.
-            if matches!(&field.ty, FieldTy::Via(_)) && !db.sql {
+            if matches!(&field.ty, FieldTy::Via(_)) && !db.sql() {
                 return Err(crate::Error::invalid_schema(format!(
                     "field `{}::{}` declares a multi-step `via` relation, which \
                      requires a SQL-capable driver; the configured driver does not \
@@ -341,6 +336,11 @@ pub struct EnumVariant {
     /// Typically `Value::I64` for integer discriminants or `Value::String` for
     /// string discriminants.
     pub discriminant: stmt::Value,
+
+    /// The contiguous range of this variant's fields in [`EmbeddedEnum::fields`].
+    /// Ranges follow variant order and partition the enum's fields, including
+    /// empty ranges for unit variants.
+    pub field_range: std::ops::Range<usize>,
 }
 
 impl EmbeddedEnum {
@@ -350,21 +350,73 @@ impl EmbeddedEnum {
     }
 
     /// Returns fields belonging to a specific variant.
-    pub fn variant_fields(&self, variant_index: usize) -> impl Iterator<Item = &Field> {
-        let variant_id = VariantId {
-            model: self.id,
-            index: variant_index,
-        };
-        self.fields
-            .iter()
-            .filter(move |f| f.variant == Some(variant_id))
+    pub fn variant_fields(&self, variant_index: usize) -> &[Field] {
+        &self.fields[self.variants[variant_index].field_range.clone()]
     }
 
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
+        self.verify_variant_field_layout()?;
+
         for field in &self.fields {
             field.verify(db)?;
         }
         Ok(())
+    }
+
+    fn verify_variant_field_layout(&self) -> Result<()> {
+        let mut next_field = 0;
+
+        for (variant_index, variant) in self.variants.iter().enumerate() {
+            self.verify_variant_field_range(variant_index, variant, next_field)?;
+            next_field = variant.field_range.end;
+        }
+
+        if next_field != self.fields.len() {
+            return Err(crate::Error::invalid_schema(format!(
+                "variant field ranges do not cover enum {}",
+                self.name.upper_camel_case(),
+            )));
+        }
+
+        Ok(())
+    }
+
+    fn verify_variant_field_range(
+        &self,
+        variant_index: usize,
+        variant: &EnumVariant,
+        expected_start: usize,
+    ) -> Result<()> {
+        let range = &variant.field_range;
+
+        if range.start != expected_start {
+            return Err(self.invalid_variant_field_range(variant));
+        }
+
+        let Some(fields) = self.fields.get(range.clone()) else {
+            return Err(self.invalid_variant_field_range(variant));
+        };
+
+        let variant_id = VariantId {
+            model: self.id,
+            index: variant_index,
+        };
+
+        for (field_index, field) in range.clone().zip(fields) {
+            if field.id != self.id.field(field_index) || field.variant != Some(variant_id) {
+                return Err(self.invalid_variant_field_range(variant));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn invalid_variant_field_range(&self, variant: &EnumVariant) -> crate::Error {
+        crate::Error::invalid_schema(format!(
+            "invalid field range for enum variant {}::{}",
+            self.name.upper_camel_case(),
+            variant.name.upper_camel_case(),
+        ))
     }
 }
 
@@ -414,11 +466,6 @@ impl Model {
     /// Returns true if this is an embedded model (flattened into parent)
     pub fn is_embedded(&self) -> bool {
         matches!(self, Model::EmbeddedStruct(_) | Model::EmbeddedEnum(_))
-    }
-
-    /// Returns true if this model can be the target of a relation
-    pub fn can_be_relation_target(&self) -> bool {
-        self.is_root()
     }
 
     /// Returns the inner [`ModelRoot`] if this is a root model.
@@ -505,9 +552,9 @@ impl Model {
 /// # Examples
 ///
 /// ```
-/// use toasty_core::schema::app::ModelId;
+/// use toasty_core::schema::app::{ModelId, VariantId};
 ///
-/// let variant_id = ModelId(1).variant(0);
+/// let variant_id = VariantId { model: ModelId(1), index: 0 };
 /// assert_eq!(variant_id.model, ModelId(1));
 /// assert_eq!(variant_id.index, 0);
 /// ```
@@ -530,12 +577,6 @@ impl ModelId {
     /// `index`.
     pub const fn field(self, index: usize) -> FieldId {
         FieldId { model: self, index }
-    }
-
-    /// Create a `VariantId` representing the current model's variant at
-    /// `index`.
-    pub const fn variant(self, index: usize) -> VariantId {
-        VariantId { model: self, index }
     }
 
     pub(crate) const fn placeholder() -> Self {

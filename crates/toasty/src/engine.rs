@@ -1,7 +1,7 @@
-// Statement effect classification.  The consumer (pool retry wrapper)
-// lands in a follow-up PR per `docs/dev/design/retry-safe-recovery.md`;
-// allow dead code until then.
-#[allow(dead_code)]
+// Statement effect classification. Used by the planner's mutation
+// classification (`mir::Operation::is_effectful`); the pool retry wrapper
+// consumer lands in a follow-up PR per
+// `docs/dev/design/retry-safe-recovery.md`.
 pub(crate) mod effect;
 pub(crate) mod eval;
 pub(crate) mod exec;
@@ -18,6 +18,7 @@ mod index;
 mod legalize;
 mod lower;
 mod mir;
+mod normalize;
 mod plan;
 mod select_item;
 pub(crate) use select_item::{SelectItem, SelectItems};
@@ -43,11 +44,12 @@ use toasty_core::{
 ///
 /// The execution pipeline follows this process:
 ///
-/// 1. **Verification.** Validate statement structure and reject AST shapes
+/// 1. **Normalization.** Expand implicit application-level semantics.
+/// 2. **Verification.** Validate statement structure and reject AST shapes
 ///    the driver does not support.
-/// 2. **Lowering.** Convert to HIR with dependency tracking.
-/// 3. **Planning.** Build MIR operation graph.
-/// 4. **Execution.** Run actions against the database driver. Each
+/// 3. **Lowering.** Convert to HIR with dependency tracking.
+/// 4. **Planning.** Build MIR operation graph.
+/// 5. **Execution.** Run actions against the database driver. Each
 ///    driver-bound statement is legalized for the target backend and its
 ///    bind parameters extracted ([`prepare_for_driver`](Self::prepare_for_driver))
 ///    immediately before it crosses to the driver.
@@ -82,7 +84,7 @@ impl Engine {
         mut stmt: Statement,
         in_transaction: bool,
     ) -> Result<toasty_core::driver::ExecResponse> {
-        upsert::apply_defaults(&mut stmt)?;
+        self.normalize_stmt(&mut stmt)?;
         self.verify(&stmt)?;
 
         // Lower the statement to High-level intermediate representation
@@ -92,7 +94,7 @@ impl Engine {
         let plan = self.plan_hir_statement(hir)?;
 
         tracing::trace!(
-            actions = plan.actions.len(),
+            steps = plan.steps.len(),
             needs_transaction = plan.needs_transaction,
             "execution plan ready"
         );
@@ -108,7 +110,7 @@ impl Engine {
         connection: &mut dyn Connection,
         raw: RawSql,
     ) -> Result<toasty_core::driver::ExecResponse> {
-        if !self.capability.sql {
+        if !self.capability.sql() {
             return Err(toasty_core::Error::unsupported_feature(format!(
                 "{} does not support raw SQL",
                 self.capability.driver_name

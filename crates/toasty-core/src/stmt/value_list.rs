@@ -21,6 +21,11 @@ impl Value {
         matches!(self, Self::List(_))
     }
 
+    /// Returns `true` if this value is an empty [`Value::List`].
+    pub fn is_list_empty(&self) -> bool {
+        matches!(self, Self::List(items) if items.is_empty())
+    }
+
     /// Consumes this value and returns the inner `Vec<Value>`, panicking
     /// if this is not a [`Value::List`].
     ///

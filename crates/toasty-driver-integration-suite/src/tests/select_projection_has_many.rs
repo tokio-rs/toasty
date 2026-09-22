@@ -9,8 +9,11 @@
 
 use crate::prelude::*;
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to), requires(sql))]
-pub async fn select_has_many_basic(t: &mut Test) -> Result<()> {
+#[driver_test(
+    scenario(crate::scenarios::has_many_belongs_to::id_uuid),
+    requires(sql)
+)]
+pub async fn select_has_many(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
     toasty::create!(User {
@@ -30,19 +33,6 @@ pub async fn select_has_many_basic(t: &mut Test) -> Result<()> {
     titles.sort();
     assert_eq!(titles, vec!["alpha".to_string(), "beta".to_string()]);
 
-    Ok(())
-}
-
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to), requires(sql))]
-pub async fn select_has_many_with_filter(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
-
-    toasty::create!(User {
-        name: "Alice",
-        todos: [Todo::create().title("alpha")],
-    })
-    .exec(&mut db)
-    .await?;
     toasty::create!(User {
         name: "Bob",
         todos: [
@@ -62,20 +52,6 @@ pub async fn select_has_many_with_filter(t: &mut Test) -> Result<()> {
     let mut titles: Vec<String> = todos_per_user[0].iter().map(|p| p.title.clone()).collect();
     titles.sort();
     assert_eq!(titles, vec!["beta one".to_string(), "beta two".to_string()]);
-
-    Ok(())
-}
-
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to), requires(sql))]
-pub async fn select_has_many_first(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
-
-    toasty::create!(User {
-        name: "Alice",
-        todos: [Todo::create().title("alpha"), Todo::create().title("beta"),],
-    })
-    .exec(&mut db)
-    .await?;
 
     let todos: Option<Vec<Todo>> = User::filter(User::fields().name().eq("Alice"))
         .select(User::fields().todos())

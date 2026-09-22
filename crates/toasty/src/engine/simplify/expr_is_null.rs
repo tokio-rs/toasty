@@ -13,8 +13,9 @@ impl Simplify<'_> {
         let field = self.cx.resolve_expr_reference(f).as_field_unwrap();
 
         if !field.nullable() {
-            // `is_null` on a non-nullable field evaluates to `false`.
-            return Some(stmt::Expr::Value(stmt::Value::Bool(false)));
+            // `is_null` on a non-nullable field evaluates to `false`, and
+            // `is_not_null` to `true`.
+            return Some(stmt::Expr::Value(stmt::Value::Bool(expr.negated)));
         }
 
         None

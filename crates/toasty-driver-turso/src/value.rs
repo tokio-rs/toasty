@@ -6,7 +6,7 @@
 //! `experimental_custom_types`, decimal, native date/time — is still
 //! moving upstream, so we leave those cases as `todo!()` for now and
 //! revisit once the upstream surface settles. The current shape lets
-//! Turso ride on the SQLite-flavored serializer without an
+//! Turso ride on the SQLite-dialect serializer without an
 //! independent type system.
 
 use toasty_core::stmt::{self, Value as CoreValue};
@@ -84,6 +84,33 @@ pub(crate) fn from_turso_infer(value: TursoValue) -> CoreValue {
         TursoValue::Real(v) => CoreValue::F64(v),
         TursoValue::Text(v) => CoreValue::String(v),
         TursoValue::Blob(v) => CoreValue::Bytes(v),
+    }
+}
+
+/// Converts a [`turso::Value`] to a [`turso_serverless::Value`]. The two
+/// enums are structurally identical (SQLite's five storage classes).
+#[cfg(feature = "serverless")]
+pub(crate) fn to_serverless(value: TursoValue) -> turso_serverless::Value {
+    use turso_serverless::Value as ServerlessValue;
+    match value {
+        TursoValue::Null => ServerlessValue::Null,
+        TursoValue::Integer(v) => ServerlessValue::Integer(v),
+        TursoValue::Real(v) => ServerlessValue::Real(v),
+        TursoValue::Text(v) => ServerlessValue::Text(v),
+        TursoValue::Blob(v) => ServerlessValue::Blob(v),
+    }
+}
+
+/// Converts a [`turso_serverless::Value`] to a [`turso::Value`].
+#[cfg(feature = "serverless")]
+pub(crate) fn from_serverless(value: turso_serverless::Value) -> TursoValue {
+    use turso_serverless::Value as ServerlessValue;
+    match value {
+        ServerlessValue::Null => TursoValue::Null,
+        ServerlessValue::Integer(v) => TursoValue::Integer(v),
+        ServerlessValue::Real(v) => TursoValue::Real(v),
+        ServerlessValue::Text(v) => TursoValue::Text(v),
+        ServerlessValue::Blob(v) => TursoValue::Blob(v),
     }
 }
 

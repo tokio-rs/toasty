@@ -29,11 +29,13 @@ enum ConstantizeSource<'a> {
 impl LowerStatement<'_, '_> {
     /// Shape `Returning::Model` for the statement kind before include lowering.
     ///
-    /// Plain relation fields are implicit includes, except local `has_many` /
-    /// `has_one` fields during insert returning. Those slots are filled from
-    /// nested relation inserts later in insert relation planning; building an
-    /// include subquery here would create a second, stale dependency for the
-    /// same returning slot.
+    /// Plain relation fields are implicit includes, except during insert
+    /// returning, where relation slots are filled later with per-row context:
+    /// local `has_many` / `has_one` slots from nested relation inserts during
+    /// insert relation planning, and `belongs_to` slots from per-row load
+    /// subqueries in [`Self::plan_insert_returning_belongs_to`]. Building an
+    /// include subquery here would create a stale (and, for `belongs_to`,
+    /// row-less) dependency for the same returning slot.
     pub(super) fn prepare_model_returning_for_context(
         &self,
         returning: &mut stmt::Expr,
@@ -48,7 +50,7 @@ impl LowerStatement<'_, '_> {
         if is_insert {
             includes.retain(|inc| {
                 !first_model_field(&inc.path, model.id)
-                    .is_some_and(|field| is_insert_local_eager_relation(&model.fields[field].ty))
+                    .is_some_and(|field| model.fields[field].ty.is_relation())
             });
         }
 
@@ -57,12 +59,11 @@ impl LowerStatement<'_, '_> {
                 continue;
             }
 
-            if is_insert && is_insert_local_eager_relation(&field.ty) {
+            if is_insert {
                 record[field.id.index] = match field.ty {
                     FieldTy::Has(ref rel) if rel.is_many() => stmt::Expr::list_from_vec(vec![]),
-                    FieldTy::Has(_) => stmt::Expr::null(),
                     FieldTy::Via(ref via) if via.is_many() => stmt::Expr::list_from_vec(vec![]),
-                    FieldTy::Via(_) => stmt::Expr::null(),
+                    FieldTy::Has(_) | FieldTy::Via(_) | FieldTy::BelongsTo(_) => stmt::Expr::null(),
                     _ => unreachable!(),
                 };
                 continue;
@@ -383,10 +384,6 @@ pub(super) fn constantize_update_returning(
     if let Ok(row) = project.eval(input) {
         *returning = stmt::Returning::Project(row.into());
     }
-}
-
-fn is_insert_local_eager_relation(field_ty: &FieldTy) -> bool {
-    matches!(field_ty, FieldTy::Has(_) | FieldTy::Via(_))
 }
 
 fn first_model_field(path: &stmt::Path, model_id: ModelId) -> Option<usize> {

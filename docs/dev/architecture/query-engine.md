@@ -10,11 +10,11 @@ The Toasty engine is a multi-database query compiler and runtime that executes O
 
 ### Execution Model
 
-The final output is a **mini program** executed by an interpreter. Think of it like a small virtual machine or bytecode interpreter, though there is no control flow (yet):
+The final output is a **mini program** executed by an interpreter. Think of it like a small virtual machine or bytecode interpreter:
 
 - **Instructions (Actions)**: Operations like "execute this SQL", "filter these results", "merge child records into parents"
 - **Variables**: Storage slots, or registers, that hold intermediate results between instructions
-- **Linear Execution**: Instructions run in sequence (no control flow - no branches or loops, yet). Eventually, the interpreter will be smart about concurrency and execute independent operations in parallel when possible.
+- **Linear Execution**: Instructions run in sequence. The only control flow is a structured `If` block that skips a run of pure actions when a guard condition fails (e.g. "the upsert returned no rows"); there are no loops, and mutations always run. Eventually, the interpreter will be smart about concurrency and execute independent operations in parallel when possible.
 - **Interpreter**: The engine executor reads each instruction, fetches inputs from variables, performs the operation, and stores outputs back to variables
 
 For example, loading users with their todos:
@@ -43,7 +43,9 @@ The compilation pipeline below transforms user queries into this instruction/var
 ```
 User Query (Statement AST)
     ↓
-[Verification] - Validate statement structure (debug builds only)
+[Normalization] - Expand implicit application-level semantics
+    ↓
+[Verification] - Validate normalized statement structure
     ↓
 [Simplification] - Normalize and optimize the statement AST
     ↓
@@ -58,7 +60,20 @@ User Query (Statement AST)
 Result Stream
 ```
 
-## Phase 1: Simplification
+## Phase 1: Normalization
+
+**Location**: `engine/normalize.rs`
+
+Normalization converts implicit application-level behavior into explicit AST
+nodes before verification and lowering. One mutable visitor walks the complete
+statement. Each visitor method applies all normalization rules for its node;
+individual rules do not recursively traverse the AST.
+
+Current normalization rules route model upsert defaults to their create and
+update branches and add primary-key ordering fields when SQL cursor pagination
+needs a deterministic tie-breaker.
+
+## Phase 2: Simplification
 
 **Location**: `engine/simplify.rs`
 
@@ -93,7 +108,7 @@ Delete {
 
 Converting relationship navigation into explicit filters early means downstream phases only need to handle standard query patterns with filters and subqueries - no special-case logic for each relationship type.
 
-## Phase 2: Lowering
+## Phase 3: Lowering
 
 **Location**: `engine/lower.rs`
 

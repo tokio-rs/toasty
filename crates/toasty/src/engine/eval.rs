@@ -62,6 +62,13 @@ impl<T: AsExpr> Func<T> {
     }
 }
 
+impl Func<stmt::Expr> {
+    /// Consumes the function, returning its expression.
+    pub(crate) fn into_expr(self) -> stmt::Expr {
+        self.expr
+    }
+}
+
 impl Func<&stmt::Expr> {
     pub(crate) fn try_from_stmt(
         expr: &stmt::Expr,
@@ -93,6 +100,7 @@ fn verify_expr(expr: &stmt::Expr) -> bool {
             verify_expr(&expr_match.subject)
                 && expr_match.arms.iter().all(|arm| verify_expr(&arm.expr))
         }
+        Not(expr) => verify_expr(&expr.expr),
         Project(expr) => verify_expr(&expr.base),
         Record(expr) => expr.fields.iter().all(verify_expr),
         Exists(expr_exists) => match &expr_exists.subquery.body {

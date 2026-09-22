@@ -15,7 +15,7 @@
 //! builder plants a lowering cast (`Model` → `Object`, carrying the source
 //! type — see `stmt::ExprCast::from`) in `model_to_table` and the raising
 //! cast in `table_to_model`, and the cast machinery (fold/simplify constant
-//! folding, `mir::Project` evaluation) converts values wherever the casts
+//! folding, `mir::Eval` evaluation) converts values wherever the casts
 //! land. What cannot be expressed as a cast is the *path read*: turning a
 //! positional projection into a JSON key path is a per-backend expression
 //! rewrite (the leaf's comparison form depends on driver capabilities). That
@@ -112,6 +112,14 @@ impl LegalizeDocumentPaths<'_> {
             stmt::Type::Decimal => !self.capability.native_decimal,
             #[cfg(feature = "bigdecimal")]
             stmt::Type::BigDecimal => !self.capability.native_decimal,
+            #[cfg(feature = "net")]
+            stmt::Type::Cidr => !self.capability.native_cidr,
+            #[cfg(feature = "net")]
+            stmt::Type::Inet => !self.capability.native_inet,
+            #[cfg(feature = "net")]
+            stmt::Type::MacAddr => !self.capability.native_macaddr,
+            #[cfg(feature = "net")]
+            stmt::Type::MacAddr8 => !self.capability.native_macaddr8,
             _ => false,
         }
     }

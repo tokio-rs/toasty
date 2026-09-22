@@ -9,7 +9,8 @@ impl Value {
     /// Values that are stored as JSON strings inside a `#[document]` column
     /// take this form: jiff temporal values (truncated to microseconds — the
     /// precision the SQL temporal types hold — and formatted with *fixed*
-    /// six-digit subsecond precision) and decimals (their `Display` form).
+    /// six-digit subsecond precision), decimals, and network addresses (their
+    /// `Display` forms).
     /// Fixed temporal precision matters on backends that compare document
     /// leaves as plain text (SQLite has no native temporal types, so
     /// `json_extract` comparisons are text comparisons): uniform-precision
@@ -34,6 +35,10 @@ impl Value {
             Value::Decimal(_) => Some(DocumentStorageText(self)),
             #[cfg(feature = "bigdecimal")]
             Value::BigDecimal(_) => Some(DocumentStorageText(self)),
+            #[cfg(feature = "net")]
+            Value::Cidr(_) | Value::Inet(_) | Value::MacAddr(_) | Value::MacAddr8(_) => {
+                Some(DocumentStorageText(self))
+            }
             _ => None,
         }
     }
@@ -52,7 +57,12 @@ impl fmt::Display for DocumentStorageText<'_> {
     // With none of the temporal or decimal features enabled, every arm below
     // is compiled out except the unreachable one, leaving `f` unused.
     #[cfg_attr(
-        not(any(feature = "jiff", feature = "rust_decimal", feature = "bigdecimal")),
+        not(any(
+            feature = "jiff",
+            feature = "rust_decimal",
+            feature = "bigdecimal",
+            feature = "net"
+        )),
         allow(unused_variables)
     )]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -69,6 +79,14 @@ impl fmt::Display for DocumentStorageText<'_> {
             Value::Decimal(v) => write!(f, "{v}"),
             #[cfg(feature = "bigdecimal")]
             Value::BigDecimal(v) => write!(f, "{v}"),
+            #[cfg(feature = "net")]
+            Value::Cidr(v) => write!(f, "{v}"),
+            #[cfg(feature = "net")]
+            Value::Inet(v) => write!(f, "{v}"),
+            #[cfg(feature = "net")]
+            Value::MacAddr(v) => write!(f, "{v}"),
+            #[cfg(feature = "net")]
+            Value::MacAddr8(v) => write!(f, "{v}"),
             // `document_storage_text` only constructs the adapter for the
             // variants above.
             _ => unreachable!(),

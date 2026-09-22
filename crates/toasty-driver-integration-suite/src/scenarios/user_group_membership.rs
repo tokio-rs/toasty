@@ -8,13 +8,11 @@ scenario! {
     //! permits only one membership for each user-group pair. `role` represents
     //! data stored on the relation itself.
 
-    #![id(ID)]
-
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         name: String,
 
@@ -29,7 +27,7 @@ scenario! {
     struct Group {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         name: String,
 
@@ -44,13 +42,13 @@ scenario! {
     #[key(user_id, group_id)]
     struct Membership {
         #[index]
-        user_id: ID,
+        user_id: uuid::Uuid,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::Deferred<User>,
 
         #[index]
-        group_id: ID,
+        group_id: uuid::Uuid,
 
         #[belongs_to(key = group_id, references = id)]
         group: toasty::Deferred<Group>,

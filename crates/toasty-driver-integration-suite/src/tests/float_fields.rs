@@ -1,12 +1,12 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn float_fields_column_type_override(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Measurement {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         /// f32 field stored as DOUBLE PRECISION / FLOAT8
         #[column(type = f64)]
         value_f32: f32,
@@ -34,7 +34,7 @@ pub async fn float_fields_column_type_override(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn float_fields_crud(t: &mut Test) -> Result<()> {
     #[allow(clippy::approx_constant)]
     const PI_F32: f32 = 3.14;
@@ -45,7 +45,7 @@ pub async fn float_fields_crud(t: &mut Test) -> Result<()> {
     struct Measurement {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         value_f32: f32,
         value_f64: f64,
     }

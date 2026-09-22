@@ -32,12 +32,17 @@ toasty_driver_integration_suite::generate_driver_tests!(
     native_date: false,
     native_time: false,
     native_datetime: false,
+    native_cidr: false,
+    native_inet: false,
+    native_macaddr: false,
+    native_macaddr8: false,
     native_array: false,
     native_ilike: false,
     native_json: false,
     native_jsonb: false,
     native_enum: false,
     vec_scalar: true,
+    unique_list_index: false,
     vec_remove: false,
     vec_pop: false,
     vec_remove_at: false,
@@ -292,11 +297,7 @@ async fn experimental_encryption_smoke() {
         hexkey: "0".repeat(64),
     };
 
-    let tmp = std::env::temp_dir().join(format!(
-        "toasty-turso-encryption-smoke-{}.db",
-        std::process::id()
-    ));
-    let _ = std::fs::remove_file(&tmp);
+    let tmp = temp_db_path("encryption-smoke");
 
     let db = toasty::Db::builder()
         .models(toasty::models!())
@@ -308,14 +309,99 @@ async fn experimental_encryption_smoke() {
     let _ = std::fs::remove_file(&tmp);
 }
 
-/// `Turso::new` must accept both `turso::memory:` and `turso:/path/...`
-/// and reject anything else. Mirrors the PostgreSQL driver's `url_encoding`
-/// test in spirit: exercises the URL-parsing path that doesn't run through
-/// the shared integration suite.
+/// A per-process temp database path, cleared of leftovers from prior runs.
+fn temp_db_path(tag: &str) -> std::path::PathBuf {
+    let tmp = std::env::temp_dir().join(format!("toasty-turso-{tag}-{}.db", std::process::id()));
+    let _ = std::fs::remove_file(&tmp);
+    tmp
+}
+
+#[derive(Debug, toasty::Model)]
+struct Secret {
+    #[key]
+    id: i64,
+    payload: String,
+}
+
+fn encryption_opts(hex_digit: &str) -> EncryptionOpts {
+    EncryptionOpts {
+        cipher: "aes256gcm".into(),
+        hexkey: hex_digit.repeat(64),
+    }
+}
+
+async fn open_encrypted(
+    path: &std::path::Path,
+    opts: EncryptionOpts,
+) -> toasty::Result<toasty::Db> {
+    toasty::Db::builder()
+        .models(toasty::models!(Secret))
+        .build(Turso::file(path).experimental_encryption(opts))
+        .await
+}
+
+/// Local at-rest encryption must actually round-trip: data written with a
+/// key is readable when reopening the file with the same key, and the
+/// file is unreadable without it. Pins the behavior so refactors of the
+/// driver's option handling cannot silently drop local encryption.
+#[tokio::test]
+async fn local_encryption_round_trip() {
+    let tmp = temp_db_path("encryption-roundtrip");
+
+    // Write with key A.
+    let mut db = open_encrypted(&tmp, encryption_opts("a")).await.unwrap();
+    db.push_schema().await.unwrap();
+    toasty::create!(Secret {
+        id: 1,
+        payload: "classified"
+    })
+    .exec(&mut db)
+    .await
+    .unwrap();
+    drop(db);
+
+    // Reopen with the same key: data must be readable.
+    let mut db = open_encrypted(&tmp, encryption_opts("a")).await.unwrap();
+    let read = Secret::get_by_id(&mut db, &1).await.unwrap();
+    assert_eq!(read.payload, "classified");
+    drop(db);
+
+    // Reopen with the wrong key: the database must be unreadable.
+    let wrong_key = async {
+        let mut db = open_encrypted(&tmp, encryption_opts("b")).await?;
+        Secret::get_by_id(&mut db, &1).await
+    }
+    .await;
+    assert!(
+        wrong_key.is_err(),
+        "the wrong key must not decrypt the database"
+    );
+
+    // Reopen with no key at all: the database must be unreadable.
+    let no_key = async {
+        let mut db = toasty::Db::builder()
+            .models(toasty::models!(Secret))
+            .build(Turso::file(&tmp))
+            .await?;
+        Secret::get_by_id(&mut db, &1).await
+    }
+    .await;
+    assert!(
+        no_key.is_err(),
+        "an encrypted database must not open without its key"
+    );
+
+    let _ = std::fs::remove_file(&tmp);
+}
+
+/// `Turso::new` accepts in-memory and file targets after the shared connection
+/// URL parser validates the scheme.
 #[test]
 fn url_scheme_parsing() {
-    let mem = Turso::new("turso::memory:").expect("in-memory URL must parse");
-    assert_eq!(mem.url(), "turso::memory:");
+    for url in ["turso::memory:", "turso://:memory:"] {
+        let mem = Turso::new(url).expect("in-memory URL must parse");
+        assert_eq!(mem.url(), "turso::memory:");
+    }
 
     let file = Turso::new("turso:/var/tmp/toasty.db").expect("file URL must parse");
     assert_eq!(file.url(), "turso:/var/tmp/toasty.db");
