@@ -966,7 +966,7 @@
 <a href=#966 id=966 data-nosnippet>966</a>        // Insert operation without a SQL RETURNING clause.
 <a href=#967 id=967 data-nosnippet>967</a>        </span><span class="kw">if </span>const_returning.is_none() &amp;&amp; !<span class="self">self</span>.load_data.select_items.is_empty() {
 <a href=#968 id=968 data-nosnippet>968</a>            <span class="kw">if </span><span class="self">self</span>.planner.engine.capability().sql.is_some()
-<a href=#969 id=969 data-nosnippet>969</a>                &amp;&amp; !<span class="self">self</span>.planner.engine.capability().returning_from_mutation
+<a href=#969 id=969 data-nosnippet>969</a>                &amp;&amp; !<span class="self">self</span>.planner.engine.capability().returning_from_insert
 <a href=#970 id=970 data-nosnippet>970</a>            {
 <a href=#971 id=971 data-nosnippet>971</a>                <span class="self">self</span>.verify_insert_returning_without_capability(<span class="kw-2">&amp;</span>stmt)<span class="question-mark">?</span>;
 <a href=#972 id=972 data-nosnippet>972</a>                ty = <span class="prelude-val">Some</span>(

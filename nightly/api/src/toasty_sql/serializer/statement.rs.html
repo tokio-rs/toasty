@@ -163,7 +163,7 @@
 <a href=#163 id=163 data-nosnippet>163</a>                    <span class="string">"PostgreSQL does not support modifying multiple column properties in one ALTER TABLE statement"
 <a href=#164 id=164 data-nosnippet>164</a>                </span>),
 <a href=#165 id=165 data-nosnippet>165</a>            },
-<a href=#166 id=166 data-nosnippet>166</a>            Dialect::Mysql =&gt; {
+<a href=#166 id=166 data-nosnippet>166</a>            Dialect::Mysql | Dialect::MariaDb =&gt; {
 <a href=#167 id=167 data-nosnippet>167</a>                <span class="kw">let </span>new_column_def = ColumnDef {
 <a href=#168 id=168 data-nosnippet>168</a>                    name: <span class="self">self
 <a href=#169 id=169 data-nosnippet>169</a>                        </span>.changes
@@ -388,7 +388,7 @@
 <a href=#388 id=388 data-nosnippet>388</a>            .as_ref()
 <a href=#389 id=389 data-nosnippet>389</a>            .map(|returning| (<span class="string">" RETURNING "</span>, returning));
 <a href=#390 id=390 data-nosnippet>390</a>
-<a href=#391 id=391 data-nosnippet>391</a>        <span class="kw">if </span>returning.is_some() &amp;&amp; f.serializer.is_mysql() {
+<a href=#391 id=391 data-nosnippet>391</a>        <span class="kw">if </span>returning.is_some() &amp;&amp; <span class="macro">matches!</span>(f.serializer.dialect, Dialect::Mysql) {
 <a href=#392 id=392 data-nosnippet>392</a>            <span class="macro">panic!</span>(
 <a href=#393 id=393 data-nosnippet>393</a>                <span class="string">"MySQL does not support the RETURNING clause with INSERT statements; returning={returning:#?}"
 <a href=#394 id=394 data-nosnippet>394</a>            </span>);
@@ -844,7 +844,7 @@
 <a href=#844 id=844 data-nosnippet>844</a></span><span class="kw">fn </span>serialize_append(f: <span class="kw-2">&amp;mut </span><span class="kw">super</span>::Formatter&lt;<span class="lifetime">'_</span>&gt;, column: AssignmentColumn, expr: <span class="kw-2">&amp;</span>stmt::Expr) {
 <a href=#845 id=845 data-nosnippet>845</a>    <span class="kw">match </span>f.serializer.dialect {
 <a href=#846 id=846 data-nosnippet>846</a>        Dialect::Postgresql =&gt; <span class="macro">fmt!</span>(f, column <span class="string">" || " </span>expr),
-<a href=#847 id=847 data-nosnippet>847</a>        Dialect::Mysql =&gt; {
+<a href=#847 id=847 data-nosnippet>847</a>        Dialect::Mysql | Dialect::MariaDb =&gt; {
 <a href=#848 id=848 data-nosnippet>848</a>            <span class="macro">fmt!</span>(f, <span class="string">"JSON_MERGE_PRESERVE(" </span>column <span class="string">", " </span>expr <span class="string">")"</span>)
 <a href=#849 id=849 data-nosnippet>849</a>        }
 <a href=#850 id=850 data-nosnippet>850</a>        Dialect::Sqlite =&gt; <span class="macro">fmt!</span>(
@@ -866,7 +866,7 @@
 <a href=#866 id=866 data-nosnippet>866</a></span><span class="kw">fn </span>serialize_remove(f: <span class="kw-2">&amp;mut </span><span class="kw">super</span>::Formatter&lt;<span class="lifetime">'_</span>&gt;, column: AssignmentColumn, expr: <span class="kw-2">&amp;</span>stmt::Expr) {
 <a href=#867 id=867 data-nosnippet>867</a>    <span class="kw">match </span>f.serializer.dialect {
 <a href=#868 id=868 data-nosnippet>868</a>        Dialect::Postgresql =&gt; <span class="macro">fmt!</span>(f, <span class="string">"array_remove(" </span>column <span class="string">", " </span>expr <span class="string">")"</span>),
-<a href=#869 id=869 data-nosnippet>869</a>        Dialect::Mysql | Dialect::Sqlite =&gt; <span class="macro">panic!</span>(
+<a href=#869 id=869 data-nosnippet>869</a>        Dialect::Mysql | Dialect::MariaDb | Dialect::Sqlite =&gt; <span class="macro">panic!</span>(
 <a href=#870 id=870 data-nosnippet>870</a>            <span class="string">"stmt::remove on a Vec&lt;scalar&gt; field is not yet implemented for this SQL dialect; \
 <a href=#871 id=871 data-nosnippet>871</a>             the lowering should have rejected this before reaching the serializer"</span>,
 <a href=#872 id=872 data-nosnippet>872</a>        ),
@@ -882,7 +882,7 @@
 <a href=#882 id=882 data-nosnippet>882</a></span><span class="kw">fn </span>serialize_pop(f: <span class="kw-2">&amp;mut </span><span class="kw">super</span>::Formatter&lt;<span class="lifetime">'_</span>&gt;, column: AssignmentColumn) {
 <a href=#883 id=883 data-nosnippet>883</a>    <span class="kw">match </span>f.serializer.dialect {
 <a href=#884 id=884 data-nosnippet>884</a>        Dialect::Postgresql =&gt; <span class="macro">fmt!</span>(f, column <span class="string">"[1:cardinality(" </span>column <span class="string">") - 1]"</span>),
-<a href=#885 id=885 data-nosnippet>885</a>        Dialect::Mysql | Dialect::Sqlite =&gt; <span class="macro">panic!</span>(
+<a href=#885 id=885 data-nosnippet>885</a>        Dialect::Mysql | Dialect::MariaDb | Dialect::Sqlite =&gt; <span class="macro">panic!</span>(
 <a href=#886 id=886 data-nosnippet>886</a>            <span class="string">"stmt::pop on a Vec&lt;scalar&gt; field is not yet implemented for this SQL dialect; \
 <a href=#887 id=887 data-nosnippet>887</a>             the lowering should have rejected this before reaching the serializer"</span>,
 <a href=#888 id=888 data-nosnippet>888</a>        ),
@@ -909,7 +909,7 @@
 <a href=#909 id=909 data-nosnippet>909</a>            f,
 <a href=#910 id=910 data-nosnippet>910</a>            column <span class="string">"[1:" </span>expr <span class="string">"] || " </span>column <span class="string">"[" </span>expr <span class="string">" + 2:cardinality(" </span>column <span class="string">")]"
 <a href=#911 id=911 data-nosnippet>911</a>        </span>),
-<a href=#912 id=912 data-nosnippet>912</a>        Dialect::Mysql | Dialect::Sqlite =&gt; <span class="macro">panic!</span>(
+<a href=#912 id=912 data-nosnippet>912</a>        Dialect::Mysql | Dialect::MariaDb | Dialect::Sqlite =&gt; <span class="macro">panic!</span>(
 <a href=#913 id=913 data-nosnippet>913</a>            <span class="string">"stmt::remove_at on a Vec&lt;scalar&gt; field is not yet implemented for this SQL dialect; \
 <a href=#914 id=914 data-nosnippet>914</a>             the lowering should have rejected this before reaching the serializer"</span>,
 <a href=#915 id=915 data-nosnippet>915</a>        ),
@@ -936,36 +936,53 @@
 <a href=#936 id=936 data-nosnippet>936</a><span class="kw">impl </span>ToSql <span class="kw">for </span><span class="kw-2">&amp;</span>stmt::Values {
 <a href=#937 id=937 data-nosnippet>937</a>    <span class="kw">fn </span>to_sql(<span class="self">self</span>, f: <span class="kw-2">&amp;mut </span><span class="kw">super</span>::Formatter&lt;<span class="lifetime">'_</span>&gt;) {
 <a href=#938 id=938 data-nosnippet>938</a>        <span class="comment">// MySQL requires the `ROW(...)` keyword for table value constructors
-<a href=#939 id=939 data-nosnippet>939</a>        // when used in subqueries, but NOT in INSERT statements.
-<a href=#940 id=940 data-nosnippet>940</a>        //
-<a href=#941 id=941 data-nosnippet>941</a>        // Rows are `Expr::Record`s, which serialize with their own `(...)`.
-<a href=#942 id=942 data-nosnippet>942</a>        // Inside `ROW(...)` we need the fields comma-separated *without*
-<a href=#943 id=943 data-nosnippet>943</a>        // those parens — otherwise MySQL parses `ROW((1, 'a'))` as a single
-<a href=#944 id=944 data-nosnippet>944</a>        // row-expression operand and rejects it with "Operand should contain
-<a href=#945 id=945 data-nosnippet>945</a>        // 1 column(s)".
-<a href=#946 id=946 data-nosnippet>946</a>        </span><span class="kw">if </span>f.serializer.is_mysql() &amp;&amp; !f.in_insert {
-<a href=#947 id=947 data-nosnippet>947</a>            <span class="comment">// `Expr::Record` serializes with its own `(...)`; render its
-<a href=#948 id=948 data-nosnippet>948</a>            // fields directly inside `ROW(...)` so we don't end up with
-<a href=#949 id=949 data-nosnippet>949</a>            // `ROW((a, b))` (which MySQL parses as a single row-typed
-<a href=#950 id=950 data-nosnippet>950</a>            // operand and rejects). Other expression shapes are wrapped
-<a href=#951 id=951 data-nosnippet>951</a>            // as-is — a single-scalar row `ROW(x)` is well-formed.
-<a href=#952 id=952 data-nosnippet>952</a>            </span><span class="kw">for </span>(i, row) <span class="kw">in </span><span class="self">self</span>.rows.iter().enumerate() {
-<a href=#953 id=953 data-nosnippet>953</a>                <span class="kw">if </span>i == <span class="number">0 </span>{
-<a href=#954 id=954 data-nosnippet>954</a>                    <span class="macro">fmt!</span>(f, <span class="string">"VALUES "</span>);
-<a href=#955 id=955 data-nosnippet>955</a>                } <span class="kw">else </span>{
-<a href=#956 id=956 data-nosnippet>956</a>                    <span class="macro">fmt!</span>(f, <span class="string">", "</span>);
-<a href=#957 id=957 data-nosnippet>957</a>                }
-<a href=#958 id=958 data-nosnippet>958</a>                <span class="kw">match </span>row {
-<a href=#959 id=959 data-nosnippet>959</a>                    stmt::Expr::Record(record) =&gt; {
-<a href=#960 id=960 data-nosnippet>960</a>                        <span class="macro">fmt!</span>(f, <span class="string">"ROW(" </span>Comma(record.fields.iter()) <span class="string">")"</span>)
-<a href=#961 id=961 data-nosnippet>961</a>                    }
-<a href=#962 id=962 data-nosnippet>962</a>                    <span class="kw">_ </span>=&gt; <span class="macro">fmt!</span>(f, <span class="string">"ROW(" </span>row <span class="string">")"</span>),
-<a href=#963 id=963 data-nosnippet>963</a>                }
-<a href=#964 id=964 data-nosnippet>964</a>            }
-<a href=#965 id=965 data-nosnippet>965</a>        } <span class="kw">else </span>{
-<a href=#966 id=966 data-nosnippet>966</a>            <span class="kw">let </span>rows = Comma(<span class="self">self</span>.rows.iter());
-<a href=#967 id=967 data-nosnippet>967</a>            <span class="macro">fmt!</span>(f, <span class="string">"VALUES " </span>rows)
-<a href=#968 id=968 data-nosnippet>968</a>        }
-<a href=#969 id=969 data-nosnippet>969</a>    }
-<a href=#970 id=970 data-nosnippet>970</a>}
+<a href=#939 id=939 data-nosnippet>939</a>        // when used in subqueries, but NOT in INSERT statements. MariaDB has
+<a href=#940 id=940 data-nosnippet>940</a>        // no `VALUES ROW(...)` at all and takes the plain form below.
+<a href=#941 id=941 data-nosnippet>941</a>        //
+<a href=#942 id=942 data-nosnippet>942</a>        // Rows are `Expr::Record`s, which serialize with their own `(...)`.
+<a href=#943 id=943 data-nosnippet>943</a>        // Inside `ROW(...)` we need the fields comma-separated *without*
+<a href=#944 id=944 data-nosnippet>944</a>        // those parens — otherwise MySQL parses `ROW((1, 'a'))` as a single
+<a href=#945 id=945 data-nosnippet>945</a>        // row-expression operand and rejects it with "Operand should contain
+<a href=#946 id=946 data-nosnippet>946</a>        // 1 column(s)".
+<a href=#947 id=947 data-nosnippet>947</a>        </span><span class="kw">if </span><span class="macro">matches!</span>(f.serializer.dialect, Dialect::Mysql) &amp;&amp; !f.in_insert {
+<a href=#948 id=948 data-nosnippet>948</a>            <span class="comment">// `Expr::Record` serializes with its own `(...)`; render its
+<a href=#949 id=949 data-nosnippet>949</a>            // fields directly inside `ROW(...)` so we don't end up with
+<a href=#950 id=950 data-nosnippet>950</a>            // `ROW((a, b))` (which MySQL parses as a single row-typed
+<a href=#951 id=951 data-nosnippet>951</a>            // operand and rejects). Other expression shapes are wrapped
+<a href=#952 id=952 data-nosnippet>952</a>            // as-is — a single-scalar row `ROW(x)` is well-formed.
+<a href=#953 id=953 data-nosnippet>953</a>            </span><span class="kw">for </span>(i, row) <span class="kw">in </span><span class="self">self</span>.rows.iter().enumerate() {
+<a href=#954 id=954 data-nosnippet>954</a>                <span class="kw">if </span>i == <span class="number">0 </span>{
+<a href=#955 id=955 data-nosnippet>955</a>                    <span class="macro">fmt!</span>(f, <span class="string">"VALUES "</span>);
+<a href=#956 id=956 data-nosnippet>956</a>                } <span class="kw">else </span>{
+<a href=#957 id=957 data-nosnippet>957</a>                    <span class="macro">fmt!</span>(f, <span class="string">", "</span>);
+<a href=#958 id=958 data-nosnippet>958</a>                }
+<a href=#959 id=959 data-nosnippet>959</a>                <span class="kw">match </span>row {
+<a href=#960 id=960 data-nosnippet>960</a>                    stmt::Expr::Record(record) =&gt; {
+<a href=#961 id=961 data-nosnippet>961</a>                        <span class="macro">fmt!</span>(f, <span class="string">"ROW(" </span>Comma(record.fields.iter()) <span class="string">")"</span>)
+<a href=#962 id=962 data-nosnippet>962</a>                    }
+<a href=#963 id=963 data-nosnippet>963</a>                    <span class="kw">_ </span>=&gt; <span class="macro">fmt!</span>(f, <span class="string">"ROW(" </span>row <span class="string">")"</span>),
+<a href=#964 id=964 data-nosnippet>964</a>                }
+<a href=#965 id=965 data-nosnippet>965</a>            }
+<a href=#966 id=966 data-nosnippet>966</a>        } <span class="kw">else if </span><span class="macro">matches!</span>(f.serializer.dialect, Dialect::MariaDb) &amp;&amp; !f.in_insert {
+<a href=#967 id=967 data-nosnippet>967</a>            <span class="comment">// MariaDB's table value constructor cannot type a bare `?`: the
+<a href=#968 id=968 data-nosnippet>968</a>            // column binds to the empty string, so the join silently matches
+<a href=#969 id=969 data-nosnippet>969</a>            // nothing. A UNION ALL of SELECTs binds and names its own columns.
+<a href=#970 id=970 data-nosnippet>970</a>            </span><span class="kw">let </span>rows = <span class="self">self</span>.rows.iter().enumerate().map(|(i, row)| {
+<a href=#971 id=971 data-nosnippet>971</a>                <span class="kw">let </span>fields = <span class="kw">match </span>row {
+<a href=#972 id=972 data-nosnippet>972</a>                    stmt::Expr::Record(record) =&gt; <span class="kw-2">&amp;</span>record.fields[..],
+<a href=#973 id=973 data-nosnippet>973</a>                    other =&gt; std::slice::from_ref(other),
+<a href=#974 id=974 data-nosnippet>974</a>                };
+<a href=#975 id=975 data-nosnippet>975</a>                <span class="comment">// Only the first SELECT names the columns.
+<a href=#976 id=976 data-nosnippet>976</a>                </span><span class="kw">let </span>fields = fields.iter().enumerate().map(<span class="kw">move </span>|(column, field)| {
+<a href=#977 id=977 data-nosnippet>977</a>                    (field, (i == <span class="number">0</span>).then_some((<span class="string">" AS "</span>, ColumnAlias(column))))
+<a href=#978 id=978 data-nosnippet>978</a>                });
+<a href=#979 id=979 data-nosnippet>979</a>                (<span class="string">"SELECT "</span>, Comma(fields))
+<a href=#980 id=980 data-nosnippet>980</a>            });
+<a href=#981 id=981 data-nosnippet>981</a>            <span class="macro">fmt!</span>(f, Delimited(rows, <span class="string">" UNION ALL "</span>));
+<a href=#982 id=982 data-nosnippet>982</a>        } <span class="kw">else </span>{
+<a href=#983 id=983 data-nosnippet>983</a>            <span class="kw">let </span>rows = Comma(<span class="self">self</span>.rows.iter());
+<a href=#984 id=984 data-nosnippet>984</a>            <span class="macro">fmt!</span>(f, <span class="string">"VALUES " </span>rows)
+<a href=#985 id=985 data-nosnippet>985</a>        }
+<a href=#986 id=986 data-nosnippet>986</a>    }
+<a href=#987 id=987 data-nosnippet>987</a>}
 </code></pre></div></section></main></body></html>

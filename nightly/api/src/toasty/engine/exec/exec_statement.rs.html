@@ -269,7 +269,7 @@
 <a href=#269 id=269 data-nosnippet>269</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#270 id=270 data-nosnippet>270</a>        stmt: <span class="kw-2">&amp;mut </span>stmt::Statement,
 <a href=#271 id=271 data-nosnippet>271</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;MySQLUpdateReturning&gt; {
-<a href=#272 id=272 data-nosnippet>272</a>        <span class="kw">if </span><span class="self">self</span>.engine.capability().returning_from_mutation || !<span class="self">self</span>.engine.capability().sql() {
+<a href=#272 id=272 data-nosnippet>272</a>        <span class="kw">if </span><span class="self">self</span>.engine.capability().returning_from_update || !<span class="self">self</span>.engine.capability().sql() {
 <a href=#273 id=273 data-nosnippet>273</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
 <a href=#274 id=274 data-nosnippet>274</a>        }
 <a href=#275 id=275 data-nosnippet>275</a>

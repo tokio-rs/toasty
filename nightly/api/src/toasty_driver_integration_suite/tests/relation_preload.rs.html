@@ -225,10 +225,10 @@
 <a href=#225 id=225 data-nosnippet>225</a></span><span class="kw">pub async fn </span>combined_has_many_and_has_one_preload(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#226 id=226 data-nosnippet>226</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#227 id=227 data-nosnippet>227</a>
-<a href=#228 id=228 data-nosnippet>228</a>    <span class="comment">// A backend without mutation RETURNING cannot provide generated IDs for a
+<a href=#228 id=228 data-nosnippet>228</a>    <span class="comment">// A backend without insert RETURNING cannot provide generated IDs for a
 <a href=#229 id=229 data-nosnippet>229</a>    // batch of auto-increment todos. Seed those todos individually so the
 <a href=#230 id=230 data-nosnippet>230</a>    // preload behavior remains covered on that backend.
-<a href=#231 id=231 data-nosnippet>231</a>    </span><span class="kw">let </span>user = <span class="kw">if </span><span class="macro">driver_test_cfg!</span>(id_u64) &amp;&amp; !test.capability().returning_from_mutation {
+<a href=#231 id=231 data-nosnippet>231</a>    </span><span class="kw">let </span>user = <span class="kw">if </span><span class="macro">driver_test_cfg!</span>(id_u64) &amp;&amp; !test.capability().returning_from_insert {
 <a href=#232 id=232 data-nosnippet>232</a>        <span class="kw">let </span>user = User::create()
 <a href=#233 id=233 data-nosnippet>233</a>            .name(<span class="string">"Bob Smith"</span>)
 <a href=#234 id=234 data-nosnippet>234</a>            .profile(Profile::create().bio(<span class="string">"Developer"</span>))

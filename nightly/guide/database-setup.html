@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5001f70e.js";
+            window.path_to_searchindex_js = "searchindex-74ecf604.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -216,6 +216,7 @@ requires its corresponding feature flag in <code>Cargo.toml</code>.</p>
 <tr><td><code>turso</code></td><td>Turso (SQLite-compatible, async-native)</td><td><code>turso</code></td></tr>
 <tr><td><code>postgresql</code> or <code>postgres</code></td><td>PostgreSQL</td><td><code>postgresql</code></td></tr>
 <tr><td><code>mysql</code></td><td>MySQL</td><td><code>mysql</code></td></tr>
+<tr><td><code>mariadb</code></td><td>MariaDB 11.8+</td><td><code>mariadb</code></td></tr>
 <tr><td><code>dynamodb</code></td><td>DynamoDB</td><td><code>dynamodb</code></td></tr>
 </tbody>
 </table>
@@ -233,8 +234,20 @@ requires its corresponding feature flag in <code>Cargo.toml</code>.</p>
 // MySQL
 .connect("mysql://user:pass@localhost:3306/mydb")
 
+// MariaDB
+.connect("mariadb://user:pass@localhost:3306/mydb")
+
 // DynamoDB (uses AWS config from environment)
 .connect("dynamodb://us-east-1")</code></pre>
+<p>The <code>mariadb</code> feature uses <code>MariaDB</code> from the <code>toasty-driver-mysql</code> crate. MariaDB stores
+UUIDs in native <code>UUID</code> columns and supports <code>INSERT ... RETURNING</code>, including
+generated IDs from batch inserts. <code>UPDATE ... RETURNING</code> uses the same
+follow-up query as MySQL. Both drivers accept the
+<a href="./mysql.html#connection-url-options">MySQL connection parameters</a>.</p>
+<p>The URL scheme selects the driver; Toasty does not detect the server type.
+Using <code>mysql://</code> with MariaDB retains MySQL’s behavior, including
+<code>VARCHAR(36)</code> UUID storage. Switching an existing database to <code>mariadb://</code>
+changes the default UUID column type and requires a schema migration.</p>
 <p>For per-backend details — URL query parameters, TLS, type mapping,
 and per-driver behavior — see the
 <a href="./postgresql.html">Database Backends</a> chapters.</p>

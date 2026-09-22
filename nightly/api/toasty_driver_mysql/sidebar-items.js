@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["Connection","MySQL"]};
+window.SIDEBAR_ITEMS = {"struct":["Connection","MariaDB","MySQL"]};

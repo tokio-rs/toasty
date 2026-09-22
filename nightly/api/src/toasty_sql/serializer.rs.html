@@ -225,7 +225,7 @@
 <a href=#225 id=225 data-nosnippet>225</a>        <span class="kw">match </span><span class="self">self</span>.dialect {
 <a href=#226 id=226 data-nosnippet>226</a>            <span class="comment">// MySQL has no SQLite-style lock-mode keyword; drivers
 <a href=#227 id=227 data-nosnippet>227</a>            // reject non-Default `mode` before reaching the serializer.
-<a href=#228 id=228 data-nosnippet>228</a>            </span>Dialect::Mysql =&gt; {
+<a href=#228 id=228 data-nosnippet>228</a>            </span>Dialect::Mysql | Dialect::MariaDb =&gt; {
 <a href=#229 id=229 data-nosnippet>229</a>                <span class="kw">let </span><span class="kw-2">mut </span>sql = String::new();
 <a href=#230 id=230 data-nosnippet>230</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(level) = isolation {
 <a href=#231 id=231 data-nosnippet>231</a>                    sql.push_str(<span class="string">"SET TRANSACTION ISOLATION LEVEL "</span>);
