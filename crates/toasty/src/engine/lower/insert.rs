@@ -82,9 +82,13 @@ impl LowerStatement<'_, '_> {
             });
         }
 
-        // If there are any has_n associations included in the insertion, the
-        // statement returning has to be transformed to accomodate the nested
-        // structure.
+        // `preserve_returning_projection` is true for `INSERT ... DO NOTHING`.
+        // Such an insert can return no rows after a conflict, so its returning
+        // clause must stay a projection over the database result. For example,
+        // converting `RETURNING id` to an expression for input row zero would
+        // try to project a row that does not exist. Other inserts return a row
+        // for every input row, so convert their returning projection into
+        // per-row expressions for relation planning.
         if !preserve_returning_projection {
             self.convert_returning_for_insert(values, returning, source.single);
         }
