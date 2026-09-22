@@ -92,11 +92,20 @@ impl LowerStatement<'_, '_> {
             // A scalar projection must not load relations in its base embed.
             return;
         }
-        if let stmt::Expr::Record(record) = value {
-            for field in &mut record.fields {
-                self.process_projected_returning(field);
+        struct Recurse<'a, 'b, 'c>(&'a mut LowerStatement<'b, 'c>);
+
+        impl stmt::VisitMut for Recurse<'_, '_, '_> {
+            fn visit_expr_mut(&mut self, value: &mut stmt::Expr) {
+                self.0.process_projected_returning(value);
             }
+
+            // Nested statements process their returning expressions in their
+            // own model scope during statement lowering.
+            fn visit_stmt_mut(&mut self, _: &mut stmt::Statement) {}
+            fn visit_stmt_query_mut(&mut self, _: &mut stmt::Query) {}
         }
+
+        stmt::visit_mut::visit_expr_mut(&mut Recurse(self), value);
     }
 
     /// Load complete returned embeds and refresh relations whose keys changed.
