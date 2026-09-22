@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-74ecf604.js";
+            window.path_to_searchindex_js = "searchindex-afd1684a.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -618,6 +618,60 @@ let users = User::filter(
 .await?;</code></pre>
 <p>The <code>.matches()</code> closure receives the variant’s field accessors. It checks both
 the discriminant and the field condition.</p>
+<h2 id="relations-inside-embedded-types"><a class="header" href="#relations-inside-embedded-types">Relations inside embedded types</a></h2>
+<p>An embedded struct or enum variant can contain a <code>#[belongs_to]</code> relation.
+Its key references a sibling field. An enum lets a model belong to one of
+several parent types:</p>
+<pre><code class="language-rust ignore">#[derive(toasty::Embed)]
+enum Owner {
+    Human {
+        #[shared(id)]
+        id: uuid::Uuid,
+        #[belongs_to(key = id)]
+        human: toasty::Deferred&lt;Human&gt;,
+    },
+    Animal {
+        #[shared(id)]
+        id: uuid::Uuid,
+        #[belongs_to(key = id)]
+        animal: toasty::Deferred&lt;Animal&gt;,
+    },
+}
+
+#[derive(toasty::Model)]
+struct Object {
+    #[key]
+    #[auto]
+    id: uuid::Uuid,
+    owner: Owner,
+}
+
+let objects = Object::all()
+    .include(Object::fields().owner().human().human())
+    .include(Object::fields().owner().animal().animal())
+    .exec(&amp;mut db)
+    .await?;
+
+for object in objects {
+    match object.owner {
+        Owner::Human { human, .. } =&gt; println!("{}", human.get().name),
+        Owner::Animal { animal, .. } =&gt; println!("{}", animal.get().name),
+    }
+}</code></pre>
+<p>The <code>owner</code> column stores the variant discriminant, and <code>owner_id</code> stores
+the shared key. The relation fields have no columns. Loading an owner
+checks its variant as well as its key, so a human and an animal with the
+same ID remain distinct.</p>
+<p>An include loads only the field its path names. The <code>owner</code> field above is
+not deferred, so <code>.include(Object::fields().owner())</code> has no effect. Name
+each deferred relation that the query should load, as in the example. If
+the model instead stores <code>owner: Deferred&lt;Owner&gt;</code>, including <code>owner()</code> loads
+the enum but leaves its deferred relations unloaded; including a relation’s
+full path loads both the deferred enum and that relation. A non-deferred
+relation such as <code>human: Human</code> loads automatically whenever its containing
+embed loads. Relations can also sit inside nested embeds, and <code>Option&lt;Owner&gt;</code>
+represents an object without an owner.</p>
+<p>Inverse <code>has_many</code> and <code>has_one</code> fields cannot pair with an embedded relation.</p>
 <h2 id="indexing-embedded-fields"><a class="header" href="#indexing-embedded-fields">Indexing embedded fields</a></h2>
 <p>Add <code>#[index]</code> or <code>#[unique]</code> to fields inside an embedded type. The index
 applies to the flattened column in the parent table:</p>

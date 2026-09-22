@@ -33,7 +33,7 @@
 <a href=#33 id=33 data-nosnippet>33</a>    /// returning, where relation slots are filled later with per-row context:
 <a href=#34 id=34 data-nosnippet>34</a>    /// local `has_many` / `has_one` slots from nested relation inserts during
 <a href=#35 id=35 data-nosnippet>35</a>    /// insert relation planning, and `belongs_to` slots from per-row load
-<a href=#36 id=36 data-nosnippet>36</a>    /// subqueries in [`Self::plan_insert_returning_belongs_to`]. Building an
+<a href=#36 id=36 data-nosnippet>36</a>    /// subqueries in [`Self::plan_insert_returning_relations`]. Building an
 <a href=#37 id=37 data-nosnippet>37</a>    /// include subquery here would create a stale (and, for `belongs_to`,
 <a href=#38 id=38 data-nosnippet>38</a>    /// row-less) dependency for the same returning slot.
 <a href=#39 id=39 data-nosnippet>39</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>prepare_model_returning_for_context(
