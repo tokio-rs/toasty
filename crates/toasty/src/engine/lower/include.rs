@@ -66,24 +66,35 @@ struct FieldIncludes {
 }
 
 impl LowerStatement<'_, '_> {
-    /// Load relations in complete embedded values selected by a query.
-    pub(super) fn process_projected_embeds(&mut self, value: &mut stmt::Expr) {
+    /// Load relations in a query projection.
+    pub(super) fn process_projected_returning(&mut self, value: &mut stmt::Expr) {
         if let Some((field, mapping, path)) =
             projected_field(self.schema(), self.model_unwrap().id, value)
         {
-            if let app::FieldTy::Embedded(embedded) = &field.ty {
-                use stmt::VisitMut;
-                self.visit_expr_mut(value);
-                super::Simplify::with_context(self.expr_cx, self.capability())
-                    .visit_expr_mut(value);
-                self.process_embed(value, embedded.target, mapping, &[], &path);
+            match &field.ty {
+                app::FieldTy::Embedded(embedded) => {
+                    use stmt::VisitMut;
+                    self.visit_expr_mut(value);
+                    super::Simplify::with_context(self.expr_cx, self.capability())
+                        .visit_expr_mut(value);
+                    self.process_embed(value, embedded.target, mapping, &[], &path);
+                }
+                _ if field.ty.is_relation()
+                    && matches!(
+                        value,
+                        stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, .. })
+                    ) =>
+                {
+                    *value = self.build_relation_subquery(field.id.index);
+                }
+                _ => {}
             }
             // A scalar projection must not load relations in its base embed.
             return;
         }
         if let stmt::Expr::Record(record) = value {
             for field in &mut record.fields {
-                self.process_projected_embeds(field);
+                self.process_projected_returning(field);
             }
         }
     }
