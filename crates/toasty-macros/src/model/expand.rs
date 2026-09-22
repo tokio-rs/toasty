@@ -559,7 +559,8 @@ impl Expand<'_> {
         let span = field_ident.span();
 
         quote_spanned! { span=>
-            #vis fn #field_ident(&self) -> <<#ty as #field_trait>::Target as #toasty::Model>::OneField<__Origin> {
+            #[allow(clippy::type_complexity)]
+            #vis fn #field_ident(&self) -> <<#ty as #field_trait>::Target as #toasty::Model>::OneField<__Origin, <#ty as #field_trait>::Expr> {
                 <<#ty as #field_trait>::Target as #toasty::ModelCodegen>::new_one_field(
                     #parent_path.chain(
                         <#model_ident as #schema_trait>::path_field(#field_offset)

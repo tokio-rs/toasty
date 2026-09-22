@@ -688,8 +688,24 @@ fn expand_via(
         return quote! { None };
     };
 
-    let path = expand_via_path(toasty, model_ident, segments, terminal_ty);
-    quote! { Some(#path) }
+    let chain = expand_via_chain(model_ident, segments);
+    quote! {
+        Some({
+            // The via and its terminal can differ in optionality. Validate
+            // the model they reference without changing either path target.
+            fn __into_relation_path<__Origin, __Target>(
+                path: #toasty::Path<__Origin, __Target>,
+            ) -> #toasty::core::stmt::Path
+            where
+                __Target: #toasty::RelationOneField<Target = #terminal_ty>,
+            {
+                path.into()
+            }
+
+            let __via_typed: #toasty::Path<#model_ident, _> = #chain.into();
+            __into_relation_path(__via_typed)
+        })
+    }
 }
 
 /// Emit the fully-resolved [`stmt::Path`] for a `via` relation: chain the named
@@ -712,10 +728,7 @@ pub(super) fn expand_via_path(
     segments: &[syn::Ident],
     terminal_ty: &TokenStream,
 ) -> TokenStream {
-    let mut chain = quote! { #model_ident::fields() };
-    for segment in segments {
-        chain = quote_spanned! { segment.span()=> #chain.#segment() };
-    }
+    let chain = expand_via_chain(model_ident, segments);
 
     // Pin the typed path's terminal to `terminal_ty`. When it disagrees with
     // the path, the `.into()` has no matching conversion. Point that failure at
@@ -744,4 +757,12 @@ pub(super) fn expand_via_path(
             __via_untyped
         }
     }
+}
+
+fn expand_via_chain(model_ident: &syn::Ident, segments: &[syn::Ident]) -> TokenStream {
+    let mut chain = quote! { #model_ident::fields() };
+    for segment in segments {
+        chain = quote_spanned! { segment.span()=> #chain.#segment() };
+    }
+    chain
 }

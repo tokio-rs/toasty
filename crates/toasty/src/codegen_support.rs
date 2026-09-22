@@ -40,7 +40,7 @@ pub type FieldExprTarget<F> = <F as Field>::ExprTarget;
 /// Internal constructors used by generated model field accessors.
 pub trait ModelCodegen: Model {
     /// Construct the field accessor for a singular relation to this model.
-    fn new_one_field<Origin>(path: Path<Origin, Self>) -> Self::OneField<Origin>;
+    fn new_one_field<Origin, Target>(path: Path<Origin, Target>) -> Self::OneField<Origin, Target>;
 
     /// Encode referenced fields so the engine can resolve a relation key.
     fn to_relation_expr(&self, fields: &[&str]) -> core::stmt::Expr;
