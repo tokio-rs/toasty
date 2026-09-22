@@ -1391,15 +1391,19 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             lower
                 .state
                 .update_returning
-                .insert(update_stmt_id, stmt.assignments.clone());
+                .insert(update_stmt_id, std::mem::take(&mut stmt.assignments));
             if returning_changed {
                 lower.process_update_embedded_relations(returning);
             }
             lower.visit_returning_mut(returning);
+            // Restore assignments after relation loads finish lowering.
+            stmt.assignments = lower
+                .state
+                .update_returning
+                .swap_remove(&update_stmt_id)
+                .expect("update assignments registered while lowering returning");
             // Use the lowered assignments (which are now column-indexed)
             returning::constantize_update_returning(lower.expr_cx, returning, &stmt.assignments);
-            // Restrict substitution to relation loads for this returning clause.
-            lower.state.update_returning.swap_remove(&update_stmt_id);
         }
 
         self.visit_update_target_mut(&mut stmt.target);
