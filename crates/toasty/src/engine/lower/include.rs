@@ -95,10 +95,13 @@ impl LowerStatement<'_, '_> {
     ///
     /// Returns `true` when the expression is a complete field projection.
     fn process_projected_field(&mut self, expr: &mut stmt::Expr) -> bool {
-        let Some(projected) = resolve_projected_field(self.schema(), self.model_unwrap().id, expr)
-        else {
+        let Some(projected) = self.expr_cx.resolve_projected_field(expr) else {
             return false;
         };
+        // Relation loading belongs to the statement that owns the reference.
+        if projected.nesting != 0 {
+            return false;
+        }
 
         match &projected.field.ty {
             app::FieldTy::Embedded(embedded) => {
@@ -647,78 +650,6 @@ fn field_path(host: &stmt::Path, index: usize) -> stmt::Path {
     let mut path = host.clone();
     path.projection.push(index);
     path
-}
-
-struct ProjectedField<'a> {
-    field: &'a app::Field,
-    mapping: &'a mapping::Field,
-    path: stmt::Path,
-}
-
-fn resolve_projected_field<'a>(
-    schema: &'a toasty_core::Schema,
-    model: app::ModelId,
-    expr: &stmt::Expr,
-) -> Option<ProjectedField<'a>> {
-    match expr {
-        stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }) => {
-            Some(ProjectedField {
-                field: &schema.app.model(model).fields()[*index],
-                mapping: &schema.mapping_for(model).fields[*index],
-                path: stmt::Path::field(model, *index),
-            })
-        }
-        stmt::Expr::Project(project) => {
-            let projected = if let stmt::Expr::Variant(variant) = &*project.base {
-                let ProjectedField { mapping, path, .. } =
-                    resolve_projected_field(schema, model, &variant.base)?;
-                let fields = schema
-                    .app
-                    .model(variant.variant.model)
-                    .as_embedded_enum_unwrap()
-                    .variant_fields(variant.variant.index);
-                let mapping::Field::Enum(mapping) = mapping else {
-                    return None;
-                };
-                let (&index, rest) = project.projection.as_slice().split_first()?;
-                let mut path = stmt::Path::from_variant(path, variant.variant);
-                path.projection.push(index);
-
-                return resolve_projected_subfield(
-                    schema,
-                    ProjectedField {
-                        field: &fields[index],
-                        mapping: &mapping.variants[variant.variant.index].fields[index],
-                        path,
-                    },
-                    rest,
-                );
-            } else {
-                resolve_projected_field(schema, model, &project.base)?
-            };
-            resolve_projected_subfield(schema, projected, project.projection.as_slice())
-        }
-        _ => None,
-    }
-}
-
-fn resolve_projected_subfield<'a>(
-    schema: &'a toasty_core::Schema,
-    mut projected: ProjectedField<'a>,
-    steps: &[usize],
-) -> Option<ProjectedField<'a>> {
-    for index in steps {
-        let app::FieldTy::Embedded(embedded) = &projected.field.ty else {
-            return None;
-        };
-        let mapping::Field::Struct(mapped) = projected.mapping else {
-            return None;
-        };
-        projected.field = &schema.app.model(embedded.target).fields()[*index];
-        projected.mapping = &mapped.fields[*index];
-        projected.path.projection.push(*index);
-    }
-    Some(projected)
 }
 
 /// Partitions includes for a field and merges modifiers on the field itself.

@@ -1,3 +1,6 @@
+mod projected_field;
+pub use projected_field::ProjectedField;
+
 use crate::{
     Schema,
     schema::{
