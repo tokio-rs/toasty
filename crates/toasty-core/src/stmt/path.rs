@@ -140,14 +140,25 @@ impl Path {
     /// expression carries no variant check; the engine's statement
     /// normalization adds one per selection to the predicate built over it.
     pub fn into_stmt(self) -> Expr {
+        self.into_stmt_with_nesting(0)
+    }
+
+    /// Converts this path into an [`Expr`] at the specified query nesting level.
+    ///
+    /// A nesting level of `0` references the current query; `1` references its
+    /// parent. Projections and variant selections preserve this nesting level.
+    pub fn into_stmt_with_nesting(self, nesting: usize) -> Expr {
         match self.root {
             PathRoot::Model(model_id) => match self.projection.as_slice() {
-                [] => Expr::ref_ancestor_model(0),
+                [] => Expr::ref_ancestor_model(nesting),
                 [field, project @ ..] => {
-                    let mut ret = Expr::ref_self_field(FieldId {
-                        model: model_id,
-                        index: *field,
-                    });
+                    let mut ret = Expr::ref_field(
+                        nesting,
+                        FieldId {
+                            model: model_id,
+                            index: *field,
+                        },
+                    );
 
                     if !project.is_empty() {
                         ret = Expr::project(ret, project);
@@ -159,7 +170,7 @@ impl Path {
             PathRoot::Variant { parent, variant_id } => {
                 // The selection stands for the variant's payload, so the
                 // steps index the variant's fields by their local positions.
-                let selection = Expr::variant(parent.into_stmt(), variant_id);
+                let selection = Expr::variant(parent.into_stmt_with_nesting(nesting), variant_id);
 
                 match self.projection.as_slice() {
                     [] => selection,

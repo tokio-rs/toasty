@@ -627,17 +627,8 @@ impl LowerStatement<'_, '_> {
             _ => source_field.index,
         };
 
-        let mut source = field_path(record_path, local_index).into_stmt();
         // This expression runs in the relation query and reads its parent.
-        stmt::visit_mut::for_each_expr_mut(&mut source, |expr| {
-            if let stmt::Expr::Reference(
-                stmt::ExprReference::Field { nesting, .. } | stmt::ExprReference::Model { nesting },
-            ) = expr
-            {
-                *nesting = 1;
-            }
-        });
-        source
+        field_path(record_path, local_index).into_stmt_with_nesting(1)
     }
 }
 
