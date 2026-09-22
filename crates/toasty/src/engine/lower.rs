@@ -73,6 +73,7 @@ impl Engine {
             errors: vec![],
             dependencies: IndexSet::new(),
             insert_stmts: vec![],
+            update_returning: IndexMap::new(),
         };
 
         state.lower_stmt(stmt::ExprContext::new(schema), None, stmt);
@@ -163,6 +164,10 @@ struct LowerStatement<'a, 'b> {
 
 #[derive(Debug)]
 struct LoweringState<'a> {
+    /// Lowered assignments for updates whose returning expressions are active.
+    /// Sub-statements that load relations use assigned constants instead of
+    /// reading them from the update's returned row.
+    update_returning: IndexMap<hir::StmtId, stmt::Assignments>,
     /// Database engine handle
     engine: &'a Engine,
 
@@ -973,17 +978,6 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             }
             stmt::Expr::Reference(expr_reference) => {
                 match expr_reference {
-                    // A reference to a relation field inside a Returning
-                    // clause becomes a subquery that loads the related
-                    // model(s).  This is the `.select(rel_field)` path; it
-                    // mirrors the include-subquery machinery that
-                    // `.include(...)` uses for `Returning::Model`.
-                    stmt::ExprReference::Field { nesting: 0, index }
-                        if matches!(self.cx, LoweringContext::Returning(_))
-                            && self.model_unwrap().fields[*index].ty.is_relation() =>
-                    {
-                        *expr = self.build_relation_subquery(*index);
-                    }
                     stmt::ExprReference::Field { nesting, index } => {
                         *expr = self.lower_expr_field(*nesting, *index);
                         self.visit_expr_mut(expr);
@@ -993,6 +987,18 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         if expr_column.nesting > 0 {
                             let source_id = self.scope_stmt_id();
                             let target_id = self.resolve_stmt_id(expr_column.nesting);
+
+                            // A relation subquery can use a constant assigned by
+                            // the enclosing update without reading its returned row.
+                            if let Some(update_assignments) =
+                                self.state.update_returning.get(&target_id)
+                                && let Some(stmt::Assignment::Set(assigned_value)) =
+                                    update_assignments.get(&[expr_column.column])
+                                && assigned_value.is_const()
+                            {
+                                *expr = assigned_value.clone();
+                                return;
+                            }
 
                             // the current scope ID should also be the top of the stack
                             debug_assert_eq!(self.state.scopes.len(), self.scope_id + 1);
@@ -1138,9 +1144,17 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             let is_insert = self.cx.is_insert();
 
             self.prepare_model_returning_for_context(&mut returning, &mut include_paths, is_insert);
-            self.process_top_level_includes(&mut returning, &include_paths, is_insert);
+            self.process_top_level_includes(returning.as_record_mut_unwrap(), &include_paths);
 
             *i = stmt::Returning::Project(returning);
+        }
+
+        if self.model().is_some()
+            && let stmt::Returning::Project(value) = i
+        {
+            // Expand relation projections while they still refer to app fields.
+            // The normal returning pass replaces them with mapped expressions.
+            self.lower_returning().process_projected_returning(value);
         }
 
         // For multi-row INSERT returning, visit each row with its row index so
@@ -1220,6 +1234,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             lower.visit_assignments_mut(&mut upsert.update_defaults);
         }
 
+        // Returning lowering rewrites `Model` to `Project`, so preserve the
+        // caller's original request for insert relation planning.
+        let returns_model = stmt
+            .returning
+            .as_ref()
+            .is_some_and(stmt::Returning::is_model);
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
         }
@@ -1238,6 +1258,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             &mut stmt.source,
             &mut stmt.returning,
             preserve_returning_projection,
+            returns_model,
         );
 
         // Lower the insertion source
@@ -1361,7 +1382,23 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         }
 
         if let Some(returning) = &mut stmt.returning {
+            let update_stmt_id = lower.scope_stmt_id();
+            // Relation subqueries may replace references to this update with
+            // constants from assignments lowered to column indices.
+            lower
+                .state
+                .update_returning
+                .insert(update_stmt_id, std::mem::take(&mut stmt.assignments));
+            if returning_changed {
+                lower.process_update_embedded_relations(returning);
+            }
             lower.visit_returning_mut(returning);
+            // Restore assignments after relation loads finish lowering.
+            stmt.assignments = lower
+                .state
+                .update_returning
+                .swap_remove(&update_stmt_id)
+                .expect("update assignments registered while lowering returning");
             // Use the lowered assignments (which are now column-indexed)
             returning::constantize_update_returning(lower.expr_cx, returning, &stmt.assignments);
         }
@@ -1576,13 +1613,19 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 Some(self.combine_record_op(op, std::mem::take(&mut rec.fields), val_exprs))
             }
             (stmt::Expr::Cast(expr_cast), other) | (other, stmt::Expr::Cast(expr_cast)) => {
-                // An embedded-enum decode (`Match`, possibly under a
-                // projection) on the other side cannot be cast mid-lower;
-                // post-lower simplify eliminates the match into
-                // variant-gated terms and strips the decode casts
-                // (`eliminate_match_in_binary_op`,
-                // `simplify_expr_in_subquery`).
+                // Expand decodes of embedded values into guarded comparisons so
+                // each cast operand can use the database's stored type.
                 if expr_is_enum_decode(other) {
+                    let comparison = stmt::Expr::binary_op(lhs.clone(), op, rhs.clone());
+                    let mut expanded_comparison = comparison.clone();
+                    Simplify::with_context(self.expr_cx, self.capability())
+                        .visit_expr_mut(&mut expanded_comparison);
+                    // Simplification also expands optional struct decodes.
+                    // Revisit only after it makes progress to prevent recursion.
+                    if expanded_comparison != comparison {
+                        self.visit_expr_mut(&mut expanded_comparison);
+                        return Some(expanded_comparison);
+                    }
                     return None;
                 }
 
@@ -2133,6 +2176,14 @@ impl LoweringContext<'_> {
         matches!(self, LoweringContext::Insert { .. })
     }
 
+    fn is_insert_without_row(&self) -> bool {
+        matches!(self, Self::Insert(_, None))
+    }
+
+    fn is_insert_with_row(&self) -> bool {
+        matches!(self, Self::Insert(_, Some(_)))
+    }
+
     fn is_returning(&self) -> bool {
         matches!(self, LoweringContext::Returning(_))
     }
@@ -2207,12 +2258,16 @@ fn variant_payload(lowered: stmt::Expr, disc_value: &stmt::Value) -> stmt::Expr 
 
 pub(super) fn key_field_refs(
     nesting: usize,
-    mut fields: impl ExactSizeIterator<Item = app::FieldId>,
+    fields: impl ExactSizeIterator<Item = app::FieldId>,
 ) -> stmt::Expr {
+    scalar_or_record(fields.map(|field| stmt::Expr::ref_field(nesting, field)))
+}
+
+fn scalar_or_record(mut fields: impl ExactSizeIterator<Item = stmt::Expr>) -> stmt::Expr {
     if fields.len() == 1 {
-        stmt::Expr::ref_field(nesting, fields.next().unwrap())
+        fields.next().unwrap()
     } else {
-        stmt::Expr::record(fields.map(|field| stmt::Expr::ref_field(nesting, field)))
+        stmt::Expr::record(fields)
     }
 }
 

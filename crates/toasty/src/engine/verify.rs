@@ -352,7 +352,6 @@ impl Verify<'_, '_> {
 
     /// Reject include ordering on singular relations and preserve the existing
     /// rule that filters are rejected only on required singular relations.
-    /// Variant-rooted paths are not resolvable here and pass through unchecked.
     fn verify_include_modifiers(&mut self, i: &stmt::Select) {
         for include in i.returning.model_includes() {
             let Some(query) = &include.query else {
@@ -366,14 +365,15 @@ impl Verify<'_, '_> {
             if !has_filter && !has_order_by {
                 continue;
             }
-            let Some(model_id) = include.path.root.as_model() else {
-                continue;
+            let mut error = None;
+            let verifier = VerifyExpr {
+                schema: self.schema,
+                capability: self.capability,
+                model: i.source.model_id_unwrap(),
+                error: &mut error,
             };
-            let root = self.schema.app.model(model_id);
-            let Some(field) = self
-                .schema
-                .app
-                .resolve_field(root, &include.path.projection)
+            let Some(PathTarget::Field(field)) =
+                verifier.resolve_expr_path(&include.path.clone().into_stmt())
             else {
                 continue;
             };

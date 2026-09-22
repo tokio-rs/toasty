@@ -151,15 +151,7 @@ fn embedded_key_expr(host: Expr, target: EmbedTarget<'_>, belongs_to: &BelongsTo
         fields.push(Expr::project(host.clone(), [index]));
     }
 
-    Some(scalar_or_record(fields))
-}
-
-fn scalar_or_record(mut fields: Vec<Expr>) -> Expr {
-    if fields.len() == 1 {
-        fields.pop().unwrap()
-    } else {
-        Expr::record(fields)
-    }
+    Some(super::scalar_or_record(fields.into_iter()))
 }
 
 /// Copies the host path once a relation is found, merging adjacent projections.

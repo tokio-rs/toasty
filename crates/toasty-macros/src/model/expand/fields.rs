@@ -55,7 +55,13 @@ impl Expand<'_> {
             .iter()
             .enumerate()
             .filter(|(_, field)| {
-                !util::ident_is_reserved(&field.name.ident, FIELD_STRUCT_RESERVED_METHODS)
+                let ident = &field.name.ident;
+
+                if util::ident_is_reserved(ident, FIELD_STRUCT_RESERVED_METHODS) {
+                    return false;
+                }
+
+                true
             })
             .map(move |(offset, field)| {
                 let field_ident = &field.name.ident;
