@@ -19,6 +19,14 @@ pub enum Flavor {
     /// MySQL
     Mysql,
 
+    /// MariaDB
+    ///
+    /// Distinct from [`Flavor::Mysql`]: MariaDB stores UUIDs in a native
+    /// `UUID` column and renders its own dialect, so lowering a MariaDB
+    /// schema as MySQL would emit `VARCHAR(36)` key columns instead.
+    #[value(name = "mariadb")]
+    MariaDb,
+
     /// Turso
     Turso,
 }
@@ -30,6 +38,7 @@ impl Flavor {
             Flavor::Sqlite => "sqlite",
             Flavor::Postgresql => "postgresql",
             Flavor::Mysql => "mysql",
+            Flavor::MariaDb => "mariadb",
             Flavor::Turso => "turso",
         }
     }

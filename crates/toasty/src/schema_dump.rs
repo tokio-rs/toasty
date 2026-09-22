@@ -47,13 +47,14 @@ pub fn capability_for_flavor(flavor: &str) -> Option<&'static Capability> {
         "sqlite" => Some(&Capability::SQLITE),
         "postgresql" | "postgres" => Some(&Capability::POSTGRESQL),
         "mysql" => Some(&Capability::MYSQL),
+        "mariadb" => Some(&Capability::MARIADB),
         "turso" => Some(&Capability::TURSO),
         _ => None,
     }
 }
 
 /// Flavor names accepted by [`capability_for_flavor`], for error messages.
-pub const FLAVOR_NAMES: &[&str] = &["sqlite", "postgresql", "mysql", "turso"];
+pub const FLAVOR_NAMES: &[&str] = &["sqlite", "postgresql", "mysql", "mariadb", "turso"];
 
 #[cfg(debug_assertions)]
 mod dump {

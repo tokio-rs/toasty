@@ -22,6 +22,7 @@ default = [
 	"sqlite",
 	"postgresql",
 	"mysql",
+	"mariadb",
 	"bigdecimal",
 	"jiff",
 	"net",
@@ -30,6 +31,7 @@ default = [
 sqlite = ["toasty/sqlite"]
 postgresql = ["toasty/postgresql"]
 mysql = ["toasty/mysql"]
+mariadb = ["toasty/mariadb"]
 turso = ["toasty/turso"]
 
 # Optional column types the CLI decodes. A type whose feature is off here is

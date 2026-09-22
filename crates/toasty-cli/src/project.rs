@@ -118,8 +118,8 @@ impl Project {
     /// `migration.flavor` entry in `Toasty.toml`.
     pub fn flavor(&self, flag: Option<crate::Flavor>) -> Result<crate::Flavor> {
         flag.or(self.config.migration.flavor).context(
-            "no flavor selected; pass `--flavor <sqlite|postgresql|mysql|turso>` or set \
-             `migration.flavor` in Toasty.toml",
+            "no flavor selected; pass `--flavor <sqlite|postgresql|mysql|mariadb|turso>` or \
+             set `migration.flavor` in Toasty.toml",
         )
     }
 }
