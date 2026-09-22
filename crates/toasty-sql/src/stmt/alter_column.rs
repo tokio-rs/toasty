@@ -101,18 +101,30 @@ impl AlterColumnChanges {
     pub fn has_type_change(&self) -> bool {
         self.new_ty.is_some() || self.new_not_null.is_some() || self.new_auto_increment.is_some()
     }
+
+    /// Returns `true` if any column property changed.
+    pub fn is_empty(&self) -> bool {
+        self.new_name.is_none()
+            && self.new_ty.is_none()
+            && self.new_not_null.is_none()
+            && self.new_auto_increment.is_none()
+    }
 }
 
 impl Statement {
     /// Alters a column.
     pub fn alter_column(
-        column: &Column,
+        previous: &Column,
+        next: &Column,
         changes: AlterColumnChanges,
         capability: &Capability,
     ) -> Self {
+        let mut column_def =
+            ColumnDef::from_schema(previous, &capability.storage_types, capability);
+        column_def.comment = next.comment.clone();
         AlterColumn {
-            id: column.id,
-            column_def: ColumnDef::from_schema(column, &capability.storage_types, capability),
+            id: previous.id,
+            column_def,
             changes,
         }
         .into()
