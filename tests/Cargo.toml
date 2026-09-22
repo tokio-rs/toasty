@@ -13,7 +13,7 @@ pulldown-cmark = { workspace = true }
 
 [features]
 default = ["sqlite"]
-sql = ["sqlite", "mysql", "postgresql"]
+sql = ["sqlite", "mysql", "mariadb", "postgresql"]
 sqlite = ["toasty/sqlite", "dep:toasty-driver-sqlite"]
 turso = ["toasty/turso", "dep:toasty-driver-turso"]
 turso-sync = ["turso", "toasty/turso-sync"]
@@ -26,6 +26,12 @@ turso-serverless = [
 ]
 mysql = [
     "toasty/mysql",
+    "dep:toasty-driver-mysql",
+    "dep:sqlx-core",
+    "dep:sqlx-mysql",
+]
+mariadb = [
+    "toasty/mariadb",
     "dep:toasty-driver-mysql",
     "dep:sqlx-core",
     "dep:sqlx-mysql",
