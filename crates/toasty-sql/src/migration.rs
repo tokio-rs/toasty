@@ -74,6 +74,7 @@ pub fn generate_migration(schema_diff: &diff::Schema<'_>, capability: &Capabilit
                 Dialect::Sqlite => Serializer::sqlite(stmt.schema()),
                 Dialect::Postgresql => Serializer::postgresql(stmt.schema()),
                 Dialect::Mysql => Serializer::mysql(stmt.schema()),
+                Dialect::MariaDb => Serializer::mariadb(stmt.schema()),
             };
             serializer.serialize(stmt.statement())
         })
@@ -81,7 +82,9 @@ pub fn generate_migration(schema_diff: &diff::Schema<'_>, capability: &Capabilit
 
     match dialect {
         Dialect::Postgresql => Migration::new_sql(sql_strings.join("\n")),
-        Dialect::Sqlite | Dialect::Mysql => Migration::new_sql_with_breakpoints(&sql_strings),
+        Dialect::Sqlite | Dialect::Mysql | Dialect::MariaDb => {
+            Migration::new_sql_with_breakpoints(&sql_strings)
+        }
     }
 }
 

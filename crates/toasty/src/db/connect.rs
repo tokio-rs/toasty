@@ -29,6 +29,7 @@ impl Connect {
     /// | `sqlite` | SQLite | `sqlite` |
     /// | `postgresql` / `postgres` | PostgreSQL | `postgresql` |
     /// | `mysql` | MySQL | `mysql` |
+    /// | `mariadb` | MariaDB | `mariadb` |
     /// | `dynamodb` | DynamoDB | `dynamodb` |
     /// | `turso` | Turso | `turso` |
     ///
@@ -41,6 +42,7 @@ impl Connect {
             not(any(
                 feature = "dynamodb",
                 feature = "mysql",
+                feature = "mariadb",
                 feature = "postgresql",
                 feature = "sqlite",
                 feature = "turso"
@@ -73,6 +75,15 @@ impl Connect {
             "mysql" => {
                 return Err(toasty_core::Error::unsupported_feature(
                     "`mysql` feature not enabled",
+                ));
+            }
+
+            #[cfg(feature = "mariadb")]
+            "mariadb" => Box::new(toasty_driver_mysql::MariaDB::new(url.as_str())?),
+            #[cfg(not(feature = "mariadb"))]
+            "mariadb" => {
+                return Err(toasty_core::Error::unsupported_feature(
+                    "`mariadb` feature not enabled",
                 ));
             }
 

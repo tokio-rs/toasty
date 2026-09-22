@@ -13,11 +13,25 @@ pulldown-cmark = { workspace = true }
 
 [features]
 default = ["sqlite"]
-sql = ["sqlite", "mysql", "postgresql"]
+sql = ["sqlite", "mysql", "mariadb", "postgresql"]
 sqlite = ["toasty/sqlite", "dep:toasty-driver-sqlite"]
 turso = ["toasty/turso", "dep:toasty-driver-turso"]
+turso-sync = ["turso", "toasty/turso-sync"]
+turso-serverless = [
+    "turso",
+    "toasty/turso-serverless",
+    "dep:turso_serverless",
+    "dep:reqwest",
+    "dep:serde_json",
+]
 mysql = [
     "toasty/mysql",
+    "dep:toasty-driver-mysql",
+    "dep:sqlx-core",
+    "dep:sqlx-mysql",
+]
+mariadb = [
+    "toasty/mariadb",
     "dep:toasty-driver-mysql",
     "dep:sqlx-core",
     "dep:sqlx-mysql",
@@ -44,6 +58,13 @@ toasty-driver-integration-suite.workspace = true
 # Database drivers
 toasty-driver-sqlite = { workspace = true, optional = true }
 toasty-driver-turso = { workspace = true, optional = true }
+turso_serverless = { workspace = true, optional = true }
+reqwest = { version = "0.13", default-features = false, features = [
+	"blocking",
+	"json",
+	"rustls",
+], optional = true }
+serde_json = { workspace = true, optional = true }
 toasty-driver-mysql = { workspace = true, optional = true }
 toasty-driver-postgresql = { workspace = true, optional = true }
 toasty-driver-dynamodb = { workspace = true, optional = true }

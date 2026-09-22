@@ -26,4 +26,7 @@ pub enum Dialect {
 
     /// MySQL.
     Mysql,
+
+    /// MariaDB.
+    MariaDb,
 }

@@ -1,7 +1,7 @@
 use super::{Expand, schema, util};
 use crate::model::schema::{BelongsTo, EnumStorageStrategy, FieldTy, Name, VariantValue};
 
-use hashbrown::HashMap;
+use indexmap::IndexMap;
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
@@ -599,8 +599,8 @@ impl Expand<'_> {
     /// override on one sharing field suffices, so propagate it to every
     /// member. Disagreeing overrides are rejected by
     /// `expand_shared_column_checks`; here the first one wins.
-    fn shared_column_overrides(&self) -> HashMap<String, &syn::LitStr> {
-        let mut overrides = HashMap::new();
+    fn shared_column_overrides(&self) -> IndexMap<String, &syn::LitStr> {
+        let mut overrides = IndexMap::new();
         for field in &self.model.fields {
             let Some(ident) = &field.attrs.shared else {
                 continue;
@@ -665,7 +665,7 @@ impl Expand<'_> {
     fn primitive_schema_parts(
         &self,
         field: &crate::model::schema::Field,
-        shared_overrides: &HashMap<String, &syn::LitStr>,
+        shared_overrides: &IndexMap<String, &syn::LitStr>,
     ) -> SchemaFieldParts {
         let toasty = &self.toasty;
         let ty = primitive_ty_unwrap(field);
@@ -708,7 +708,7 @@ impl Expand<'_> {
     fn primitive_storage_name(
         &self,
         field: &crate::model::schema::Field,
-        shared_overrides: &HashMap<String, &syn::LitStr>,
+        shared_overrides: &IndexMap<String, &syn::LitStr>,
     ) -> TokenStream {
         let own_override = field.attrs.column.as_ref().and_then(|c| c.name.as_ref());
         let group_override = || {
@@ -1168,8 +1168,8 @@ struct SchemaFieldParts {
 /// siblings fill each other.
 pub(super) fn relation_key_fill<'a>(
     fields: &[&'a crate::model::schema::Field],
-) -> HashMap<usize, (&'a crate::model::schema::Field, &'a syn::Ident)> {
-    let mut fill = HashMap::new();
+) -> IndexMap<usize, (&'a crate::model::schema::Field, &'a syn::Ident)> {
+    let mut fill = IndexMap::new();
     for field in fields {
         if let FieldTy::BelongsTo(rel) = &field.ty {
             for fk_field in &rel.foreign_key {

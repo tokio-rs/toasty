@@ -18,11 +18,14 @@ default = ["rustls"]
 dynamodb = ["dep:toasty-driver-dynamodb"]
 migration = ["dep:toml", "dep:toml_edit", "dep:toasty-sql", "toasty-core/migration"]
 mysql = ["dep:toasty-driver-mysql"]
+mariadb = ["dep:toasty-driver-mysql"]
 native-tls = ["toasty-driver-mysql?/native-tls"]
 postgresql = ["dep:toasty-driver-postgresql"]
 rustls = ["toasty-driver-mysql?/rustls"]
 sqlite = ["dep:toasty-driver-sqlite"]
 turso = ["dep:toasty-driver-turso"]
+turso-sync = ["turso", "toasty-driver-turso?/sync"]
+turso-serverless = ["turso", "toasty-driver-turso?/serverless"]
 rust_decimal = [
 	"dep:rust_decimal",
 	"toasty-core/rust_decimal",

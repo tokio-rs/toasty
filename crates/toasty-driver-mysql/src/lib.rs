@@ -1,16 +1,20 @@
 #![warn(missing_docs)]
 #![allow(clippy::needless_range_loop)]
 
-//! Toasty driver for [MySQL](https://www.mysql.com/) using
-//! [SQLx](https://docs.rs/sqlx).
+//! Toasty drivers for [MySQL](https://www.mysql.com/) and
+//! [MariaDB](https://mariadb.org/) 11.8 and later, using [SQLx](https://docs.rs/sqlx).
 //!
 //! # Examples
 //!
 //! ```no_run
-//! use toasty_driver_mysql::MySQL;
+//! use toasty_driver_mysql::{MySQL, MariaDB};
 //!
 //! let driver = MySQL::new("mysql://localhost/mydb").unwrap();
+//! let driver = MariaDB::new("mariadb://localhost/mydb").unwrap();
 //! ```
+
+mod mariadb;
+pub use mariadb::MariaDB;
 
 mod value;
 pub(crate) use value::Value;
@@ -26,7 +30,8 @@ use std::{borrow::Cow, cell::Cell, sync::Arc};
 use toasty_core::{
     Result, Schema,
     driver::{
-        Capability, ConnectContext, ConnectionUrl, Driver, ExecResponse, Operation, QueryLogConfig,
+        Capability, ConnectContext, ConnectionUrl, Dialect, Driver, ExecResponse, Operation,
+        QueryLogConfig,
         log::QueryLog,
         operation::{RawSqlRet, Transaction, TransactionMode},
     },
@@ -93,6 +98,7 @@ fn record_mysql_err(valid: &Cell<bool>, e: sqlx_core::Error) -> toasty_core::Err
 pub struct MySQL {
     url: String,
     opts: MySqlConnectOptions,
+    capability: &'static Capability,
 }
 
 impl MySQL {
@@ -101,12 +107,20 @@ impl MySQL {
     /// The URL must use the `mysql` scheme and include a database path, such as
     /// `mysql://user:pass@host:3306/dbname`.
     pub fn new(url: impl Into<String>) -> Result<Self> {
+        Self::with_capability(url, "mysql", &Capability::MYSQL)
+    }
+
+    fn with_capability(
+        url: impl Into<String>,
+        scheme: &str,
+        capability: &'static Capability,
+    ) -> Result<Self> {
         let url_str = url.into();
         let url = ConnectionUrl::parse(&url_str)?;
 
-        if !url.has_scheme("mysql") {
+        if !url.has_scheme(scheme) {
             return Err(toasty_core::Error::invalid_connection_url(format!(
-                "connection url does not have a `mysql` scheme; url={}",
+                "connection url does not have a `{scheme}` scheme; url={}",
                 url.as_str()
             )));
         }
@@ -131,7 +145,19 @@ impl MySQL {
             .map_err(toasty_core::Error::driver_operation_failed)?
             .disable_statement_logging();
 
-        Ok(Self { url: url_str, opts })
+        Ok(Self {
+            url: url_str,
+            opts,
+            capability,
+        })
+    }
+}
+
+/// The serializer for the dialect `capability` names.
+fn serializer<'a>(capability: &Capability, schema: &'a db::Schema) -> sql::Serializer<'a> {
+    match capability.sql {
+        Some(Dialect::MariaDb) => sql::Serializer::mariadb(schema),
+        _ => sql::Serializer::mysql(schema),
     }
 }
 
@@ -142,7 +168,7 @@ impl Driver for MySQL {
     }
 
     fn capability(&self) -> &'static Capability {
-        &Capability::MYSQL
+        self.capability
     }
 
     async fn connect(
@@ -152,7 +178,7 @@ impl Driver for MySQL {
         let conn = MySqlConnection::connect_with(&self.opts)
             .await
             .map_err(classify_mysql_error)?;
-        let mut connection = Connection::new(conn);
+        let mut connection = Connection::with_capability(conn, self.capability);
         connection.query_log = cx.query_log;
         Ok(Box::new(connection))
     }
@@ -192,15 +218,21 @@ pub struct Connection {
     /// passive validity flag, so the driver records one for [`is_valid`].
     valid: Cell<bool>,
     query_log: QueryLogConfig,
+    capability: &'static Capability,
 }
 
 impl Connection {
     /// Wraps an existing SQLx [`MySqlConnection`] as a Toasty connection.
     pub fn new(conn: MySqlConnection) -> Self {
+        Self::with_capability(conn, &Capability::MYSQL)
+    }
+
+    fn with_capability(conn: MySqlConnection, capability: &'static Capability) -> Self {
         Self {
             conn,
             valid: Cell::new(true),
             query_log: QueryLogConfig::default(),
+            capability,
         }
     }
 
@@ -279,9 +311,8 @@ impl Connection {
 
     /// Creates a table and its indices from a schema definition.
     pub async fn create_table(&mut self, schema: &db::Schema, table: &Table) -> Result<()> {
-        let serializer = sql::Serializer::mysql(schema);
-        let statement =
-            serializer.serialize(&sql::Statement::create_table(table, &Capability::MYSQL));
+        let serializer = serializer(self.capability, schema);
+        let statement = serializer.serialize(&sql::Statement::create_table(table, self.capability));
 
         sqlx_core::query::query(AssertSqlSafe(statement))
             .execute(&mut self.conn)
@@ -313,11 +344,21 @@ impl From<MySqlConnection> for Connection {
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
-        tracing::trace!(driver = "mysql", op = %op.name(), "driver exec");
+        let driver = match self.capability.sql {
+            Some(Dialect::MariaDb) => "mariadb",
+            _ => "mysql",
+        };
+        tracing::trace!(driver, op = %op.name(), "driver exec");
 
         let (sql, typed_params, ret) = match op {
             Operation::Insert(op) => {
+                // A surviving RETURNING clause means MariaDB, and a result
+                // set to read. For MySQL the planner strips it and asks for
+                // the auto-increment key alone, via LAST_INSERT_ID().
+                let returns_rows = op.stmt.returning().is_some();
+
                 let ret = match op.ret {
+                    Some(types) if returns_rows => SqlReturn::Types(types),
                     Some(types) => {
                         let [ty] = &types[..] else {
                             return Err(toasty_core::Error::invalid_result(format!(
@@ -345,7 +386,7 @@ impl toasty_core::driver::Connection for Connection {
                 };
                 let mut log = QueryLog::sql(
                     &self.query_log,
-                    "mysql",
+                    driver,
                     &op.sql,
                     op.params.iter().map(|tv| &tv.value),
                 );
@@ -366,10 +407,11 @@ impl toasty_core::driver::Connection for Connection {
                 } = &op
                 {
                     return Err(toasty_core::Error::unsupported_feature(format!(
-                        "MySQL does not support TransactionMode::{mode:?}"
+                        "{} does not support TransactionMode::{mode:?}",
+                        self.capability.driver_name
                     )));
                 }
-                let statement = sql::Serializer::mysql(&schema.db).serialize_transaction(&op);
+                let statement = serializer(self.capability, &schema.db).serialize_transaction(&op);
                 sqlx_core::raw_sql::raw_sql(AssertSqlSafe(statement))
                     .execute(&mut self.conn)
                     .await
@@ -380,11 +422,11 @@ impl toasty_core::driver::Connection for Connection {
         };
 
         let (sql_as_str, arg_order) =
-            sql::Serializer::mysql(&schema.db).serialize_with_arg_order(&sql);
+            serializer(self.capability, &schema.db).serialize_with_arg_order(&sql);
 
         let mut log = QueryLog::sql(
             &self.query_log,
-            "mysql",
+            driver,
             &sql_as_str,
             arg_order.iter().map(|&pos| &typed_params[pos].value),
         );
