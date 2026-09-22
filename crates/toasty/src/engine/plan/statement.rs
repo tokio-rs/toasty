@@ -89,6 +89,9 @@
 
 use std::mem;
 
+#[cfg(test)]
+mod tests;
+
 use indexmap::{IndexMap, IndexSet};
 use toasty_core::schema::db;
 use toasty_core::stmt::{self, visit_mut};
@@ -2121,44 +2124,53 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     /// Rewrites one child-query conjunct for a projected parent row.
     ///
-    /// Every argument must reference this parent, and the conjunct must contain
-    /// at least one parent reference and only the expression variants below.
+    /// The conjunct must be evaluable in memory and reference this parent at
+    /// least once. Every statement-level argument must reference this parent;
+    /// arguments bound by nested `Map` and `Let` expressions remain local.
     fn rewrite_parent_only_conjunct(
         &self,
         child_stmt: &hir::StatementInfo,
         back_ref: &hir::BackRef,
         mut conjunct: stmt::Expr,
     ) -> Option<stmt::Expr> {
+        if !conjunct.is_eval() {
+            return None;
+        }
+
         let mut eligible = true;
         let mut references_parent = false;
 
-        visit_mut::for_each_expr_mut(&mut conjunct, |expr| match expr {
-            stmt::Expr::Arg(arg) => {
+        visit_mut::walk_expr_scoped_mut(&mut conjunct, 0, |expr, scope_depth| {
+            if !eligible {
+                return false;
+            }
+            if let stmt::Expr::Arg(arg) = expr {
+                if arg.nesting < scope_depth {
+                    return false;
+                }
                 if let Some(hir::Arg::Ref {
                     stmt_id,
                     target_expr_ref,
                     ..
                 }) = child_stmt.args.get(arg.position)
                     && *stmt_id == self.stmt_id
+                    && arg.nesting == scope_depth
                 {
                     let back_ref_column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
-                    *expr = stmt::Expr::arg_project(0, [back_ref_column]);
+                    *expr = stmt::Expr::arg_project(
+                        stmt::ExprArg {
+                            position: 0,
+                            nesting: scope_depth,
+                        },
+                        [back_ref_column],
+                    );
                     references_parent = true;
                 } else {
                     eligible = false;
                 }
+                return false;
             }
-            stmt::Expr::Value(_)
-            | stmt::Expr::BinaryOp(_)
-            | stmt::Expr::And(_)
-            | stmt::Expr::Or(_)
-            | stmt::Expr::Not(_)
-            | stmt::Expr::IsNull(_)
-            | stmt::Expr::Cast(_)
-            | stmt::Expr::Project(_)
-            | stmt::Expr::Record(_)
-            | stmt::Expr::Match(_) => {}
-            _ => eligible = false,
+            true
         });
 
         (eligible && references_parent).then_some(conjunct)

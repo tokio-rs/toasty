@@ -449,7 +449,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
         match expr {
             Expr::Arg(e) => args.resolve_arg_ty(e).clone(),
             Expr::And(_) => Type::Bool,
-            Expr::AnyOp(_) | Expr::AllOp(_) => Type::Bool,
+            Expr::Any(_) | Expr::AnyOp(_) | Expr::AllOp(_) | Expr::InList(_) => Type::Bool,
             Expr::BinaryOp(_) => Type::Bool,
             Expr::Cast(e) => e.ty.clone(),
             Expr::Reference(expr_ref) => {
@@ -564,7 +564,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     .map(|field| self.infer_expr_ty2(args, field, returning_expr))
                     .collect(),
             ),
-            Expr::Value(value) => value.infer_ty(),
+            Expr::Value(value) | Expr::Static(value) => value.infer_ty(),
             Expr::Let(expr_let) => {
                 let scope_tys: Vec<_> = expr_let
                     .bindings

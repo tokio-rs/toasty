@@ -1,4 +1,7 @@
 mod as_expr;
+#[cfg(test)]
+mod tests;
+
 use as_expr::AsExpr;
 
 use crate::Result;
@@ -21,7 +24,7 @@ pub(crate) struct Func<T = stmt::Expr> {
 
 impl<T: AsExpr> Func<T> {
     pub(crate) fn from_stmt(expr: T, args: Vec<stmt::Type>) -> Self {
-        assert!(verify_expr(expr.as_expr()));
+        assert!(expr.as_expr().is_eval());
         let ret = ExprContext::new_free().infer_expr_ty(expr.as_expr(), &args);
         Self { args, ret, expr }
     }
@@ -74,43 +77,11 @@ impl Func<&stmt::Expr> {
         expr: &stmt::Expr,
         args: Vec<stmt::Type>,
     ) -> Option<Func<&stmt::Expr>> {
-        if !verify_expr(expr) {
+        if !expr.is_eval() {
             return None;
         }
 
         let ret = ExprContext::new_free().infer_expr_ty(expr, &args);
         Some(Func::from_stmt_typed(expr, args, ret))
-    }
-}
-
-fn verify_expr(expr: &stmt::Expr) -> bool {
-    use stmt::Expr::*;
-
-    match expr {
-        Arg(_) => true,
-        And(expr_and) => expr_and.operands.iter().all(verify_expr),
-        Or(expr_or) => expr_or.operands.iter().all(verify_expr),
-        BinaryOp(expr) => verify_expr(&expr.lhs) && verify_expr(&expr.rhs),
-        Cast(expr) => verify_expr(&expr.expr),
-        IsNull(expr) => verify_expr(&expr.expr),
-        Let(expr) => expr.bindings.iter().all(verify_expr) && verify_expr(&expr.body),
-        List(expr) => expr.items.iter().all(verify_expr),
-        Map(expr) => verify_expr(&expr.base) && verify_expr(&expr.map),
-        Match(expr_match) => {
-            verify_expr(&expr_match.subject)
-                && expr_match.arms.iter().all(|arm| verify_expr(&arm.expr))
-        }
-        Not(expr) => verify_expr(&expr.expr),
-        Project(expr) => verify_expr(&expr.base),
-        Record(expr) => expr.fields.iter().all(verify_expr),
-        Exists(expr_exists) => match &expr_exists.subquery.body {
-            stmt::ExprSet::Values(values) => values.rows.iter().all(verify_expr),
-            _ => false,
-        },
-        Reference(_) => false,
-        Incoming(_) => false,
-        Func(_) => false,
-        Value(_) => true,
-        _ => todo!("expr={expr:#?}"),
     }
 }
