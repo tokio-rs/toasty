@@ -108,3 +108,36 @@ fn deferred_relation_field_shapes_are_supported() {
     assert_belongs_to_field::<Deferred<Dummy>>();
     assert_belongs_to_field::<Deferred<Option<Dummy>>>();
 }
+
+#[test]
+fn deferred_load_distinguishes_unloaded_and_loaded_null() {
+    assert!(
+        Deferred::<Option<i64>>::load(Value::Null)
+            .unwrap()
+            .is_unloaded()
+    );
+    for value in [None, Some(42)] {
+        let record = Value::Record(stmt::ValueRecord::from_vec(vec![value.into()]));
+        let loaded = Deferred::<Option<i64>>::load(record).unwrap();
+        assert!(!loaded.is_unloaded());
+        assert_eq!(loaded.into_inner(), value);
+    }
+}
+
+#[test]
+fn deferred_load_rejects_malformed_values() {
+    for value in [
+        Value::I64(1),
+        Value::Record(stmt::ValueRecord::from_vec(vec![])),
+        Value::Record(stmt::ValueRecord::from_vec(vec![Value::Null, Value::Null])),
+    ] {
+        let error = Deferred::<Option<i64>>::load(value).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("deferred field decoder expected Null or single-field Record")
+        );
+    }
+    let invalid_inner = Value::Record(stmt::ValueRecord::from_vec(vec![Value::Bool(true)]));
+    assert!(Deferred::<i64>::load(invalid_inner).is_err());
+}

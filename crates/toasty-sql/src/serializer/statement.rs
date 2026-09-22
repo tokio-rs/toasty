@@ -163,7 +163,7 @@ impl ToSql for &stmt::AlterColumn {
                     "PostgreSQL does not support modifying multiple column properties in one ALTER TABLE statement"
                 ),
             },
-            Dialect::Mysql => {
+            Dialect::Mysql | Dialect::MariaDb => {
                 let new_column_def = ColumnDef {
                     name: self
                         .changes
@@ -388,7 +388,7 @@ impl ToSql for &stmt::Insert {
             .as_ref()
             .map(|returning| (" RETURNING ", returning));
 
-        if returning.is_some() && f.serializer.is_mysql() {
+        if returning.is_some() && matches!(f.serializer.dialect, Dialect::Mysql) {
             panic!(
                 "MySQL does not support the RETURNING clause with INSERT statements; returning={returning:#?}"
             );
@@ -848,7 +848,7 @@ impl ToSql for AssignmentList<'_> {
 fn serialize_append(f: &mut super::Formatter<'_>, column: AssignmentColumn, expr: &stmt::Expr) {
     match f.serializer.dialect {
         Dialect::Postgresql => fmt!(f, column " || " expr),
-        Dialect::Mysql => {
+        Dialect::Mysql | Dialect::MariaDb => {
             fmt!(f, "JSON_MERGE_PRESERVE(" column ", " expr ")")
         }
         Dialect::Sqlite => fmt!(
@@ -870,7 +870,7 @@ fn serialize_append(f: &mut super::Formatter<'_>, column: AssignmentColumn, expr
 fn serialize_remove(f: &mut super::Formatter<'_>, column: AssignmentColumn, expr: &stmt::Expr) {
     match f.serializer.dialect {
         Dialect::Postgresql => fmt!(f, "array_remove(" column ", " expr ")"),
-        Dialect::Mysql | Dialect::Sqlite => panic!(
+        Dialect::Mysql | Dialect::MariaDb | Dialect::Sqlite => panic!(
             "stmt::remove on a Vec<scalar> field is not yet implemented for this SQL dialect; \
              the lowering should have rejected this before reaching the serializer",
         ),
@@ -886,7 +886,7 @@ fn serialize_remove(f: &mut super::Formatter<'_>, column: AssignmentColumn, expr
 fn serialize_pop(f: &mut super::Formatter<'_>, column: AssignmentColumn) {
     match f.serializer.dialect {
         Dialect::Postgresql => fmt!(f, column "[1:cardinality(" column ") - 1]"),
-        Dialect::Mysql | Dialect::Sqlite => panic!(
+        Dialect::Mysql | Dialect::MariaDb | Dialect::Sqlite => panic!(
             "stmt::pop on a Vec<scalar> field is not yet implemented for this SQL dialect; \
              the lowering should have rejected this before reaching the serializer",
         ),
@@ -913,7 +913,7 @@ fn serialize_remove_at(f: &mut super::Formatter<'_>, column: AssignmentColumn, e
             f,
             column "[1:" expr "] || " column "[" expr " + 2:cardinality(" column ")]"
         ),
-        Dialect::Mysql | Dialect::Sqlite => panic!(
+        Dialect::Mysql | Dialect::MariaDb | Dialect::Sqlite => panic!(
             "stmt::remove_at on a Vec<scalar> field is not yet implemented for this SQL dialect; \
              the lowering should have rejected this before reaching the serializer",
         ),
@@ -940,14 +940,15 @@ impl ToSql for &stmt::UpdateTarget {
 impl ToSql for &stmt::Values {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
         // MySQL requires the `ROW(...)` keyword for table value constructors
-        // when used in subqueries, but NOT in INSERT statements.
+        // when used in subqueries, but NOT in INSERT statements. MariaDB has
+        // no `VALUES ROW(...)` at all and takes the plain form below.
         //
         // Rows are `Expr::Record`s, which serialize with their own `(...)`.
         // Inside `ROW(...)` we need the fields comma-separated *without*
         // those parens — otherwise MySQL parses `ROW((1, 'a'))` as a single
         // row-expression operand and rejects it with "Operand should contain
         // 1 column(s)".
-        if f.serializer.is_mysql() && !f.in_insert {
+        if matches!(f.serializer.dialect, Dialect::Mysql) && !f.in_insert {
             // `Expr::Record` serializes with its own `(...)`; render its
             // fields directly inside `ROW(...)` so we don't end up with
             // `ROW((a, b))` (which MySQL parses as a single row-typed
@@ -966,6 +967,22 @@ impl ToSql for &stmt::Values {
                     _ => fmt!(f, "ROW(" row ")"),
                 }
             }
+        } else if matches!(f.serializer.dialect, Dialect::MariaDb) && !f.in_insert {
+            // MariaDB's table value constructor cannot type a bare `?`: the
+            // column binds to the empty string, so the join silently matches
+            // nothing. A UNION ALL of SELECTs binds and names its own columns.
+            let rows = self.rows.iter().enumerate().map(|(i, row)| {
+                let fields = match row {
+                    stmt::Expr::Record(record) => &record.fields[..],
+                    other => std::slice::from_ref(other),
+                };
+                // Only the first SELECT names the columns.
+                let fields = fields.iter().enumerate().map(move |(column, field)| {
+                    (field, (i == 0).then_some((" AS ", ColumnAlias(column))))
+                });
+                ("SELECT ", Comma(fields))
+            });
+            fmt!(f, Delimited(rows, " UNION ALL "));
         } else {
             let rows = Comma(self.rows.iter());
             fmt!(f, "VALUES " rows)

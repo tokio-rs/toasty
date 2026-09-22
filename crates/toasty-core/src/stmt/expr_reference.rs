@@ -112,6 +112,15 @@ impl Expr {
         matches!(self, Self::Reference(ExprReference::Field { .. }))
     }
 
+    /// Returns the field index if this references a field in the current
+    /// query scope (`nesting == 0`), or `None` otherwise.
+    pub fn as_self_field_index(&self) -> Option<usize> {
+        match self {
+            Self::Reference(ExprReference::Field { nesting: 0, index }) => Some(*index),
+            _ => None,
+        }
+    }
+
     /// Creates a model reference to the parent (nesting level 1).
     pub fn ref_parent_model() -> Self {
         Self::ref_ancestor_model(1)

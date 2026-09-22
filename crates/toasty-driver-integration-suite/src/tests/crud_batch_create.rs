@@ -73,7 +73,7 @@ pub async fn batch_create_many(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(requires(and(auto_increment, returning_from_mutation)))]
+#[driver_test(requires(and(auto_increment, returning_from_insert)))]
 pub async fn batch_create_many_auto_increment(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
@@ -96,7 +96,7 @@ pub async fn batch_create_many_auto_increment(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(requires(and(auto_increment, not(returning_from_mutation))))]
+#[driver_test(requires(and(auto_increment, not(returning_from_insert))))]
 pub async fn batch_create_many_auto_increment_requires_returning(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Generated {
@@ -138,7 +138,7 @@ pub async fn batch_create_many_auto_increment_requires_returning(test: &mut Test
         .await?;
 
     assert_struct!(items, [{ id: 10, name: "one" }, { id: 20, name: "two" }]);
-    assert_struct!(test.log().pop_op(), Operation::Insert({ ret: None, .. }));
+    assert_struct!(test.log().pop_op(), Operation::Insert({ ret: None }));
     assert!(test.log().is_empty());
 
     Ok(())
@@ -148,11 +148,11 @@ pub async fn batch_create_many_auto_increment_requires_returning(test: &mut Test
 /// generated key, under both ID strategies. On PostgreSQL this exercises the
 /// INSERT → `unnest` transpose with a NULL cell inside a column array bind.
 ///
-/// Gated on `returning_from_mutation`: the `id(ID)` expansion gates its
+/// Gated on `returning_from_insert`: the `id(ID)` expansion gates its
 /// `id_u64` variant on `auto_increment` alone, so without this the test also
 /// runs on MySQL, where a multi-row insert with a generated key needs the
-/// mutation `RETURNING` MySQL lacks.
-#[driver_test(id(ID), requires(returning_from_mutation))]
+/// `RETURNING` clause MySQL lacks.
+#[driver_test(id(ID), requires(returning_from_insert))]
 pub async fn batch_create_with_null_field(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
@@ -277,10 +277,9 @@ pub async fn batch_create_document_columns(test: &mut Test) -> Result<()> {
     assert_eq!(2, res.len());
 
     let reloaded = Doc::get_by_id(&mut db, "b").await?;
-    assert_struct!(reloaded, _ {
+    assert_struct!(reloaded, {
         text_encoded: Json(== "three"),
         binary_encoded: Json(== "four"),
-        ..
     });
 
     Ok(())

@@ -1,7 +1,7 @@
 use super::{Expand, schema, util};
 use crate::model::schema::{BelongsTo, EnumStorageStrategy, FieldTy, Name, VariantValue};
 
-use hashbrown::HashMap;
+use indexmap::IndexMap;
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
@@ -96,8 +96,12 @@ impl Expand<'_> {
         }
     }
 
-    /// Generates tokens for an `is_variant(path, variant_id)` expression.
+    /// Generates tokens for an `is_variant(path, variant_id)` predicate.
     /// Reused by `is_{variant}()` methods and the `matches()` method.
+    ///
+    /// When the enum is itself reached through a variant of an enclosing
+    /// enum, the engine's statement normalization requires that variant as
+    /// well.
     fn expand_is_variant_expr(&self, variant_idx: &TokenStream) -> TokenStream {
         let toasty = &self.toasty;
         let model_ident = &self.model.ident;
@@ -111,7 +115,7 @@ impl Expand<'_> {
                     model: <#model_ident as #toasty::Embed>::id(),
                     index: #variant_idx,
                 };
-                #toasty::stmt::Expr::from_untyped(
+                #toasty::stmt::Expr::<bool>::from_untyped(
                     #toasty::core::stmt::Expr::is_variant(path_stmt, variant_id)
                 )
             }
@@ -195,8 +199,9 @@ impl Expand<'_> {
         // both the entry point returned by `email()` (used for `.matches(...)`
         // filters and direct `.eq()`/include path access) and the namespace
         // for variant-field accessors. The struct stores the model-rooted path
-        // to the enum field. `matches()` uses it to build the `is_variant` gate,
-        // while field accessors add the variant step before chaining the field.
+        // to the enum field. `matches()` uses it to build the `is_variant`
+        // check, while field accessors add the variant step before chaining
+        // the field.
         let variant_field_structs: Vec<_> = embedded_enum
             .variants
             .iter()
@@ -205,6 +210,7 @@ impl Expand<'_> {
             .map(|(variant_index, variant)| {
                 let variant_handle_ident = variant.variant_handle_ident.as_ref().unwrap();
                 let variant_idx = util::int(variant_index);
+                let is_variant_check = self.expand_is_variant_expr(&variant_idx);
                 let variant_path = quote! {{
                     let variant_id = #toasty::core::schema::app::VariantId {
                         model: <#model_ident as #toasty::Embed>::id(),
@@ -218,21 +224,33 @@ impl Expand<'_> {
                     .iter()
                     .enumerate()
                     .filter_map(|(field_index, field)| {
-                        // A relation field has no filter path yet; only its
-                        // key fields are queryable. The offset comes from the
-                        // enumeration before this filter, so skipping does not
-                        // shift later fields.
-                        let FieldTy::Primitive(field_ty) = &field.ty else {
-                            return None;
-                        };
                         let field_ident = &field.name.ident;
                         let field_offset = util::int(field_index);
-                        Some(self.expand_primitive_field_method(
-                            field_ident,
-                            field_ty,
-                            &field_offset,
-                            &variant_path,
-                        ))
+                        match &field.ty {
+                            FieldTy::Primitive(field_ty) => {
+                                Some(self.expand_primitive_field_method(
+                                    field_ident,
+                                    field_ty,
+                                    &field_offset,
+                                    &variant_path,
+                                ))
+                            }
+                            // A relation accessor chains the target model's
+                            // fields struct off the variant-rooted path, so
+                            // `v.human().eq(&alice)` and traversal
+                            // (`v.human().name()`) gate on the variant.
+                            FieldTy::BelongsTo(rel) => {
+                                let toasty = &self.toasty;
+                                Some(self.expand_one_relation_field_method(
+                                    field_ident,
+                                    quote!(#toasty::RelationOneField),
+                                    &rel.ty,
+                                    &field_offset,
+                                    &variant_path,
+                                ))
+                            }
+                            _ => None,
+                        }
                     })
                     .collect();
 
@@ -247,17 +265,7 @@ impl Expand<'_> {
                             self,
                             f: impl FnOnce(Self) -> #toasty::stmt::Expr<bool>,
                         ) -> #toasty::stmt::Expr<bool> {
-                            let parent_stmt: #toasty::core::stmt::Expr = {
-                                let p: #toasty::core::stmt::Path = self.path.clone().into();
-                                p.into_stmt()
-                            };
-                            let variant_id = #toasty::core::schema::app::VariantId {
-                                model: <#model_ident as #toasty::Embed>::id(),
-                                index: #variant_idx,
-                            };
-                            let is_var = #toasty::stmt::Expr::from_untyped(
-                                #toasty::core::stmt::Expr::is_variant(parent_stmt, variant_id)
-                            );
+                            let is_var: #toasty::stmt::Expr<bool> = #is_variant_check;
                             let body = f(self);
                             is_var.and(body)
                         }
@@ -312,16 +320,223 @@ impl Expand<'_> {
         }
     }
 
+    /// Generates the construction builders behind `create!` / `update!`
+    /// variant literals.
+    ///
+    /// The enum implements `EmbedCreate`, returning the variant-selection
+    /// builder `{Enum}Create`, whose per-variant methods (`human()`) return
+    /// that variant's construction builder `{Enum}{Variant}Create`. The
+    /// macros rewrite `Owner::Human { human: &alice }` into
+    /// `<Owner as EmbedCreate>::create().human().human(&alice)`,
+    /// which is what allows a variant literal to set a relation from a
+    /// parent model value. The setter records the parent's expression in
+    /// the relation slot; the engine assigns the sibling foreign-key fields.
+    ///
+    /// Nothing is generated for an enum without data-carrying variants: it
+    /// encodes as a bare discriminant, and a unit variant is written as a
+    /// plain path (`Status::Done`), not a literal.
+    pub(super) fn expand_enum_create_builders(&self) -> TokenStream {
+        if !self.expand_enum_has_data_variants() {
+            return TokenStream::new();
+        }
+
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+        let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
+        let create_struct_ident = &embedded_enum.create_struct_ident;
+
+        let mut selectors = Vec::new();
+        let mut builders = Vec::new();
+
+        for (variant_index, variant) in embedded_enum.variants.iter().enumerate() {
+            let Some(builder_ident) = &variant.create_struct_ident else {
+                continue;
+            };
+            let span = variant.ident.span();
+            let method_ident = &variant.name.ident;
+            let fields = self.variant_fields(variant_index);
+            let slot_count = fields.len() + 1;
+            let discriminant_expr =
+                self.expand_discriminant_value_expr(&variant.attrs.discriminant);
+
+            selectors.push(quote_spanned! { span=>
+                #vis fn #method_ident(self) -> #builder_ident {
+                    let mut slots = Vec::with_capacity(#slot_count);
+                    slots.push(#discriminant_expr);
+                    slots.resize_with(#slot_count, #toasty::core::stmt::Expr::null);
+                    #builder_ident {
+                        slots,
+                    }
+                }
+            });
+
+            let key_fill = relation_key_fill(&fields);
+
+            let setters = fields.iter().enumerate().map(|(local, field)| {
+                let field_ident = &field.name.ident;
+                let slot = util::int(local + 1);
+
+                match &field.ty {
+                    // The setter is monomorphic in the declared field
+                    // type so values type-check exactly as they would in
+                    // a plain struct literal — inference-dependent
+                    // expressions (`"…".into()`) keep working when the
+                    // macros rewrite a literal into this builder.
+                    FieldTy::Primitive(ty) => quote! {
+                        #vis fn #field_ident(mut self, value: #ty) -> Self {
+                            self.slots[#slot] =
+                                #toasty::into_untyped_expr::<FieldExprTarget<#ty>, #ty>(value);
+                            self
+                        }
+                    },
+                    FieldTy::BelongsTo(rel) => {
+                        let rel_ty = &rel.ty;
+                        let targets = rel.foreign_key.iter().map(|fk| util::bare_ident_name(&fk.target));
+
+                        quote! {
+                            #vis fn #field_ident(
+                                mut self,
+                                value: impl #toasty::EmbeddedRelationValue<
+                                    #rel_ty,
+                                    Model = <#rel_ty as #toasty::RelationOneField>::Target,
+                                >,
+                            ) -> Self {
+                                self.slots[#slot] = #toasty::embedded_relation_value_expr::<#rel_ty, _>(&value, &[ #( #targets ),* ]);
+                                self
+                            }
+                        }
+                    }
+                    _ => TokenStream::new(),
+                }
+            });
+
+            // The `create!` / `update!` literal rewrite bypasses Rust's
+            // struct-literal exhaustiveness check, so a required slot
+            // could otherwise reach the statement as `Null` and persist
+            // a row that fails to decode. No setter can produce `Null`
+            // for a non-nullable field, so a `Null` slot at `into_expr`
+            // time means unset.
+            let required_checks = fields
+                .iter()
+                .enumerate()
+                .filter_map(|(local, field)| {
+                    let FieldTy::Primitive(ty) = &field.ty else {
+                        return None;
+                    };
+                    let slot = util::int(local + 1);
+                    let msg = match key_fill.get(&field.id) {
+                        Some((relation, _)) => format!(
+                            "cannot build `{}::{}` expression: key field `{}` is not set \
+                         and relation `{}` has no loaded value to fill it from",
+                            model_ident, variant.ident, field.name.ident, relation.name.ident,
+                        ),
+                        None => format!(
+                            "cannot build `{}::{}` expression: missing required field `{}`",
+                            model_ident, variant.ident, field.name.ident,
+                        ),
+                    };
+                    let relation_unset = key_fill.get(&field.id).map(|(relation, _)| {
+                        let local = fields.iter().position(|f| f.id == relation.id).unwrap();
+                        let slot = util::int(local + 1);
+                        quote!(&& slots[#slot].is_value_null())
+                    });
+                    Some(quote! {
+                        if !<#ty as #toasty::Field>::NULLABLE && slots[#slot].is_value_null() #relation_unset {
+                            ::std::panic!(#msg);
+                        }
+                    })
+                })
+                .collect::<Vec<_>>();
+
+            // Span the struct to the variant so "no method named … found
+            // for struct `OwnerHumanCreate`" errors point at the variant.
+            let struct_def = quote_spanned! { span=>
+                #[derive(Clone)]
+                #[allow(dead_code)]
+                #vis struct #builder_ident {
+                    /// Record slots: `[discriminant, variant fields...]`.
+                    /// Unset slots stay `Null`.
+                    slots: Vec<#toasty::core::stmt::Expr>,
+                }
+            };
+
+            let record = self.expand_embedded_record(quote!(
+                #toasty::core::stmt::Expr::record_from_vec(slots)
+            ));
+            let conversions = self.expand_create_conversions(
+                builder_ident,
+                quote! {
+                    let slots = self.slots;
+                    #( #required_checks )*
+                    #toasty::stmt::Expr::from_untyped(
+                        #record
+                    )
+                },
+                quote!(<Self as #toasty::IntoExpr<#model_ident>>::into_expr(self.clone())),
+            );
+
+            builders.push(quote! {
+                #struct_def
+
+                impl #builder_ident {
+                    #( #setters )*
+                }
+
+                #conversions
+            });
+        }
+
+        // Span the selector to the enum so "no method named `foo` found for
+        // struct `OwnerCreate`" errors — a literal naming a unit or unknown
+        // variant — point at the enum.
+        let selector_def = quote_spanned! { model_ident.span()=>
+            #[derive(Clone, Copy)]
+            #[allow(dead_code)]
+            #vis struct #create_struct_ident;
+        };
+
+        quote! {
+            #selector_def
+
+            impl #toasty::EmbedCreate for #model_ident {
+                type Create = #create_struct_ident;
+
+                fn create() -> #create_struct_ident {
+                    #create_struct_ident
+                }
+            }
+
+            #[allow(dead_code)]
+            impl #create_struct_ident {
+                #( #selectors )*
+            }
+
+            #( #builders )*
+        }
+    }
+
     /// Generates the `EnumVariant` schema structs (without fields — fields are
     /// stored at the `EmbeddedEnum` level).
     pub(super) fn expand_enum_variants(&self) -> Vec<TokenStream> {
         let toasty = &self.toasty;
         let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
 
+        let mut field_start = 0;
         embedded_enum
             .variants
             .iter()
-            .map(|variant| {
+            .enumerate()
+            .map(|(index, variant)| {
+                let field_end = field_start
+                    + self
+                        .model
+                        .fields
+                        .iter()
+                        .filter(|f| f.variant == Some(index))
+                        .count();
+                let field_range = quote! { #field_start..#field_end };
+                field_start = field_end;
                 let variant_name = schema::expand_name(toasty, &variant.name);
                 let discriminant_expr =
                     self.expand_discriminant_schema(&variant.attrs.discriminant);
@@ -329,6 +544,7 @@ impl Expand<'_> {
                     #toasty::core::schema::app::EnumVariant {
                         name: #variant_name,
                         discriminant: #discriminant_expr,
+                        field_range: #field_range,
                     }
                 }
             })
@@ -383,8 +599,8 @@ impl Expand<'_> {
     /// override on one sharing field suffices, so propagate it to every
     /// member. Disagreeing overrides are rejected by
     /// `expand_shared_column_checks`; here the first one wins.
-    fn shared_column_overrides(&self) -> HashMap<String, &syn::LitStr> {
-        let mut overrides = HashMap::new();
+    fn shared_column_overrides(&self) -> IndexMap<String, &syn::LitStr> {
+        let mut overrides = IndexMap::new();
         for field in &self.model.fields {
             let Some(ident) = &field.attrs.shared else {
                 continue;
@@ -449,7 +665,7 @@ impl Expand<'_> {
     fn primitive_schema_parts(
         &self,
         field: &crate::model::schema::Field,
-        shared_overrides: &HashMap<String, &syn::LitStr>,
+        shared_overrides: &IndexMap<String, &syn::LitStr>,
     ) -> SchemaFieldParts {
         let toasty = &self.toasty;
         let ty = primitive_ty_unwrap(field);
@@ -492,7 +708,7 @@ impl Expand<'_> {
     fn primitive_storage_name(
         &self,
         field: &crate::model::schema::Field,
-        shared_overrides: &HashMap<String, &syn::LitStr>,
+        shared_overrides: &IndexMap<String, &syn::LitStr>,
     ) -> TokenStream {
         let own_override = field.attrs.column.as_ref().and_then(|c| c.name.as_ref());
         let group_override = || {
@@ -842,29 +1058,19 @@ impl Expand<'_> {
                         quote! { #model_ident::#ident( #( #field_idents ),* ) }
                     };
 
-                    let field_exprs = fields.iter().map(|field| {
-                        let field_ident = &field.name.ident;
-                        match &field.ty {
-                            // The relation slot encodes as `Null`; the sibling
-                            // key fields carry the storage.
-                            FieldTy::BelongsTo(_) => {
-                                quote!(#toasty::embedded_relation_expr(&#field_ident))
-                            }
-                            _ => {
-                                let ty = primitive_ty_unwrap(field);
-                                quote!(#toasty::into_untyped_expr::<FieldExprTarget<#ty>, _>(#field_ident))
-                            }
-                        }
+                    let field_exprs = self.expand_embedded_field_exprs(&fields, false, |field| {
+                        let ident = &field.name.ident;
+                        quote!(#ident)
                     });
 
+                    let record = self.expand_embedded_record(quote! {
+                        #toasty::core::stmt::Expr::record([
+                            #discriminant_expr,
+                            #( #field_exprs ),*
+                        ])
+                    });
                     quote! {
-                        #pattern =>
-                            #toasty::stmt::Expr::from_untyped(
-                                #toasty::core::stmt::Expr::record([
-                                    #discriminant_expr,
-                                    #( #field_exprs ),*
-                                ])
-                            ),
+                        #pattern => #toasty::stmt::Expr::from_untyped(#record),
                     }
                 }
             })
@@ -954,6 +1160,24 @@ struct SchemaFieldParts {
     nullable: TokenStream,
     deferred: TokenStream,
     shared: TokenStream,
+}
+
+/// Maps a key field's index (within the containing model) to the sibling
+/// relation that can fill it in a write: `(relation field, referenced
+/// field ident on the target model)`. Built per variant, so only same-variant
+/// siblings fill each other.
+pub(super) fn relation_key_fill<'a>(
+    fields: &[&'a crate::model::schema::Field],
+) -> IndexMap<usize, (&'a crate::model::schema::Field, &'a syn::Ident)> {
+    let mut fill = IndexMap::new();
+    for field in fields {
+        if let FieldTy::BelongsTo(rel) = &field.ty {
+            for fk_field in &rel.foreign_key {
+                fill.insert(fk_field.source, (*field, &fk_field.target));
+            }
+        }
+    }
+    fill
 }
 
 fn primitive_ty_unwrap(field: &crate::model::schema::Field) -> &syn::Type {

@@ -16,9 +16,9 @@ pub use crate::schema::inventory;
 pub use crate::{
     Db, Error, Executor, Result, Statement,
     schema::{
-        Auto, Deferred, DiscoverItem, Document, Embed, Field, Load, Model, QueryMany, QueryOne,
-        QueryOptionOne, RelationManyField, RelationOneField, Scalar, Scope, ViaMany, ViaManyField,
-        ViaPath, ViaTarget, generate_unique_id,
+        Auto, Deferred, DiscoverItem, Document, Embed, EmbedCreate, Field, Load, Model, QueryMany,
+        QueryOne, QueryOptionOne, RelationManyField, RelationOneField, Scalar, Scope, ViaMany,
+        ViaManyField, ViaPath, ViaTarget, generate_unique_id,
     },
     stmt::CreateMany,
     stmt::{self, Assign, Expr, IntoExpr, IntoInsert, IntoStatement, List, Path},
@@ -41,6 +41,9 @@ pub type FieldExprTarget<F> = <F as Field>::ExprTarget;
 pub trait ModelCodegen: Model {
     /// Construct the field accessor for a singular relation to this model.
     fn new_one_field<Origin>(path: Path<Origin, Self>) -> Self::OneField<Origin>;
+
+    /// Encode referenced fields so the engine can resolve a relation key.
+    fn to_relation_expr(&self, fields: &[&str]) -> core::stmt::Expr;
 }
 
 /// Infer the [`Scope`] type from a scope expression and return its fields
@@ -71,20 +74,100 @@ pub fn into_untyped_expr<T, V: IntoExpr<T>>(value: V) -> core::stmt::Expr {
     expr.into()
 }
 
-/// Encode a relation field stored in an embedded type.
+/// Encode a deferred relation's loaded model for engine key resolution.
+pub fn embedded_relation_expr<T>(value: &Deferred<T>, fields: &[&str]) -> core::stmt::Expr
+where
+    Deferred<T>: EmbeddedRelationValue<Deferred<T>>,
+    <Deferred<T> as EmbeddedRelationValue<Deferred<T>>>::Model: ModelCodegen,
+{
+    embedded_relation_value_expr::<Deferred<T>, _>(value, fields)
+}
+
+/// A value usable as the parent of an embedded relation in a write.
 ///
-/// The relation itself has no storage — the sibling foreign key field(s) own
-/// the columns — so its record slot encodes as `Null`. Setting the relation
-/// from a model value is not supported; the key fields must be set
-/// explicitly and the relation left unloaded.
-pub fn embedded_relation_expr<T>(value: &Deferred<T>) -> core::stmt::Expr {
-    assert!(
-        value.is_unloaded(),
-        "a relation stored in an embedded type cannot be set from a model \
-         value; set the foreign key field(s) explicitly and leave the \
-         relation unloaded (`Deferred::default()`)"
-    );
-    core::stmt::Expr::null()
+/// The trait parameter `F` is the relation field's *declared* type
+/// (`Deferred<M>` or `Deferred<Option<M>>`); the accepted value is the target
+/// model itself (by value or reference) or a value of the declared shape.
+/// Keying by `F` rather than by the model keeps inference working when the
+/// setter receives `Deferred::default()` — the setter signature pins `F`, so
+/// the deferred wrapper's inner type resolves uniquely.
+///
+/// `model_ref` resolves to the parent model when one is present: an unloaded
+/// `Deferred` (or a loaded `Deferred<Option<M>>` holding `None`) resolves to
+/// `None`, meaning the write has no parent value to take keys from and the
+/// explicitly set key fields stand.
+pub trait EmbeddedRelationValue<F> {
+    type Model;
+
+    fn model_ref(&self) -> Option<&Self::Model>;
+}
+
+macro_rules! impl_embedded_relation_value {
+    ($field:ty) => {
+        impl<M: Model> EmbeddedRelationValue<$field> for M {
+            type Model = M;
+
+            fn model_ref(&self) -> Option<&M> {
+                Some(self)
+            }
+        }
+
+        impl<M: Model> EmbeddedRelationValue<$field> for &M {
+            type Model = M;
+
+            fn model_ref(&self) -> Option<&M> {
+                Some(self)
+            }
+        }
+
+        impl<M: Model> EmbeddedRelationValue<$field> for &$field {
+            type Model = M;
+
+            fn model_ref(&self) -> Option<&M> {
+                (*self).model_ref()
+            }
+        }
+    };
+}
+
+impl_embedded_relation_value!(Deferred<M>);
+impl_embedded_relation_value!(Deferred<Option<M>>);
+
+impl<M: Model> EmbeddedRelationValue<Deferred<M>> for Deferred<M> {
+    type Model = M;
+
+    fn model_ref(&self) -> Option<&M> {
+        if self.is_unloaded() {
+            None
+        } else {
+            Some(self.get())
+        }
+    }
+}
+
+impl<M: Model> EmbeddedRelationValue<Deferred<Option<M>>> for Deferred<Option<M>> {
+    type Model = M;
+
+    fn model_ref(&self) -> Option<&M> {
+        if self.is_unloaded() {
+            None
+        } else {
+            self.get().as_ref()
+        }
+    }
+}
+
+/// Encode a loaded relation's key, leaving unloaded relations unset.
+pub fn embedded_relation_value_expr<F, V>(value: &V, fields: &[&str]) -> core::stmt::Expr
+where
+    V: EmbeddedRelationValue<F>,
+    V::Model: ModelCodegen,
+{
+    value
+        .model_ref()
+        .map_or_else(core::stmt::Expr::null, |model| {
+            model.to_relation_expr(fields)
+        })
 }
 
 /// Continue a `has_many` traversal from `query` along `path`.

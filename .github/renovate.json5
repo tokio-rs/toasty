@@ -27,6 +27,15 @@
       extractVersionTemplate: "^(?<version>\\d+\\.\\d+\\.\\d+)$",
     },
   ],
+  // `Cargo.lock` is committed, so Renovate only touches transitive
+  // dependencies through lockfile maintenance (`cargo update`). Without this
+  // the lockfile would drift ever further behind the semver-compatible
+  // latest, which is the situation CI is meant to exercise.
+  lockFileMaintenance: {
+    enabled: true,
+    automerge: true,
+    platformAutomerge: true,
+  },
   packageRules: [
     {
       matchManagers: ["custom.regex"],
@@ -44,6 +53,11 @@
       matchDepTypes: ["devDependencies"],
       automerge: true,
       platformAutomerge: true,
+    },
+    // Pinned to the version `postgres-protocol` uses; see Cargo.toml.
+    {
+      matchPackageNames: ["fallible-iterator"],
+      enabled: false,
     },
   ],
 }

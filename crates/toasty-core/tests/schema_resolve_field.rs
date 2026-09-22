@@ -105,7 +105,7 @@ fn embedded_field(model: ModelId, index: usize, name: &str, target: ModelId) -> 
 /// Schema:
 ///   User { id, name, status: Status, contact: ContactInfo, address: Address }
 ///   Status = enum { Active(0), Inactive(1) }  (unit variants only)
-///   ContactInfo = enum { Email(0, fields: [address]), Phone(1, fields: [number]) }
+///   ContactInfo = enum { Email(0, fields: [address]), Phone(1, fields: [country_code, number]) }
 ///   Address = struct { street, city }
 fn schema() -> Schema {
     let status = Model::EmbeddedEnum(EmbeddedEnum {
@@ -120,10 +120,12 @@ fn schema() -> Schema {
             EnumVariant {
                 name: Name::new("Active"),
                 discriminant: stmt::Value::I64(0),
+                field_range: 0..0,
             },
             EnumVariant {
                 name: Name::new("Inactive"),
                 discriminant: stmt::Value::I64(1),
+                field_range: 0..0,
             },
         ],
         fields: vec![],
@@ -142,15 +144,18 @@ fn schema() -> Schema {
             EnumVariant {
                 name: Name::new("Email"),
                 discriminant: stmt::Value::I64(0),
+                field_range: 0..1,
             },
             EnumVariant {
                 name: Name::new("Phone"),
                 discriminant: stmt::Value::I64(1),
+                field_range: 1..3,
             },
         ],
         fields: vec![
             variant_field(CONTACT_ENUM, 0, "address", 0),
-            variant_field(CONTACT_ENUM, 1, "number", 1),
+            variant_field(CONTACT_ENUM, 1, "country_code", 1),
+            variant_field(CONTACT_ENUM, 2, "number", 1),
         ],
         indices: vec![],
     });
@@ -253,7 +258,7 @@ fn resolve_embedded_struct_field() {
     assert_eq!(field.name.app.as_deref(), Some("city"));
 }
 
-// === Embedded enum (data-carrying) — valid two-step projection ===
+// === Embedded enum (data-carrying) — field step is local to the variant ===
 
 #[test]
 fn resolve_data_enum_variant_field() {
@@ -266,7 +271,13 @@ fn resolve_data_enum_variant_field() {
         .unwrap();
     assert_eq!(field.name.app.as_deref(), Some("address"));
 
-    // User.contact -> Phone(disc=1) -> number(global index=1) => [3, 1, 1]
+    // Phone local 0 = country_code => [3, 1, 0]
+    let field = s
+        .resolve_field(root, &stmt::Projection::from([3, 1, 0]))
+        .unwrap();
+    assert_eq!(field.name.app.as_deref(), Some("country_code"));
+
+    // Phone local 1 = number => [3, 1, 1]
     let field = s
         .resolve_field(root, &stmt::Projection::from([3, 1, 1]))
         .unwrap();
@@ -321,6 +332,23 @@ fn resolve_enum_invalid_field_in_variant_returns_none() {
     // User.contact -> Email(disc=0) -> field 99 doesn't exist
     assert!(
         s.resolve_field(root, &stmt::Projection::from([3, 0, 99]))
+            .is_none()
+    );
+}
+
+// Field steps must not leak across variants: [3, 0, 1] is Email + Phone's
+// field, and [3, 1, 2] is past Phone's two locals.
+#[test]
+fn resolve_enum_field_index_is_variant_local() {
+    let s = schema();
+    let root = s.model(USER);
+
+    assert!(
+        s.resolve_field(root, &stmt::Projection::from([3, 0, 1]))
+            .is_none()
+    );
+    assert!(
+        s.resolve_field(root, &stmt::Projection::from([3, 1, 2]))
             .is_none()
     );
 }
@@ -416,4 +444,59 @@ fn resolve_through_primitive_is_none() {
     let s = schema();
     let root = s.model(USER);
     assert!(s.resolve(root, &stmt::Projection::from([1, 0])).is_none());
+}
+
+#[test]
+fn variant_field_ranges_include_empty_variants() {
+    let mut s = schema();
+    s.models.retain(|id, _| *id == CONTACT_ENUM);
+    let Model::EmbeddedEnum(model) = s.models.get_mut(&CONTACT_ENUM).unwrap() else {
+        unreachable!()
+    };
+    model.variants.insert(
+        1,
+        EnumVariant {
+            name: Name::new("Empty"),
+            discriminant: stmt::Value::I64(2),
+            field_range: 1..1,
+        },
+    );
+    model.variants.push(EnumVariant {
+        name: Name::new("Other"),
+        discriminant: stmt::Value::I64(3),
+        field_range: 3..3,
+    });
+    for field in &mut model.fields[1..] {
+        field.variant.as_mut().unwrap().index = 2;
+    }
+    assert!(model.variant_fields(1).is_empty());
+    assert_eq!(model.variant_fields(2)[0].id, CONTACT_ENUM.field(1));
+    assert!(model.variant_fields(3).is_empty());
+    toasty_core::schema::Builder::new()
+        .build(s, &toasty_core::driver::Capability::SQLITE)
+        .unwrap();
+}
+
+#[test]
+fn rejects_invalid_variant_field_ranges() {
+    for ranges in [
+        [0..1, 2..3],
+        [0..1, 0..3],
+        [0..1, 1..4],
+        [0..1, 1..2],
+        [0..2, 2..3],
+    ] {
+        let mut s = schema();
+        s.models.retain(|id, _| *id == CONTACT_ENUM);
+        let Model::EmbeddedEnum(model) = s.models.get_mut(&CONTACT_ENUM).unwrap() else {
+            unreachable!()
+        };
+        for (variant, range) in model.variants.iter_mut().zip(ranges) {
+            variant.field_range = range;
+        }
+        let err = toasty_core::schema::Builder::new()
+            .build(s, &toasty_core::driver::Capability::SQLITE)
+            .unwrap_err();
+        assert!(err.to_string().contains("field range"), "{err}");
+    }
 }

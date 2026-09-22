@@ -463,6 +463,25 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             }
             Expr::IsNull(_) => Type::Bool,
             Expr::IsVariant(_) => Type::Bool,
+            Expr::Variant(e) => {
+                // The selected variant's payload: its fields, without the
+                // discriminant.
+                let base = self.infer_expr_ty2(args, &e.base, returning_expr);
+                let Type::Model(id) = base else {
+                    todo!("variant selection on non-enum type {base:#?}")
+                };
+                assert_eq!(id, e.variant.model, "variant selection on the wrong enum");
+                let Some(Model::EmbeddedEnum(embedded)) = self.schema.model(id) else {
+                    todo!("variant selection on non-enum model {id:?}")
+                };
+                Type::Record(
+                    embedded
+                        .variant_fields(e.variant.index)
+                        .iter()
+                        .map(|field| field.expr_ty().clone())
+                        .collect(),
+                )
+            }
             Expr::List(e) => {
                 debug_assert!(!e.items.is_empty());
                 Type::list(self.infer_expr_ty2(args, &e.items[0], returning_expr))
@@ -487,6 +506,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 // The mapped type is a list
                 Type::list(ty)
             }
+            Expr::Not(_) => Type::Bool,
             Expr::Or(_) => Type::Bool,
             Expr::Project(e) => {
                 if returning_expr {
