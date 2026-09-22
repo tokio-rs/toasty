@@ -74,19 +74,10 @@ pub fn into_untyped_expr<T, V: IntoExpr<T>>(value: V) -> core::stmt::Expr {
     expr.into()
 }
 
-/// Encode a deferred relation's loaded model for engine key resolution.
-pub fn embedded_relation_expr<T>(value: &Deferred<T>, fields: &[&str]) -> core::stmt::Expr
-where
-    Deferred<T>: EmbeddedRelationValue<Deferred<T>>,
-    <Deferred<T> as EmbeddedRelationValue<Deferred<T>>>::Model: ModelCodegen,
-{
-    embedded_relation_value_expr::<Deferred<T>, _>(value, fields)
-}
-
 /// A value usable as the parent of an embedded relation in a write.
 ///
 /// The trait parameter `F` is the relation field's *declared* type
-/// (`Deferred<M>` or `Deferred<Option<M>>`); the accepted value is the target
+/// (`M`, `Option<M>`, `Deferred<M>`, or `Deferred<Option<M>>`); the accepted value is the target
 /// model itself (by value or reference) or a value of the declared shape.
 /// Keying by `F` rather than by the model keeps inference working when the
 /// setter receives `Deferred::default()` — the setter signature pins `F`, so
@@ -132,6 +123,31 @@ macro_rules! impl_embedded_relation_value {
 
 impl_embedded_relation_value!(Deferred<M>);
 impl_embedded_relation_value!(Deferred<Option<M>>);
+impl_embedded_relation_value!(Option<M>);
+
+impl<M: Model> EmbeddedRelationValue<M> for M {
+    type Model = M;
+
+    fn model_ref(&self) -> Option<&M> {
+        Some(self)
+    }
+}
+
+impl<M: Model> EmbeddedRelationValue<M> for &M {
+    type Model = M;
+
+    fn model_ref(&self) -> Option<&M> {
+        Some(self)
+    }
+}
+
+impl<M: Model> EmbeddedRelationValue<Option<M>> for Option<M> {
+    type Model = M;
+
+    fn model_ref(&self) -> Option<&M> {
+        self.as_ref()
+    }
+}
 
 impl<M: Model> EmbeddedRelationValue<Deferred<M>> for Deferred<M> {
     type Model = M;

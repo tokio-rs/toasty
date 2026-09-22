@@ -239,12 +239,14 @@ let name = match &object.owner {
 };
 ```
 
-To avoid the extra round-trip, `.include()` preloads the relation field of
-whichever variant each row holds:
+To avoid the extra round-trip, name each relation to preload with
+`.include()`:
 
 ```rust
 let objects = Object::all()
-    .include(Object::fields().owner())
+    .include(Object::fields().owner().human().human())
+    .include(Object::fields().owner().animal().animal())
+    .include(Object::fields().owner().bot().bot())
     .collect(&mut db)
     .await?;
 
@@ -254,6 +256,12 @@ for object in &objects {
     }
 }
 ```
+
+An include loads only the field its path names. Because `owner: Owner` is
+not deferred, `.include(Object::fields().owner())` has no effect. If the
+model stores `owner: Deferred<Owner>`, that include loads the enum value and
+leaves its deferred relations unloaded. A full relation path loads any
+deferred embeds along the path as well as the relation at its end.
 
 ### Creating and updating
 
@@ -301,9 +309,10 @@ missing — the exclusivity that the status-quo encoding cannot enforce.
 - `human.objects()` and other pair queries add the discriminant predicate
   automatically. On SQL backends the query has the form
   `WHERE owner = 'human' AND owner_id = ?`.
-- `.include(Object::fields().owner())` issues one query per variant present
-  in the result set and merges the results into each row's enum value.
-  Variants not present in the result set cost nothing.
+- An include of an embedded relation path issues a query when that variant is
+  present in the result set and merges the result into each row's enum value.
+  An include ending at an embed loads only that embed when it is deferred.
+  It does not load relations inside the embed.
 - Writes set the discriminant and key columns together, as one embed value.
   Columns belonging to other variants are written NULL, per existing
   embedded-enum storage semantics.
@@ -572,12 +581,14 @@ The work ships in steps, each providing user value on its own.
    This lifts step 1's explicit-keys restriction: a loaded relation
    value in a write is rewritten to its key assignments instead of
    rejected.
-3. **Preloading with `.include()`.** `.include(Object::fields().owner())`
-   issues one query per variant present and merges results into each
-   row's enum value. This lifts step 1's `Deferred`-only requirement on
-   embedded relation fields: a non-deferred field (`human: Human`) needs
-   its value present on every load, which only works once includes can
-   populate it — with them, it behaves as at model level.
+3. **Preloading with `.include()`.** An explicit relation path such as
+   `.include(Object::fields().owner().human().human())` loads that relation
+   for rows holding the matching variant. An include ending at an embed is
+   shallow: it loads the embed itself when deferred and leaves deferred
+   relations inside it unloaded. This lifts step 1's `Deferred`-only
+   requirement on embedded relation fields: a non-deferred field
+   (`human: Human`) needs its value present on every load, which only works
+   once includes can populate it — with them, it behaves as at model level.
 4. **Inverse pairs, queries.** `pair` paths, the `Pair` struct, the
    per-embedding instance records, linker recursion, and the removals
    listed above land together; `has_many` / `has_one` declarations on
@@ -638,6 +649,8 @@ None.
 
 ## Out of scope
 
+- **Loading every relation inside an embed with one include.** Each relation
+  currently needs its own include path. A shorter form requires a separate API.
 - **`via` relations through a polymorphic owner** (e.g. collecting all
   objects of all humans in a group) — composition with `via` is a separate
   design.
