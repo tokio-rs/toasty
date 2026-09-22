@@ -215,13 +215,17 @@ impl LowerStatement<'_, '_> {
             let app::FieldTy::BelongsTo(relation) = &field.ty else {
                 continue;
             };
-            if field.deferred
-                || !relation
-                    .foreign_key
-                    .fields
-                    .iter()
-                    .any(|fk| returned_fields.contains(fk.source.index))
-            {
+            if field.deferred {
+                continue;
+            }
+
+            let has_returned_foreign_key_field = relation
+                .foreign_key
+                .fields
+                .iter()
+                .any(|fk| returned_fields.contains(fk.source.index));
+
+            if !has_returned_foreign_key_field {
                 continue;
             }
 
