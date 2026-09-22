@@ -134,7 +134,7 @@ impl LowerStatement<'_, '_> {
             return;
         };
         let mapping = self.mapping_unwrap();
-        self.lower_returning().process_sparse_embeds(
+        self.lower_returning().process_sparse_embeds_for_update(
             expr,
             &model.fields,
             &mapping.fields,
@@ -142,7 +142,7 @@ impl LowerStatement<'_, '_> {
         );
     }
 
-    fn process_sparse_embeds(
+    fn process_sparse_embeds_for_update(
         &mut self,
         expr: &mut stmt::Expr,
         app_fields: &[app::Field],
@@ -182,7 +182,7 @@ impl LowerStatement<'_, '_> {
                 else {
                     unreachable!("only structs support partial updates")
                 };
-                self.process_sparse_embeds(
+                self.process_sparse_embeds_for_update(
                     field_expr,
                     &model.fields,
                     &mapping_fields[field_index].as_struct().unwrap().fields,
