@@ -992,12 +992,15 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                             // the enclosing update without reading its returned row.
                             if let Some(update_assignments) =
                                 self.state.update_returning.get(&target_id)
-                                && let Some(stmt::Assignment::Set(assigned_value)) =
-                                    update_assignments.get(&[expr_column.column])
-                                && assigned_value.is_const()
                             {
-                                *expr = assigned_value.clone();
-                                return;
+                                if let Some(stmt::Assignment::Set(assigned_value)) =
+                                    update_assignments.get(&[expr_column.column])
+                                {
+                                    if assigned_value.is_const() {
+                                        *expr = assigned_value.clone();
+                                        return;
+                                    }
+                                }
                             }
 
                             // the current scope ID should also be the top of the stack
