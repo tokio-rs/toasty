@@ -656,8 +656,9 @@ fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
             included = true;
             if rest.is_empty() {
                 top_order_by = fi.query.as_ref().and_then(|query| query.order_by.clone());
-                match query_filter_expr(&fi.query).cloned() {
+                match query_filter_expr(&fi.query) {
                     Some(f) if !unfiltered_self => {
+                        let f = f.clone();
                         top_filter = Some(match top_filter.take() {
                             Some(prev) => stmt::Expr::or(prev, f),
                             None => f,
