@@ -4,7 +4,6 @@ use std::borrow::Cow;
 use toasty_core::{
     Result,
     driver::{Capability, ConnectContext, Connection, Driver},
-    schema::{db::Migration, diff},
 };
 
 /// A MariaDB 11.8+ [`Driver`] that connects through SQLx.
@@ -52,10 +51,6 @@ impl Driver for MariaDB {
 
     async fn connect(&self, cx: &ConnectContext) -> Result<Box<dyn Connection>> {
         self.inner.connect(cx).await
-    }
-
-    fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
-        self.inner.generate_migration(schema_diff)
     }
 
     async fn reset_db(&self) -> Result<()> {

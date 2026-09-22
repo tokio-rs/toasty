@@ -80,10 +80,7 @@ use toasty_core::{
         log::QueryLog,
         operation::{IsolationLevel, Operation, RawSqlRet, Transaction, TypedValue},
     },
-    schema::{
-        db::{self, Migration, Table},
-        diff,
-    },
+    schema::db::{self, Table},
     stmt,
 };
 use toasty_sql::{self as sql};
@@ -1105,17 +1102,6 @@ impl Driver for Turso {
             default_begin_sql,
             query_log: cx.query_log,
         }))
-    }
-
-    fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
-        let statements = sql::MigrationStatement::from_diff(schema_diff, &Capability::SQLITE);
-
-        let sql_strings: Vec<String> = statements
-            .iter()
-            .map(|stmt| sql::Serializer::sqlite(stmt.schema()).serialize(stmt.statement()))
-            .collect();
-
-        Migration::new_sql_with_breakpoints(&sql_strings)
     }
 
     async fn reset_db(&self) -> Result<()> {

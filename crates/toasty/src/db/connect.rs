@@ -2,11 +2,8 @@ use crate::Result;
 
 use async_trait::async_trait;
 use std::borrow::Cow;
+use toasty_core::driver::Connection;
 use toasty_core::driver::{Capability, ConnectContext, ConnectionUrl, Driver};
-use toasty_core::{
-    driver::Connection,
-    schema::{db::Migration, diff},
-};
 
 /// A connection to a database, wrapping the specific driver implementation.
 pub struct Connect {
@@ -146,10 +143,6 @@ impl Driver for Connect {
 
     fn max_connections(&self) -> Option<usize> {
         self.driver.max_connections()
-    }
-
-    fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
-        self.driver.generate_migration(schema_diff)
     }
 
     async fn reset_db(&self) -> Result<()> {

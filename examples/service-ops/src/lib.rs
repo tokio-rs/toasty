@@ -1,9 +1,10 @@
 //! service-ops: a deployable Toasty service laid out the way a real app ships — shared models
-//! and connection setup in a library, consumed by two binaries: an app `server` and a
-//! project-local `migrate` CLI. Keeping the models in one library is what lets the migration
-//! tool diff against exactly the types the server runs.
+//! and connection setup in a library, consumed by an app `server` binary. Schema changes are
+//! managed with the standalone `toasty` CLI (`cargo install toasty-cli`), which compiles this
+//! package to diff against exactly the types the server runs.
 //!
-//! See `src/bin/server.rs` (the app) and `src/bin/migrate.rs` (the migration CLI).
+//! See `src/bin/server.rs` (the app); run `toasty migrate generate` from this directory after
+//! editing models.
 
 #[derive(Debug, toasty::Model)]
 pub struct Tenant {
