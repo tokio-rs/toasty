@@ -2036,7 +2036,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     // ===== Finalization helpers =====
 
     fn process_back_ref_projections(&mut self, exec_stmt_node_id: mir::NodeId) {
-        for (child_id, back_ref) in &self.stmt_info.back_refs {
+        for (child_stmt_id, back_ref) in &self.stmt_info.back_refs {
             let projection = stmt::Expr::record(back_ref.exprs.iter().map(|expr_reference| {
                 let index = self
                     .load_data
@@ -2054,89 +2054,114 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             let body = eval::Func::from_stmt(projection, vec![row_ty]);
             let eval =
                 mir::Eval::map_over(&self.planner.mir, exec_stmt_node_id, IndexSet::new(), body);
-            let mut project_node_id = self.planner.mir.insert(eval);
-            if self.stmt_info.stmt().is_query()
-                && let Some(predicate) = self.back_ref_filter(*child_id, back_ref, project_node_id)
-            {
-                project_node_id = self.planner.mir.insert(mir::Filter {
+            let project_node_id = self.planner.mir.insert(eval);
+            let project_node_id = if self.stmt_info.stmt().is_query()
+                && let Some(predicate) = self.build_parent_only_back_ref_filter(
+                    *child_stmt_id,
+                    back_ref,
+                    project_node_id,
+                ) {
+                self.planner.mir.insert(mir::Filter {
                     input: project_node_id,
                     args: IndexSet::new(),
                     predicate,
                     ty: self.planner.mir[project_node_id].ty().clone(),
-                });
-            }
+                })
+            } else {
+                project_node_id
+            };
             back_ref.node_id.set(Some(project_node_id));
         }
     }
 
-    /// Filter each child's batch input by predicates that depend only on the
-    /// parent. In particular, a variant-scoped include receives keys only from
-    /// that variant. An empty batch simplifies the child query to no results.
-    fn back_ref_filter(
+    /// Builds a filter over the projected parent rows passed to a child query.
+    ///
+    /// Each eligible top-level conjunct is copied from the child query and
+    /// rewritten to read fields from the projected back-reference row. This
+    /// limits a variant-scoped include to parent rows from that variant. If
+    /// every row is removed, the child receives an empty batch.
+    fn build_parent_only_back_ref_filter(
         &self,
-        child_id: hir::StmtId,
+        child_stmt_id: hir::StmtId,
         back_ref: &hir::BackRef,
-        input: mir::NodeId,
+        project_node_id: mir::NodeId,
     ) -> Option<eval::Func> {
-        let child = &self.planner.hir[child_id];
-        let stmt::Statement::Query(query) = child.stmt() else {
+        let child_stmt = &self.planner.hir[child_stmt_id];
+        let stmt::Statement::Query(child_query) = child_stmt.stmt() else {
             return None;
         };
-        let stmt::ExprSet::Select(select) = &query.body else {
+        let stmt::ExprSet::Select(child_select) = &child_query.body else {
             return None;
         };
-        let filter = select.filter.expr.as_ref()?;
-        let operands = match filter {
+        let child_filter = child_select.filter.expr.as_ref()?;
+        let top_level_conjuncts = match child_filter {
             stmt::Expr::And(and) => and.operands.as_slice(),
             expr => std::slice::from_ref(expr),
         };
-        let mut predicates = vec![];
-        for operand in operands {
-            let mut predicate = operand.clone();
-            let mut valid = true;
-            let mut references_parent = false;
-            visit_mut::for_each_expr_mut(&mut predicate, |expr| match expr {
-                stmt::Expr::Arg(arg) => {
-                    if let Some(hir::Arg::Ref {
-                        stmt_id,
-                        target_expr_ref,
-                        ..
-                    }) = child.args.get(arg.position)
-                        && *stmt_id == self.stmt_id
-                    {
-                        let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
-                        *expr = stmt::Expr::arg_project(0, [column]);
-                        references_parent = true;
-                    } else {
-                        valid = false;
-                    }
-                }
-                stmt::Expr::Value(_)
-                | stmt::Expr::BinaryOp(_)
-                | stmt::Expr::And(_)
-                | stmt::Expr::Or(_)
-                | stmt::Expr::Not(_)
-                | stmt::Expr::IsNull(_)
-                | stmt::Expr::Cast(_)
-                | stmt::Expr::Project(_)
-                | stmt::Expr::Record(_)
-                | stmt::Expr::Match(_) => {}
-                _ => valid = false,
-            });
-            if valid && references_parent {
-                predicates.push(predicate);
-            }
-        }
+        let predicates = top_level_conjuncts
+            .iter()
+            .filter_map(|conjunct| {
+                self.rewrite_parent_only_conjunct(child_stmt, back_ref, conjunct.clone())
+            })
+            .collect::<Vec<_>>();
+
         if predicates.is_empty() {
             return None;
         }
-        let stmt::Type::List(row_ty) = self.planner.mir[input].ty() else {
+
+        let stmt::Type::List(row_ty) = self.planner.mir[project_node_id].ty() else {
             return None;
         };
+
         Some(eval::Func::from_stmt(
             stmt::Expr::and_from_vec(predicates),
             vec![(**row_ty).clone()],
         ))
+    }
+
+    /// Rewrites one child-query conjunct for a projected parent row.
+    ///
+    /// Every argument must reference this parent, and the conjunct must contain
+    /// at least one parent reference and only the expression variants below.
+    fn rewrite_parent_only_conjunct(
+        &self,
+        child_stmt: &hir::StatementInfo,
+        back_ref: &hir::BackRef,
+        mut conjunct: stmt::Expr,
+    ) -> Option<stmt::Expr> {
+        let mut eligible = true;
+        let mut references_parent = false;
+
+        visit_mut::for_each_expr_mut(&mut conjunct, |expr| match expr {
+            stmt::Expr::Arg(arg) => {
+                if let Some(hir::Arg::Ref {
+                    stmt_id,
+                    target_expr_ref,
+                    ..
+                }) = child_stmt.args.get(arg.position)
+                    && *stmt_id == self.stmt_id
+                {
+                    let back_ref_column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
+                    *expr = stmt::Expr::arg_project(0, [back_ref_column]);
+                    references_parent = true;
+                } else {
+                    eligible = false;
+                }
+            }
+            stmt::Expr::Value(_)
+            | stmt::Expr::BinaryOp(_)
+            | stmt::Expr::And(_)
+            | stmt::Expr::Or(_)
+            | stmt::Expr::Not(_)
+            | stmt::Expr::IsNull(_)
+            | stmt::Expr::Cast(_)
+            | stmt::Expr::Project(_)
+            | stmt::Expr::Record(_)
+            | stmt::Expr::Match(_) => {}
+            _ => eligible = false,
+        });
+
+        (eligible && references_parent).then_some(conjunct)
     }
 
     fn plan_child_statements(&mut self) -> Result<()> {

@@ -164,8 +164,9 @@ struct LowerStatement<'a, 'b> {
 
 #[derive(Debug)]
 struct LoweringState<'a> {
-    /// Lowered assignments available while loading eager relations for an
-    /// update's returned embeds. Their keys come from the replacement value.
+    /// Lowered assignments for updates whose returning expressions are active.
+    /// Sub-statements that load relations use assigned constants instead of
+    /// reading them from the update's returned row.
     update_returning: IndexMap<hir::StmtId, stmt::Assignments>,
     /// Database engine handle
     engine: &'a Engine,
@@ -987,12 +988,15 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                             let source_id = self.scope_stmt_id();
                             let target_id = self.resolve_stmt_id(expr_column.nesting);
 
-                            if let Some(assignments) = self.state.update_returning.get(&target_id)
-                                && let Some(stmt::Assignment::Set(value)) =
-                                    assignments.get(&[expr_column.column])
-                                && value.is_const()
+                            // A relation subquery can use a constant assigned by
+                            // the enclosing update without reading its returned row.
+                            if let Some(update_assignments) =
+                                self.state.update_returning.get(&target_id)
+                                && let Some(stmt::Assignment::Set(assigned_value)) =
+                                    update_assignments.get(&[expr_column.column])
+                                && assigned_value.is_const()
                             {
-                                *expr = value.clone();
+                                *expr = assigned_value.clone();
                                 return;
                             }
 
@@ -1148,6 +1152,8 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         if self.model().is_some()
             && let stmt::Returning::Project(value) = i
         {
+            // Expand relation projections while they still refer to app fields.
+            // The normal returning pass replaces them with mapped expressions.
             self.lower_returning().process_projected_returning(value);
         }
 
@@ -1228,7 +1234,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             lower.visit_assignments_mut(&mut upsert.update_defaults);
         }
 
-        let returning_model = stmt
+        // Returning lowering rewrites `Model` to `Project`, so preserve the
+        // caller's original request for insert relation planning.
+        let returns_model = stmt
             .returning
             .as_ref()
             .is_some_and(stmt::Returning::is_model);
@@ -1250,7 +1258,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             &mut stmt.source,
             &mut stmt.returning,
             preserve_returning_projection,
-            returning_model,
+            returns_model,
         );
 
         // Lower the insertion source
@@ -1374,18 +1382,21 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         }
 
         if let Some(returning) = &mut stmt.returning {
-            let stmt_id = lower.scope_stmt_id();
+            let update_stmt_id = lower.scope_stmt_id();
+            // Relation subqueries may replace references to this update with
+            // constants from assignments lowered to column indices.
             lower
                 .state
                 .update_returning
-                .insert(stmt_id, stmt.assignments.clone());
+                .insert(update_stmt_id, stmt.assignments.clone());
             if returning_changed {
                 lower.process_update_embedded_relations(returning);
             }
             lower.visit_returning_mut(returning);
             // Use the lowered assignments (which are now column-indexed)
             returning::constantize_update_returning(lower.expr_cx, returning, &stmt.assignments);
-            lower.state.update_returning.swap_remove(&stmt_id);
+            // Restrict substitution to relation loads for this returning clause.
+            lower.state.update_returning.swap_remove(&update_stmt_id);
         }
 
         self.visit_update_target_mut(&mut stmt.target);
@@ -1598,18 +1609,18 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 Some(self.combine_record_op(op, std::mem::take(&mut rec.fields), val_exprs))
             }
             (stmt::Expr::Cast(expr_cast), other) | (other, stmt::Expr::Cast(expr_cast)) => {
-                // Expand embed decodes into guarded comparisons before
-                // converting their keys to the database's stored type.
+                // Expand decodes of embedded values into guarded comparisons so
+                // each cast operand can use the database's stored type.
                 if expr_is_enum_decode(other) {
-                    // This also covers optional structs. Each surviving arm
-                    // receives the same cast handling as a direct relation.
-                    let original = stmt::Expr::binary_op(lhs.clone(), op, rhs.clone());
-                    let mut expanded = original.clone();
+                    let comparison = stmt::Expr::binary_op(lhs.clone(), op, rhs.clone());
+                    let mut expanded_comparison = comparison.clone();
                     Simplify::with_context(self.expr_cx, self.capability())
-                        .visit_expr_mut(&mut expanded);
-                    if expanded != original {
-                        self.visit_expr_mut(&mut expanded);
-                        return Some(expanded);
+                        .visit_expr_mut(&mut expanded_comparison);
+                    // Simplification also expands optional struct decodes.
+                    // Revisit only after it makes progress to prevent recursion.
+                    if expanded_comparison != comparison {
+                        self.visit_expr_mut(&mut expanded_comparison);
+                        return Some(expanded_comparison);
                     }
                     return None;
                 }
