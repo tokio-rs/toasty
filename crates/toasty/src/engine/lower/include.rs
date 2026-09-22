@@ -116,12 +116,7 @@ impl LowerStatement<'_, '_> {
                     &projected.path,
                 );
             }
-            _ if projected.field.ty.is_relation()
-                && matches!(
-                    expr,
-                    stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, .. })
-                ) =>
-            {
+            _ if projected.field.ty.is_relation() && expr.is_self_field() => {
                 *expr = self.build_relation_subquery(projected.field.id.index);
             }
             _ => {}
