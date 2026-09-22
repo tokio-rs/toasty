@@ -18,10 +18,11 @@ name = "toasty"
 path = "src/bin/toasty.rs"
 
 [features]
-default = ["sqlite", "postgresql", "mysql"]
+default = ["sqlite", "postgresql", "mysql", "mariadb"]
 sqlite = ["toasty/sqlite"]
 postgresql = ["toasty/postgresql"]
 mysql = ["toasty/mysql"]
+mariadb = ["toasty/mariadb"]
 turso = ["toasty/turso"]
 
 [dependencies]
