@@ -60,12 +60,11 @@ use super::relation_expr;
 /// `ApplyInsertScope::apply_expr`) see the already-lifted form.
 pub(super) struct LiftInSubquery<'a> {
     cx: ExprContext<'a>,
-    exclude_nulls: bool,
 }
 
 impl<'a> LiftInSubquery<'a> {
-    pub(super) fn new(cx: ExprContext<'a>, exclude_nulls: bool) -> Self {
-        Self { cx, exclude_nulls }
+    pub(super) fn new(cx: ExprContext<'a>) -> Self {
+        Self { cx }
     }
 
     pub(super) fn rewrite(&mut self, stmt: &mut stmt::Statement) {
@@ -75,19 +74,14 @@ impl<'a> LiftInSubquery<'a> {
     fn scope<'scope>(&'scope self, target: impl IntoExprTarget<'scope>) -> LiftInSubquery<'scope> {
         LiftInSubquery {
             cx: self.cx.scope(target),
-            exclude_nulls: self.exclude_nulls,
         }
     }
 
     fn exclude_nulls(&self, expr: &mut stmt::Expr) {
-        if !self.exclude_nulls {
-            return;
-        }
-
-        let stmt::Expr::InSubquery(expr) = expr else {
+        let stmt::Expr::InSubquery(in_subquery) = expr else {
             return;
         };
-        let select = expr.query.body.as_select_mut_unwrap();
+        let select = in_subquery.query.body.as_select_mut_unwrap();
         let target = select.source.model_id_unwrap();
         let returning = select.returning.as_project_unwrap().clone();
 
@@ -102,6 +96,20 @@ impl<'a> LiftInSubquery<'a> {
                 select.add_filter(stmt::Expr::is_not_null(field.clone()));
             }
         }
+
+        // A null foreign key means the relation is absent. Make membership
+        // false instead of SQL UNKNOWN so negating it includes those rows.
+        // This also prevents null keys from matching each other in memory.
+        // Simplification removes guards on non-nullable key fields.
+        let lhs = &*in_subquery.expr;
+        let mut operands: Vec<_> = lhs
+            .as_record()
+            .map_or(std::slice::from_ref(lhs), |record| &record.fields)
+            .iter()
+            .map(|field| stmt::Expr::is_not_null(field.clone()))
+            .collect();
+        operands.push(expr.take());
+        *expr = stmt::Expr::and_from_vec(operands);
     }
 }
 

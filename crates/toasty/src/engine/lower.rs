@@ -104,8 +104,7 @@ impl LoweringState<'_> {
         // BelongsTo→FK) fires inside the lowering walk itself via
         // `LowerStatement::visit_expr_binary_op_mut`.
         association::RewriteVia::new(expr_cx).rewrite(&mut stmt);
-        lift_in_subquery::LiftInSubquery::new(expr_cx, self.engine.capability.sql())
-            .rewrite(&mut stmt);
+        lift_in_subquery::LiftInSubquery::new(expr_cx).rewrite(&mut stmt);
         lift_update_query::LiftUpdateQuery::new().rewrite(&mut stmt);
 
         // Combine compatible IN subqueries after relation lifting and before
@@ -1925,11 +1924,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             // (model→PK, BelongsTo→FK) fires inside the lowering walk via
             // `LowerStatement::visit_expr_binary_op_mut`.
             association::RewriteVia::new(child.expr_cx).rewrite(&mut stmt);
-            lift_in_subquery::LiftInSubquery::new(
-                child.expr_cx,
-                child.state.engine.capability.sql(),
-            )
-            .rewrite(&mut stmt);
+            lift_in_subquery::LiftInSubquery::new(child.expr_cx).rewrite(&mut stmt);
             // Combine compatible IN subqueries before the lowering walk
             // extracts them into separate NoSQL statements.
             Simplify::with_context(child.expr_cx, child.state.engine.capability)
