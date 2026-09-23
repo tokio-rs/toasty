@@ -47,6 +47,7 @@ the entry lands here.
 
 ## Query Engine
 
+- Application Option semantics — Rust equality and membership, separate from database nullability ([design](design/option-semantics.md), [roadmap](roadmap/option-semantics.md))
 - String predicates — `contains`, `ends_with`, case-insensitive matching, regex ([#774])
 - Range and set predicates — `NOT IN`, `BETWEEN`, `IS DISTINCT FROM`
 - Relation filtering — filter by fields on an associated model
