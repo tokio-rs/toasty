@@ -17,8 +17,8 @@ help: `OtherHumanCreate` implements trait `IntoExpr<T>`
 18 | #[derive(Debug, toasty::Embed)]
    |                 ^^^^^^^^^^^^^
    |                 |
-   |                 `IntoExpr<Option<Other>>`
    |                 `IntoExpr<Other>`
+   |                 `IntoExpr<std::option::Option<Other>>`
 note: required by a bound in `ObjectCreate::owner`
   --> tests/ui/create_variant_literal_wrong_enum.rs:28:17
    |

@@ -34,7 +34,10 @@ pub struct Field {
     /// The field's type: primitive, embedded, or a relation variant.
     pub ty: FieldTy,
 
-    /// `true` if this field accepts `None` / `NULL` values.
+    /// `true` if this application field accepts `None`.
+    ///
+    /// This describes application optionality. Storage columns have separate
+    /// nullability and may use additional columns to encode presence.
     pub nullable: bool,
 
     /// `true` if this field is part of the model's primary key.
@@ -196,6 +199,21 @@ pub enum FieldTy {
 }
 
 impl Field {
+    /// Whether this application field accepts `None`.
+    pub fn is_optional(&self) -> bool {
+        self.nullable
+    }
+
+    /// The application value type, including option presence.
+    pub fn app_ty(&self) -> stmt::Type {
+        let ty = self.expr_ty().clone();
+        if self.is_optional() {
+            stmt::Type::Option(Box::new(ty))
+        } else {
+            ty
+        }
+    }
+
     /// Returns this field's [`FieldId`].
     pub fn id(&self) -> FieldId {
         self.id

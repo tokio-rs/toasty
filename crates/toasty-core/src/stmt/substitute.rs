@@ -120,6 +120,7 @@ where
                     with: None,
                     body: ExprSet::Values(Values { rows }),
                     single: false,
+                    optional: false,
                     order_by: None,
                     limit: None,
                     locks: vec![],

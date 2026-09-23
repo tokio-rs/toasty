@@ -21,6 +21,7 @@ fn query_with_order_by_is_error() {
     query.order_by = Some(OrderBy::from(OrderByExpr {
         expr: Expr::from(0i64),
         order: None,
+        nulls_first: None,
     }));
     assert!(Statement::Query(query).eval_const().is_err());
 }

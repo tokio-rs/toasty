@@ -7,6 +7,15 @@ use crate::{serializer::Dialect, stmt};
 impl ToSql for &stmt::Expr {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
         match self {
+            stmt::Expr::IsNan(expr) => {
+                assert_eq!(f.serializer.dialect, Dialect::Postgresql);
+                fmt!(f, "(" expr " IS NOT NULL AND " expr " = 'NaN')");
+            }
+            stmt::Expr::BinaryString(expr) => match f.serializer.dialect {
+                Dialect::Mysql | Dialect::MariaDb => fmt!(f, "CAST(" expr " AS BINARY)"),
+                Dialect::Sqlite => fmt!(f, "(" expr " COLLATE BINARY)"),
+                Dialect::Postgresql => fmt!(f, "(" expr " COLLATE \"C\")"),
+            },
             stmt::Expr::And(expr) => {
                 fmt!(f, Delimited(expr.operands.iter().map(AndOperand), " AND "));
             }

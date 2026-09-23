@@ -23,6 +23,16 @@ impl Expand<'_> {
         let field_struct_ident = self.field_struct_ident();
         let model_ident = &self.model.ident;
         let schema_trait = self.schema_trait();
+        let (struct_generics, generics, target_ty) =
+            if matches!(self.model.kind, ModelKind::Root(_)) {
+                (
+                    quote!(__Origin, __Target = #model_ident),
+                    quote!(__Origin, __Target),
+                    quote!(__Target),
+                )
+            } else {
+                (quote!(__Origin), quote!(__Origin), quote!(#model_ident))
+            };
         // Cloned so the field-method closure below can capture it by move while
         // `into_root` keeps using the original.
         let field_schema_trait = schema_trait.clone();
@@ -139,27 +149,46 @@ impl Expand<'_> {
         // for this struct" errors point at `struct User`, not at the derive.
         let model_span = model_ident.span();
         let struct_def = quote_spanned! { model_span=>
-            #vis struct #field_struct_ident<__Origin> {
-                path: #toasty::Path<__Origin, #model_ident>,
+            #vis struct #field_struct_ident<#struct_generics> {
+                path: #toasty::Path<__Origin, #target_ty>,
             }
         };
 
-        let include_modifier_methods = self.expand_include_modifier_methods(quote!(#model_ident));
-        let comparison_methods = self.expand_field_struct_comparison_methods();
+        let include_modifier_methods = self.expand_include_modifier_methods(target_ty.clone());
+        let comparison_methods = self.expand_field_struct_comparison_methods(&target_ty);
+        let option_methods = matches!(self.model.kind, ModelKind::Root(_)).then(|| quote! {
+            impl<__Origin> #toasty::stmt::IntoComparison<Option<#model_ident>> for #field_struct_ident<__Origin, #model_ident> {
+                fn into_comparison(self) -> #toasty::stmt::Expr<Option<#model_ident>> {
+                    self.path.into_expr().some()
+                }
+            }
+            impl<__Origin> #field_struct_ident<__Origin, Option<#model_ident>> {
+                #vis fn is_none(self) -> #toasty::stmt::Expr<bool> {
+                    self.path.is_none()
+                }
+                #vis fn is_some(self) -> #toasty::stmt::Expr<bool> {
+                    self.path.is_some()
+                }
+            }
+        });
 
         quote!(
             #struct_def
+            #option_methods
 
             #[allow(dead_code)]
-            impl<__Origin> #field_struct_ident<__Origin> {
-                #vis fn in_query(self, rhs: impl #toasty::IntoStatement<Returning = #toasty::List<#model_ident>>) -> #toasty::stmt::Expr<bool> {
+            impl<#generics> #field_struct_ident<#generics> {
+                #vis fn in_query<__Item: #toasty::stmt::QueryTarget<#target_ty>>(self, rhs: impl #toasty::IntoStatement<Returning = #toasty::List<__Item>>) -> #toasty::stmt::Expr<bool> {
                     self.path.in_query(rhs)
+                }
+
+                #vis fn in_list(self, rhs: impl #toasty::IntoExpr<#toasty::List<#target_ty>>) -> #toasty::stmt::Expr<bool> {
+                    self.path.in_list(rhs)
                 }
 
                 #comparison_methods
 
-                /// Discard `self`'s origin parameter and return a fresh
-                /// fields struct typed against this model. Used by
+                /// Return a fresh fields struct rooted at this model. Used by
                 /// `update!` to build `stmt::patch` paths for embedded
                 /// partial updates.
                 #[doc(hidden)]
@@ -177,24 +206,24 @@ impl Expand<'_> {
                 #( #methods )*
             }
 
-            impl<__Origin> Into<#toasty::Path<__Origin, #model_ident>> for #field_struct_ident<__Origin> {
-                fn into(self) -> #toasty::Path<__Origin, #model_ident> {
+            impl<#generics> Into<#toasty::Path<__Origin, #target_ty>> for #field_struct_ident<#generics> {
+                fn into(self) -> #toasty::Path<__Origin, #target_ty> {
                     self.path
                 }
             }
 
-            impl<__Origin> #toasty::IntoExpr<#model_ident> for #field_struct_ident<__Origin> {
-                fn into_expr(self) -> #toasty::stmt::Expr<#model_ident> {
+            impl<#generics> #toasty::IntoExpr<#target_ty> for #field_struct_ident<#generics> {
+                fn into_expr(self) -> #toasty::stmt::Expr<#target_ty> {
                     self.path.into_expr()
                 }
 
-                fn by_ref(&self) -> #toasty::stmt::Expr<#model_ident> {
+                fn by_ref(&self) -> #toasty::stmt::Expr<#target_ty> {
                     self.path.by_ref()
                 }
             }
 
-            impl<__Origin> Into<#toasty::stmt::Include<__Origin, #model_ident>> for #field_struct_ident<__Origin> {
-                fn into(self) -> #toasty::stmt::Include<__Origin, #model_ident> {
+            impl<#generics> Into<#toasty::stmt::Include<__Origin, #target_ty>> for #field_struct_ident<#generics> {
+                fn into(self) -> #toasty::stmt::Include<__Origin, #target_ty> {
                     self.path.into()
                 }
             }
@@ -211,10 +240,9 @@ impl Expand<'_> {
     /// `gt`/`ge`/`lt`/`le` and `asc`/`desc` — are tuple-newtype-only.
     /// Multi-field structs do not expose record ordering because backends do
     /// not share the same semantics.
-    fn expand_field_struct_comparison_methods(&self) -> TokenStream {
+    fn expand_field_struct_comparison_methods(&self, target_ty: &TokenStream) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
-        let model_ident = &self.model.ident;
 
         let names: &[&str] = if self.canonical_newtype_inner().is_some() {
             &["eq", "ne", "gt", "ge", "lt", "le"]
@@ -225,9 +253,9 @@ impl Expand<'_> {
         let methods = names.iter().map(|name| {
             let method_ident = quote::format_ident!("{name}");
             quote! {
-                #vis fn #method_ident(self, rhs: impl #toasty::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
+                #vis fn #method_ident(self, rhs: impl #toasty::stmt::IntoComparison<#target_ty>) -> #toasty::stmt::Expr<bool> {
                     use #toasty::IntoExpr;
-                    self.path.#method_ident(rhs.into_expr())
+                    self.path.#method_ident(rhs)
                 }
             }
         });

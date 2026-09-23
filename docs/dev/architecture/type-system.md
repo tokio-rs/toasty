@@ -75,7 +75,8 @@ Storage hints follow these rules:
 | Field placement | Application type | Database storage |
 |---|---|---|
 | Direct or nested flattened enum | Enum discriminant type | Field override, then enum default, then inferred storage |
-| `Option`, `Deferred`, `Box`, `Arc`, or `Rc` | Inner field type | Same as the inner field |
+| `Option<T>` | `Option(T)` | Inner storage type, with presence encoded by the field mapping |
+| `Deferred`, `Box`, `Arc`, or `Rc` | Inner application type | Same as the inner field |
 | `Vec<unit-enum>` | `List(discriminant type)` | `List(element override or enum default)` |
 | `#[document]` | Structural document | Enum embeds are currently rejected |
 
@@ -83,6 +84,20 @@ Storage hints follow these rules:
 the same checked conversion as scalar columns. A field-level type always takes
 precedence over the enum-level default. All integer discriminants must fit the
 selected type.
+
+Application optionality is distinct from database column nullability.
+`Load::app_ty()` and application field metadata preserve `Option(T)`;
+`Load::ty()` describes the representation used by the existing storage mapping.
+Application values use `Value::Option`, and expression construction uses
+`Expr::OptionSome` for `Some`. A present row returned by `.first()` receives
+its own presence wrapper, independently of any optional projected value.
+
+Typed predicates carry an `Expr::App` marker until lowering. Lowering translates
+equality, membership, and presence checks using the field's mapping, then emits
+ordinary database expressions. Simplification must preserve that marker before
+lowering: folding an application comparison using database null propagation
+would change its result. Drivers receive database values and native operators;
+`Value::Null` remains a database value.
 
 ## Type Flow Through the System
 

@@ -943,6 +943,9 @@ where
     V: VisitMut + ?Sized,
 {
     match node {
+        Expr::App(expr) | Expr::OptionSome(expr) | Expr::BinaryString(expr) | Expr::IsNan(expr) => {
+            v.visit_expr_mut(expr)
+        }
         Expr::AllOp(expr) => v.visit_expr_all_op_mut(expr),
         Expr::And(expr) => v.visit_expr_and_mut(expr),
         Expr::Any(expr) => v.visit_expr_any_mut(expr),
@@ -1677,8 +1680,11 @@ pub fn visit_value_mut<V>(v: &mut V, node: &mut Value)
 where
     V: VisitMut + ?Sized,
 {
-    if let Value::Record(node) = node {
-        v.visit_value_record(node);
+    match node {
+        Value::Record(node) => v.visit_value_record(node),
+        Value::Option(Some(value)) => v.visit_value_mut(value),
+        Value::List(values) => values.iter_mut().for_each(|value| v.visit_value_mut(value)),
+        _ => {}
     }
 }
 

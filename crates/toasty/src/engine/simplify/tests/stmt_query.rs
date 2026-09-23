@@ -48,6 +48,7 @@ fn simplify_clears_order_by_and_limit() {
         exprs: vec![OrderByExpr {
             expr: stmt::Expr::Value(stmt::Value::from(1i64)),
             order: Some(Direction::Asc),
+            nulls_first: None,
         }],
     });
     query.limit = Some(Limit::Offset(LimitOffset {
@@ -75,6 +76,7 @@ fn non_empty_query_keeps_order_by_and_limit() {
         exprs: vec![OrderByExpr {
             expr: stmt::Expr::Value(stmt::Value::from(1i64)),
             order: Some(Direction::Desc),
+            nulls_first: None,
         }],
     });
     query.limit = Some(Limit::Offset(LimitOffset {

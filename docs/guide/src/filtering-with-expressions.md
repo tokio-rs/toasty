@@ -2,7 +2,7 @@
 
 The `filter_by_*` methods generated for indexed fields cover simple equality
 lookups. For anything else — comparisons, combining conditions with AND/OR,
-checking for null — use `Model::filter()` with field expressions.
+checking for absence — use `Model::filter()` with field expressions.
 
 | Expression | Description | Database equivalent |
 |---|---|---|
@@ -13,8 +13,8 @@ checking for null — use `Model::filter()` with field expressions.
 | [`.lt(value)`](#ordering-comparisons) | Less than | `< value` |
 | [`.le(value)`](#ordering-comparisons) | Less than or equal | `<= value` |
 | [`.in_list([...])`](#membership-with-in_list) | Value in list | `IN (...)` |
-| [`.is_none()`](#null-checks) | Null check (`Option` fields) | `IS NULL` |
-| [`.is_some()`](#null-checks) | Not-null check (`Option` fields) | `IS NOT NULL` |
+| [`.is_none()`](#presence-checks) | Absent (`Option` fields) | `None` |
+| [`.is_some()`](#presence-checks) | Present (`Option` fields) | `Some(_)` |
 | [`.starts_with(prefix)`](#starts_with) | Case-sensitive prefix match | `begins_with(field, prefix)` / `^@`, `GLOB`, `BINARY ... LIKE` |
 | [`.like(pattern)`](#like) | Pattern match, behavior per backend | `LIKE pattern` |
 | [`.ilike(pattern)`](#ilike) | Case-insensitive pattern match, PostgreSQL only | `ILIKE pattern` |
@@ -141,10 +141,10 @@ let users = User::filter(
 # }
 ```
 
-## Null checks
+## Presence checks
 
 For `Option<T>` fields, use `.is_none()` and `.is_some()` to filter by whether
-the value is null:
+the value is absent:
 
 ```rust
 # use toasty::Model;
@@ -169,6 +169,11 @@ let users = User::filter(User::fields().bio().is_some())
 # Ok(())
 # }
 ```
+
+Comparisons and membership on optional fields use Rust option equality: `None`
+compares equal to `None`, and `.ne(value)` is the complement of `.eq(value)`.
+See [Optional Values](./optional-values.md) for presence, projection, and ordering
+rules.
 
 These methods are only available on paths to `Option<T>` fields. Calling
 `.is_none()` on a non-optional field is a compile error.

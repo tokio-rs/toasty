@@ -222,6 +222,7 @@ fn select_with_order_by_asc() {
         exprs: vec![OrderByExpr {
             expr: col(0, 0),
             order: Some(Direction::Asc),
+            nulls_first: None,
         }],
     };
     let stmt = make_query(Filter::ALL, Some(order_by), None, vec![]);
@@ -238,6 +239,7 @@ fn select_with_order_by_desc() {
         exprs: vec![OrderByExpr {
             expr: col(0, 0),
             order: Some(Direction::Desc),
+            nulls_first: None,
         }],
     };
     let stmt = make_query(Filter::ALL, Some(order_by), None, vec![]);
@@ -255,10 +257,12 @@ fn select_with_order_by_multiple_columns() {
             OrderByExpr {
                 expr: col(0, 1),
                 order: Some(Direction::Asc),
+                nulls_first: None,
             },
             OrderByExpr {
                 expr: col(0, 0),
                 order: Some(Direction::Desc),
+                nulls_first: None,
             },
         ],
     };

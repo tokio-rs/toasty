@@ -112,6 +112,8 @@ impl Equivalent<Vec<HashableValue>> for HashableValueSlice<'_> {
 pub(super) fn value_eq(a: &Value, b: &Value) -> bool {
     use Value::*;
     match (a, b) {
+        (Option(None), Option(None)) => true,
+        (Option(Some(a)), Option(Some(b))) => value_eq(a, b),
         (Null, Null) => true,
         (Bool(a), Bool(b)) => a == b,
         (I8(a), I8(b)) => a == b,
@@ -171,6 +173,12 @@ pub(super) fn hash_value<H: Hasher>(v: &Value, state: &mut H) {
     // don't collide (e.g. `I32(0)` vs `U32(0)`).
     std::mem::discriminant(v).hash(state);
     match v {
+        Value::Option(value) => {
+            value.is_some().hash(state);
+            if let Some(value) = value {
+                hash_value(value, state);
+            }
+        }
         Value::Null => {}
         Value::Bool(x) => x.hash(state),
         Value::I8(x) => x.hash(state),

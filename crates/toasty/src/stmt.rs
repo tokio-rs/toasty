@@ -31,6 +31,9 @@ pub use numeric::Numeric;
 mod into_expr;
 pub use into_expr::IntoExpr;
 
+mod into_comparison;
+pub use into_comparison::IntoComparison;
+
 mod into_insert;
 pub use into_insert::IntoInsert;
 
@@ -53,6 +56,21 @@ pub use paginate::Paginate;
 
 mod path;
 pub use path::Path;
+
+/// A query element compatible with a membership subject.
+///
+/// Membership accepts the same type or lifts `T` into `Some(T)` when the
+/// subject is `Option<T>`.
+pub trait QueryTarget<T>: query_target_sealed::Sealed<T> {}
+
+impl<T> QueryTarget<T> for T {}
+impl<T> QueryTarget<Option<T>> for T {}
+
+mod query_target_sealed {
+    pub trait Sealed<T> {}
+    impl<T> Sealed<T> for T {}
+    impl<T> Sealed<Option<T>> for T {}
+}
 
 pub use crate::schema::Auto;
 use crate::{Executor, schema::Load};
@@ -85,7 +103,12 @@ pub use toasty_core::stmt::Decimal;
 pub use toasty_core::stmt::{Date, DateTime, Time, Timestamp, Zoned};
 #[cfg(feature = "net")]
 pub use toasty_core::stmt::{IpCidr, IpInet, MacAddr6, MacAddr8};
-pub use toasty_core::stmt::{OrderBy, OrderByExpr, Projection, Type, Uuid, Value};
+pub use toasty_core::stmt::{OrderBy, OrderByExpr, Projection, Uuid};
+/// Low-level AST types for driver and custom mapping integration.
+///
+/// Application code constructs optional values through [`IntoExpr`] and
+/// [`Expr::some`]. Database `Value::Null` is separate from application absence.
+pub use toasty_core::stmt::{Type, Value};
 
 use toasty_core::stmt;
 
@@ -268,8 +291,5 @@ impl<M> fmt::Debug for Statement<M> {
 /// let filter = toasty::stmt::in_list(User::fields().id(), [1_i64, 2, 3]);
 /// ```
 pub fn in_list<T>(lhs: impl IntoExpr<T>, rhs: impl IntoExpr<List<T>>) -> Expr<bool> {
-    Expr::from_untyped(stmt::Expr::in_list(
-        lhs.into_expr().untyped,
-        rhs.into_expr().untyped,
-    ))
+    Expr::from_untyped(stmt::Expr::in_list(lhs.into_expr().untyped, rhs.into_expr().untyped).app())
 }

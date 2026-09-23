@@ -192,12 +192,7 @@ pub async fn in_list_id(t: &mut Test) -> Result<()> {
 
 #[driver_test(scenario(crate::scenarios::in_list_item))]
 pub async fn in_list_with_null(t: &mut Test) -> Result<()> {
-    // Exercises the PG driver's `Vec<Option<T>>` bind path: a `None` in the
-    // list maps to a SQL NULL inside the bound array.
-    //
-    // SQL semantics: `bio IN ('rusty', NULL)` is true when `bio = 'rusty'`
-    // and unknown (treated as false in WHERE) when `bio` is NULL or differs
-    // — the NULL in the list never matches anything.
+    // None is a list member and matches an absent field.
 
     let mut db = setup(t).await;
 
@@ -216,16 +211,9 @@ pub async fn in_list_with_null(t: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    assert_eq!(items.len(), 1);
-    assert_eq!(items[0].name, "a");
-
-    if t.capability().sql() {
-        // The per-item path's scalar count is implementation-defined here
-        // (the engine may drop the null operand at extract time), so pass
-        // `None` to skip the count check; element-type assertions still run.
-        let elem = column_storage_ty(&db, "items", "bio");
-        assert_in_list_bind(&pop_select(t), t.capability(), &elem, None);
-    }
+    let mut names: Vec<_> = items.iter().map(|item| item.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["a", "b"]);
 
     Ok(())
 }

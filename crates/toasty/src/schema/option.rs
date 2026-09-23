@@ -8,13 +8,18 @@ impl<T: Load> Load for Option<T> {
         T::ty()
     }
 
+    fn app_ty() -> stmt::Type {
+        stmt::Type::Option(Box::new(T::app_ty()))
+    }
+
     fn ty_relation() -> stmt::Type {
         T::ty()
     }
 
     fn load(value: Value) -> Result<Self::Output, crate::Error> {
         match value {
-            Value::Null => Ok(None),
+            Value::Option(None) | Value::Null => Ok(None),
+            Value::Option(Some(value)) => Ok(Some(T::load(*value)?)),
             // Any other value is the raw model record (from INSERT or
             // SELECT+include when a matching row exists).
             v => Ok(Some(T::load(v)?)),
@@ -23,7 +28,8 @@ impl<T: Load> Load for Option<T> {
 
     fn load_relation(value: Value) -> Result<Self::Output, crate::Error> {
         match value {
-            Value::Null => Ok(None),
+            Value::Option(None) | Value::Null => Ok(None),
+            Value::Option(Some(value)) => Ok(Some(T::load(*value)?)),
             // Any other value is the raw model record (from INSERT or
             // SELECT+include when a matching row exists).
             v => Ok(Some(T::load(v)?)),

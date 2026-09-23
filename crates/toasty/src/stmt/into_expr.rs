@@ -163,6 +163,15 @@ impl<T> IntoExpr<T> for Expr<T> {
 }
 impl_assign_via_expr!({T} Expr<T> => T);
 
+impl<T> IntoExpr<T> for &Expr<T> {
+    fn into_expr(self) -> Expr<T> {
+        self.clone()
+    }
+    fn by_ref(&self) -> Expr<T> {
+        (*self).clone()
+    }
+}
+
 impl<T: IntoExpr<T>> IntoExpr<T> for &T {
     fn into_expr(self) -> Expr<T> {
         self.by_ref()
@@ -177,15 +186,15 @@ impl_assign_via_expr!({T: IntoExpr<T>} &T => T);
 impl<T: IntoExpr<T>> IntoExpr<Self> for Option<T> {
     fn into_expr(self) -> Expr<Self> {
         match self {
-            Some(value) => value.into_expr().cast(),
-            None => Expr::from_value(Value::Null),
+            Some(value) => value.into_expr().some(),
+            None => Expr::from_value(Value::Option(None)),
         }
     }
 
     fn by_ref(&self) -> Expr<Self> {
         match self {
-            Some(value) => value.by_ref().cast(),
-            None => Expr::from_value(Value::Null),
+            Some(value) => value.by_ref().some(),
+            None => Expr::from_value(Value::Option(None)),
         }
     }
 }
@@ -193,22 +202,22 @@ impl_assign_via_expr!({T: IntoExpr<T>} Option<T> => Option<T>);
 
 impl<T: IntoExpr<T>> IntoExpr<Option<T>> for T {
     fn into_expr(self) -> Expr<Option<T>> {
-        self.into_expr().cast()
+        self.into_expr().some()
     }
 
     fn by_ref(&self) -> Expr<Option<T>> {
-        self.by_ref().cast()
+        self.by_ref().some()
     }
 }
 impl_assign_via_expr!({T: IntoExpr<T>} T => Option<T>);
 
 impl<T: IntoExpr<T>> IntoExpr<Option<T>> for &T {
     fn into_expr(self) -> Expr<Option<T>> {
-        self.by_ref().cast()
+        self.by_ref().some()
     }
 
     fn by_ref(&self) -> Expr<Option<T>> {
-        (*self).by_ref().cast()
+        (*self).by_ref().some()
     }
 }
 impl_assign_via_expr!({T: IntoExpr<T>} &T => Option<T>);
@@ -226,11 +235,11 @@ impl_assign_via_expr!(&str => String);
 
 impl IntoExpr<Option<String>> for &str {
     fn into_expr(self) -> Expr<Option<String>> {
-        Expr::from_value(Value::from(self))
+        Expr::<String>::from_value(Value::from(self)).some()
     }
 
     fn by_ref(&self) -> Expr<Option<String>> {
-        Expr::from_value(Value::from(*self))
+        Expr::<String>::from_value(Value::from(*self)).some()
     }
 }
 impl_assign_via_expr!(&str => Option<String>);
@@ -367,11 +376,11 @@ macro_rules! forward_impl {
                 T: IntoExpr<T>,
             {
                 fn into_expr(self) -> Expr<$ty> {
-                    <Self as IntoExpr<Self>>::into_expr(self).cast()
+                    <Self as IntoExpr<Self>>::into_expr(self).cast_unchecked()
                 }
 
                 fn by_ref(&self) -> Expr<$ty> {
-                    <Self as IntoExpr<Self>>::by_ref(self).cast()
+                    <Self as IntoExpr<Self>>::by_ref(self).cast_unchecked()
                 }
             }
         ) *
@@ -388,11 +397,11 @@ macro_rules! ref_smart_ptr_impl {
         $(
             impl<T: IntoExpr<T>> IntoExpr<$ptr<T>> for $ptr<T> {
                 fn into_expr(self) -> Expr<$ptr<T>> {
-                    T::by_ref(&self).cast()
+                    T::by_ref(&self).cast_unchecked()
                 }
 
                 fn by_ref(&self) -> Expr<$ptr<T>> {
-                    T::by_ref(self).cast()
+                    T::by_ref(self).cast_unchecked()
                 }
             }
 

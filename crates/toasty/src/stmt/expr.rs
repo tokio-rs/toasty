@@ -10,7 +10,7 @@ use toasty_core::stmt;
 ///
 /// - `Expr<bool>` — a boolean filter expression (comparisons, `and`, `or`, `not`).
 /// - `Expr<String>`, `Expr<i64>`, etc. — scalar value expressions.
-/// - `Expr<Option<T>>` — a nullable expression with [`is_none`](Expr::is_none)
+/// - `Expr<Option<T>>` — an optional value with [`is_none`](Expr::is_none)
 ///   and [`is_some`](Expr::is_some) helpers.
 /// - `Expr<List<T>>` — a list expression (see [`Expr::list`]).
 ///
@@ -23,6 +23,11 @@ pub struct Expr<T> {
 }
 
 impl<T> Expr<T> {
+    /// Wrap this value in `Some`, preserving its application type and presence.
+    pub fn some(self) -> Expr<Option<T>> {
+        Expr::from_untyped(stmt::Expr::OptionSome(Box::new(self.untyped)))
+    }
+
     /// Create an expression from the given value.
     pub(crate) fn from_value(value: stmt::Value) -> Self {
         Self {
@@ -32,6 +37,10 @@ impl<T> Expr<T> {
     }
 
     /// Wrap a raw untyped expression, tagging it with type `T`.
+    ///
+    /// This is a low-level AST adapter. It does not convert database nulls
+    /// into application options or give native comparisons application
+    /// semantics. The caller must supply an expression compatible with `T`.
     ///
     /// # Examples
     ///
@@ -52,18 +61,27 @@ impl<T> Expr<T> {
     /// Re-tag this expression with a different type `U`.
     ///
     /// This performs no runtime conversion — the underlying AST node is
-    /// unchanged. Use this when the type system needs a different type tag but
-    /// the expression itself is compatible (e.g., widening `Expr<T>` to
-    /// `Expr<Option<T>>`).
+    /// unchanged. Use [`some`](Self::some) to construct an application option.
     ///
     /// # Examples
     ///
     /// ```
     /// # use toasty::stmt::{Expr, IntoExpr};
     /// let expr: Expr<i64> = 42_i64.into_expr();
-    /// let optional: Expr<Option<i64>> = expr.cast();
+    /// let optional: Expr<Option<i64>> = expr.some();
     /// ```
+    #[deprecated(
+        note = "use some() for option lifting; custom AST adapters can use cast_unchecked()"
+    )]
     pub fn cast<U>(self) -> Expr<U> {
+        self.cast_unchecked()
+    }
+
+    /// Retag an expression at the low-level AST boundary.
+    ///
+    /// The caller must ensure the AST produces values accepted by `U`.
+    /// This does not construct `Some` or perform a database conversion.
+    pub fn cast_unchecked<U>(self) -> Expr<U> {
         Expr {
             untyped: self.untyped,
             _p: PhantomData,
@@ -76,42 +94,42 @@ impl<T> Expr<T> {
     /// `contact().email().address()`), the filter also requires that
     /// variant: the engine attaches the check when it normalizes the
     /// statement.
-    pub fn eq(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
-        let rhs = rhs.into_expr().untyped;
-        Expr::from_untyped(stmt::Expr::eq(self.untyped, rhs))
+    pub fn eq(self, rhs: impl super::IntoComparison<T>) -> Expr<bool> {
+        let rhs = rhs.into_comparison().untyped;
+        Expr::from_untyped(stmt::Expr::eq(self.untyped, rhs).app())
     }
 
     /// Test whether this expression does not equal `rhs`.
     ///
-    /// Like [`eq`](Expr::eq), the filter requires any variant either side
-    /// selects: rows of other variants do not match.
-    pub fn ne(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
-        let rhs = rhs.into_expr().untyped;
-        Expr::from_untyped(stmt::Expr::ne(self.untyped, rhs))
+    /// This negates the complete equality predicate, including variant guards.
+    /// An absent option differs from every present value.
+    pub fn ne(self, rhs: impl super::IntoComparison<T>) -> Expr<bool> {
+        let rhs = rhs.into_comparison().untyped;
+        Expr::from_untyped(stmt::Expr::not(stmt::Expr::eq(self.untyped, rhs).app()))
     }
 
     /// Test whether this expression is greater than `rhs`.
-    pub fn gt(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
-        let rhs = rhs.into_expr().untyped;
-        Expr::from_untyped(stmt::Expr::gt(self.untyped, rhs))
+    pub fn gt(self, rhs: impl super::IntoComparison<T>) -> Expr<bool> {
+        let rhs = rhs.into_comparison().untyped;
+        Expr::from_untyped(stmt::Expr::gt(self.untyped, rhs).app())
     }
 
     /// Test whether this expression is greater than or equal to `rhs`.
-    pub fn ge(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
-        let rhs = rhs.into_expr().untyped;
-        Expr::from_untyped(stmt::Expr::ge(self.untyped, rhs))
+    pub fn ge(self, rhs: impl super::IntoComparison<T>) -> Expr<bool> {
+        let rhs = rhs.into_comparison().untyped;
+        Expr::from_untyped(stmt::Expr::ge(self.untyped, rhs).app())
     }
 
     /// Test whether this expression is less than `rhs`.
-    pub fn lt(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
-        let rhs = rhs.into_expr().untyped;
-        Expr::from_untyped(stmt::Expr::lt(self.untyped, rhs))
+    pub fn lt(self, rhs: impl super::IntoComparison<T>) -> Expr<bool> {
+        let rhs = rhs.into_comparison().untyped;
+        Expr::from_untyped(stmt::Expr::lt(self.untyped, rhs).app())
     }
 
     /// Test whether this expression is less than or equal to `rhs`.
-    pub fn le(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
-        let rhs = rhs.into_expr().untyped;
-        Expr::from_untyped(stmt::Expr::le(self.untyped, rhs))
+    pub fn le(self, rhs: impl super::IntoComparison<T>) -> Expr<bool> {
+        let rhs = rhs.into_comparison().untyped;
+        Expr::from_untyped(stmt::Expr::le(self.untyped, rhs).app())
     }
 }
 
@@ -252,10 +270,9 @@ impl Expr<bool> {
         L: IntoExpr<T>,
         R: IntoExpr<List<T>>,
     {
-        Self::from_untyped(stmt::Expr::in_list(
-            lhs.into_expr().untyped,
-            rhs.into_expr().untyped,
-        ))
+        Self::from_untyped(
+            stmt::Expr::in_list(lhs.into_expr().untyped, rhs.into_expr().untyped).app(),
+        )
     }
 }
 
@@ -268,30 +285,30 @@ impl Not for Expr<bool> {
 }
 
 impl<T> Expr<Option<T>> {
-    /// Test whether this optional expression is `NULL`.
+    /// Test whether this optional expression is `None`.
     ///
     /// # Examples
     ///
     /// ```
     /// # use toasty::stmt::{Expr, IntoExpr};
     /// let expr: Expr<Option<i64>> = None::<i64>.into_expr();
-    /// let _is_null: Expr<bool> = expr.is_none();
+    /// let _is_none: Expr<bool> = expr.is_none();
     /// ```
     pub fn is_none(self) -> Expr<bool> {
-        Expr::from_untyped(stmt::Expr::is_null(self.untyped))
+        Expr::from_untyped(stmt::Expr::is_null(self.untyped).app())
     }
 
-    /// Test whether this optional expression is not `NULL`.
+    /// Test whether this optional expression is `Some`.
     ///
     /// # Examples
     ///
     /// ```
     /// # use toasty::stmt::{Expr, IntoExpr};
     /// let expr: Expr<Option<i64>> = Some(42_i64).into_expr();
-    /// let _is_not_null: Expr<bool> = expr.is_some();
+    /// let _is_some: Expr<bool> = expr.is_some();
     /// ```
     pub fn is_some(self) -> Expr<bool> {
-        Expr::from_untyped(stmt::Expr::is_not_null(self.untyped))
+        Expr::from_untyped(stmt::Expr::is_not_null(self.untyped).app())
     }
 }
 

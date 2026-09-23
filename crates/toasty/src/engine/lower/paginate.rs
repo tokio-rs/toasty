@@ -69,10 +69,10 @@ impl LowerStatement<'_, '_> {
         order_by: &stmt::OrderByExpr,
         value: stmt::Value,
     ) -> stmt::Expr {
-        let nulls_first = match order_by.order {
+        let nulls_first = order_by.nulls_first.unwrap_or(match order_by.order {
             Some(stmt::Direction::Desc) => !self.capability().sql_nulls_first_on_asc,
             _ => self.capability().sql_nulls_first_on_asc,
-        };
+        });
 
         if value.is_null() {
             return if nulls_first {

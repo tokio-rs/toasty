@@ -6,6 +6,9 @@ use toasty_core::stmt::{self, Expr};
 /// `simplify/expr_is_null.rs` and run after this fold pass on canonical
 /// input.
 pub(super) fn fold_expr_is_null(expr: &mut stmt::ExprIsNull) -> Option<Expr> {
+    if expr.expr.is_always_non_nullable() {
+        return Some(expr.negated.into());
+    }
     match &mut *expr.expr {
         // Null constant folding:
         //  - `null is null` → `true`

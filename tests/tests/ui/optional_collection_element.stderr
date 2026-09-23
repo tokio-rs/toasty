@@ -1,0 +1,103 @@
+error[E0277]: the trait bound `std::option::Option<std::string::String>: Embed` is not satisfied
+ --> tests/ui/optional_collection_element.rs:5:5
+  |
+5 |     values: Vec<Option<String>>,
+  |     ^^^^^^ the trait `Embed` is not implemented for `std::option::Option<std::string::String>`
+  |
+  = help: the following other types implement trait `toasty::schema::Field`:
+            Vec<IpCidr>
+            Vec<IpInet>
+            Vec<MacAddr6>
+            Vec<T>
+            Vec<TimeZone>
+            Vec<bool>
+            Vec<f32>
+            Vec<f64>
+          and $N others
+  = note: required for `Vec<std::option::Option<std::string::String>>` to implement `toasty::schema::Field`
+
+error[E0277]: the trait bound `std::option::Option<std::string::String>: Embed` is not satisfied
+ --> tests/ui/optional_collection_element.rs:1:17
+  |
+1 | #[derive(Debug, toasty::Model)]
+  |                 ^^^^^^^^^^^^^ the trait `Embed` is not implemented for `std::option::Option<std::string::String>`
+  |
+  = help: the following other types implement trait `toasty::schema::Field`:
+            Vec<IpCidr>
+            Vec<IpInet>
+            Vec<MacAddr6>
+            Vec<T>
+            Vec<TimeZone>
+            Vec<bool>
+            Vec<f32>
+            Vec<f64>
+          and $N others
+  = note: required for `Vec<std::option::Option<std::string::String>>` to implement `toasty::schema::Field`
+  = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `impl IntoExpr<FieldExprTarget<Vec<Option<String>>>>: IntoExpr<toasty::stmt::List<std::option::Option<std::string::String>>>` is not satisfied
+ --> tests/ui/optional_collection_element.rs:1:17
+  |
+1 | #[derive(Debug, toasty::Model)]
+  |                 ^^^^^^^^^^^^^ unsatisfied trait bound
+  |
+  = help: the trait `IntoExpr<toasty::stmt::List<std::option::Option<std::string::String>>>` is not implemented for `impl IntoExpr<FieldExprTarget<Vec<Option<String>>>>`
+  = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `impl Assign<FieldExprTarget<Vec<Option<String>>>>: Assign<toasty::stmt::List<std::option::Option<std::string::String>>>` is not satisfied
+ --> tests/ui/optional_collection_element.rs:1:17
+  |
+1 | #[derive(Debug, toasty::Model)]
+  |                 ^^^^^^^^^^^^^ unsatisfied trait bound
+  |
+  = help: the trait `Assign<toasty::stmt::List<std::option::Option<std::string::String>>>` is not implemented for `impl Assign<FieldExprTarget<Vec<Option<String>>>>`
+  = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `std::option::Option<std::string::String>: Embed` is not satisfied
+ --> tests/ui/optional_collection_element.rs:5:13
+  |
+5 |     values: Vec<Option<String>>,
+  |             ^^^^^^^^^^^^^^^^^^^ the trait `Embed` is not implemented for `std::option::Option<std::string::String>`
+  |
+  = help: the following other types implement trait `toasty::schema::Field`:
+            Vec<IpCidr>
+            Vec<IpInet>
+            Vec<MacAddr6>
+            Vec<T>
+            Vec<TimeZone>
+            Vec<bool>
+            Vec<f32>
+            Vec<f64>
+          and $N others
+  = note: required for `Vec<std::option::Option<std::string::String>>` to implement `toasty::schema::Field`
+
+error[E0277]: the trait bound `impl Assign<FieldExprTarget<Vec<Option<String>>>>: Assign<toasty::stmt::List<std::option::Option<std::string::String>>>` is not satisfied
+ --> tests/ui/optional_collection_element.rs:5:5
+  |
+5 |     values: Vec<Option<String>>,
+  |     ^^^^^^ unsatisfied trait bound
+  |
+  = help: the trait `Assign<toasty::stmt::List<std::option::Option<std::string::String>>>` is not implemented for `impl Assign<FieldExprTarget<Vec<Option<String>>>>`
+note: required by a bound in `ItemUpdate::<__toasty_T>::set_values`
+ --> tests/ui/optional_collection_element.rs:1:17
+  |
+1 | #[derive(Debug, toasty::Model)]
+  |                 ^^^^^^^^^^^^^ required by this bound in `ItemUpdate::<__toasty_T>::set_values`
+...
+5 |     values: Vec<Option<String>>,
+  |     ------ required by a bound in this associated function
+  = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `impl IntoExpr<FieldExprTarget<Vec<Option<String>>>>: IntoExpr<toasty::stmt::List<std::option::Option<std::string::String>>>` is not satisfied
+ --> tests/ui/optional_collection_element.rs:1:17
+  |
+1 | #[derive(Debug, toasty::Model)]
+  |                 ^^^^^^^^^^^^^ unsatisfied trait bound
+  |
+  = help: the trait `IntoExpr<toasty::stmt::List<std::option::Option<std::string::String>>>` is not implemented for `impl IntoExpr<FieldExprTarget<Vec<Option<String>>>>`
+note: required by a bound in `toasty::codegen_support::into_untyped_expr`
+ --> $WORKSPACE/crates/toasty/src/codegen_support.rs
+  |
+  | pub fn into_untyped_expr<T, V: IntoExpr<T>>(value: V) -> core::stmt::Expr {
+  |                                ^^^^^^^^^^^ required by this bound in `into_untyped_expr`
+  = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)

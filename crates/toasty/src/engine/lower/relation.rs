@@ -771,6 +771,7 @@ impl LowerStatement<'_, '_> {
         values: &mut [Option<stmt::Expr>],
     ) {
         match filter {
+            stmt::Expr::App(expr) => Self::collect_key_constraints(cx, key, expr, values),
             stmt::Expr::And(and) => {
                 for operand in &and.operands {
                     Self::collect_key_constraints(cx, key, operand, values);

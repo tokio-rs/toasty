@@ -46,6 +46,7 @@ impl<M> IntoScope<M> for Query<M> {
 fn widen(mut query: toasty_core::stmt::Query) -> toasty_core::stmt::Query {
     if query.single {
         query.single = false;
+        query.optional = false;
         query.limit = None;
     }
     query

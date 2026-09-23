@@ -69,6 +69,8 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Type {
+    /// An application option, distinct from database nullability.
+    Option(Box<Type>),
     /// Boolean value
     Bool,
 
@@ -356,7 +358,7 @@ impl Type {
     pub fn contains_model(&self) -> bool {
         match self {
             Self::Model(_) => true,
-            Self::List(elem) => elem.contains_model(),
+            Self::List(elem) | Self::Option(elem) => elem.contains_model(),
             Self::Record(fields) => fields.iter().any(Self::contains_model),
             Self::Union(union) => union.iter().any(|ty| ty.contains_model()),
             _ => false,
@@ -438,6 +440,18 @@ impl Type {
         value: Value,
     ) -> Result<Value> {
         use stmt::Value;
+
+        if let Self::Option(inner) = self {
+            return match value {
+                Value::Option(None) | Value::Null => Ok(Value::Option(None)),
+                Value::Option(Some(value)) => inner
+                    .cast(resolve, *value)
+                    .map(|value| Value::Option(Some(Box::new(value)))),
+                value => inner
+                    .cast(resolve, value)
+                    .map(|value| Value::Option(Some(Box::new(value)))),
+            };
+        }
 
         // Null values are passed through
         if value.is_null() {

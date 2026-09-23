@@ -26,7 +26,7 @@ fn json_field_ty(storage_ty: Option<db::Type>, missing_type_message: &'static st
 
 fn json_expr<T>(value: &(impl serde_core::Serialize + ?Sized)) -> Expr<T> {
     let json = serde_json::to_string(value).expect("failed to serialize JSON field");
-    Expr::<String>::from_value(StmtValue::from(json)).cast()
+    Expr::<String>::from_value(StmtValue::from(json)).cast_unchecked()
 }
 
 /// A field wrapper that serializes `T` as JSON in a database column.
@@ -294,11 +294,11 @@ where
     T: serde_core::Serialize,
 {
     fn into_expr(self) -> Expr<Option<Json<T>>> {
-        json_expr::<Json<T>>(self.0).cast()
+        json_expr::<Json<T>>(self.0).some()
     }
 
     fn by_ref(&self) -> Expr<Option<Json<T>>> {
-        json_expr::<Json<T>>(self.0).cast()
+        json_expr::<Json<T>>(self.0).some()
     }
 }
 

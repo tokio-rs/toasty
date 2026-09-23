@@ -103,6 +103,7 @@ fn extract_from_where_clause() {
         with: None,
         body: stmt::ExprSet::Values(stmt::Values::new(vec![])),
         single: false,
+        optional: false,
         order_by: None,
         limit: None,
         locks: vec![],

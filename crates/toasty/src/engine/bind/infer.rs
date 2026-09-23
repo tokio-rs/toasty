@@ -225,6 +225,11 @@ fn refine_filter(filter: &stmt::Filter, cx: &Cx<'_>, params: &mut [Param]) {
 /// types down into both sides (bidirectional inference).
 pub(super) fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [Param]) -> Ty {
     match expr {
+        stmt::Expr::BinaryString(expr) => synthesize(expr, cx, params),
+        stmt::Expr::IsNan(expr) => {
+            synthesize(expr, cx, params);
+            Ty::Inferred(db::Type::Boolean)
+        }
         // Arg — type comes from the extracted param (whatever the current
         // inference state is — `Inferred(...)` from the value, possibly
         // already upgraded to `Column(...)` by a prior `check`).
@@ -300,11 +305,17 @@ pub(super) fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [Param]) -
         // the column-known element type.
         stmt::Expr::AnyOp(e) => {
             let lhs_ty = synthesize(&e.lhs, cx, params);
+            if let Ty::List(item_ty) = synthesize(&e.rhs, cx, params) {
+                check(&e.lhs, &item_ty, params);
+            }
             check(&e.rhs, &Ty::List(Box::new(lhs_ty)), params);
             Ty::Inferred(db::Type::Boolean)
         }
         stmt::Expr::AllOp(e) => {
             let lhs_ty = synthesize(&e.lhs, cx, params);
+            if let Ty::List(item_ty) = synthesize(&e.rhs, cx, params) {
+                check(&e.lhs, &item_ty, params);
+            }
             check(&e.rhs, &Ty::List(Box::new(lhs_ty)), params);
             Ty::Inferred(db::Type::Boolean)
         }
@@ -384,6 +395,7 @@ pub(super) fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [Param]) -
 /// concrete element types propagate down (e.g. `List(Unknown) → List(Column(_))`).
 fn check(expr: &stmt::Expr, expected: &Ty, params: &mut [Param]) {
     match (expr, expected) {
+        (stmt::Expr::BinaryString(expr), ty) => check(expr, ty, params),
         // Arg — merge expected into the param's current type. `merge` handles
         // provenance (column wins over inferred) and unknowns (any type wins
         // over Unknown), including recursively for list element types.

@@ -143,7 +143,7 @@ impl Expand<'_> {
                 type Path<__Origin> = #field_struct_ident<__Origin>;
                 type PrimaryKey = #primary_key_ty;
                 type ManyField<__Origin> = #field_list_struct_ident<__Origin>;
-                type OneField<__Origin> = #field_struct_ident<__Origin>;
+                type OneField<__Origin, __Target> = #field_struct_ident<__Origin, __Target>;
 
                 fn id() -> #toasty::core::schema::app::ModelId {
                     static ID: std::sync::OnceLock<#toasty::core::schema::app::ModelId> = std::sync::OnceLock::new();
@@ -212,9 +212,9 @@ impl Expand<'_> {
                     )
                 }
 
-                fn new_one_field<__Origin>(
-                    path: #toasty::Path<__Origin, Self>,
-                ) -> Self::OneField<__Origin> {
+                fn new_one_field<__Origin, __Target>(
+                    path: #toasty::Path<__Origin, __Target>,
+                ) -> Self::OneField<__Origin, __Target> {
                     #field_struct_ident { path }
                 }
             }
@@ -459,7 +459,7 @@ impl Expand<'_> {
 
                 quote! {
                     let expr: #toasty::stmt::Expr<#ty> = #toasty::IntoExpr::into_expr(#into_expr);
-                    expr.cast()
+                    expr.cast_unchecked()
                 }
             });
 
@@ -485,7 +485,7 @@ impl Expand<'_> {
             quote! {
                 let expr: #toasty::stmt::Expr<( #( #ty ),* )> =
                     #toasty::IntoExpr::into_expr(( #( #expr ),* ));
-                expr.cast()
+                expr.cast_unchecked()
             }
         }
     }

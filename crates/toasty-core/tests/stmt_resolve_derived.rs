@@ -59,6 +59,7 @@ fn derived_from_values(rows: Vec<Expr>) -> TableDerived {
             with: None,
             body: ExprSet::Values(Values::new(rows)),
             single: false,
+            optional: false,
             order_by: None,
             limit: None,
             locks: vec![],
@@ -84,6 +85,18 @@ fn source_with_table(schema: &DbSchema) -> SourceTable {
             joins: vec![],
         }],
     }
+}
+
+#[test]
+fn infer_derived_column_type() {
+    let schema = db_schema();
+    let source = source_with_derived(derived_from_values(vec![Expr::record([
+        Expr::from(1_i64),
+        Expr::from("hello"),
+    ])]));
+    let cx = ExprContext::new_with_target(&schema, ExprTarget::Source(&source));
+    assert_eq!(cx.infer_expr_reference_ty(&col_ref(0, 0, 0)), Type::I64);
+    assert_eq!(cx.infer_expr_reference_ty(&col_ref(0, 0, 1)), Type::String);
 }
 
 fn col_ref(nesting: usize, table: usize, column: usize) -> ExprReference {

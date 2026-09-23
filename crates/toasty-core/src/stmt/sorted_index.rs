@@ -153,6 +153,10 @@ fn value_total_cmp(a: &Value, b: &Value) -> Ordering {
         (_, Value::Null) => Ordering::Greater,
 
         // For same-type pairs, partial_cmp always returns Some — unwrap is safe.
+        (Value::Option(None), Value::Option(None)) => Ordering::Equal,
+        (Value::Option(None), Value::Option(Some(_))) => Ordering::Less,
+        (Value::Option(Some(_)), Value::Option(None)) => Ordering::Greater,
+        (Value::Option(Some(a)), Value::Option(Some(b))) => value_total_cmp(a, b),
         (Value::Bool(a), Value::Bool(b)) => a.cmp(b),
         (Value::I8(a), Value::I8(b)) => a.cmp(b),
         (Value::I16(a), Value::I16(b)) => a.cmp(b),
@@ -230,6 +234,7 @@ fn value_total_cmp(a: &Value, b: &Value) -> Ordering {
 /// Returns a fixed numeric index for each [`Value`] variant, used for cross-type ordering.
 fn variant_index(v: &Value) -> u8 {
     match v {
+        Value::Option(_) => 26,
         Value::Null => 0,
         Value::Bool(_) => 1,
         Value::I8(_) => 2,

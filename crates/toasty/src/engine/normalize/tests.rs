@@ -29,6 +29,7 @@ fn normalization_is_idempotent() {
         OrderByExpr {
             expr: Expr::ref_self_field(Item::id().field(1)),
             order: Some(Direction::Asc),
+            nulls_first: None,
         }
         .into(),
     );

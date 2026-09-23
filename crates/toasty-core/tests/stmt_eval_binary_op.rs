@@ -50,7 +50,7 @@ fn eq_null_null() {
         Expr::binary_op(Value::Null, BinaryOp::Eq, Value::Null)
             .eval_const()
             .unwrap(),
-        Value::Bool(true)
+        Value::Null
     );
 }
 
@@ -60,7 +60,7 @@ fn eq_null_nonnull() {
         Expr::binary_op(Value::Null, BinaryOp::Eq, 1i64)
             .eval_const()
             .unwrap(),
-        Value::Bool(false)
+        Value::Null
     );
 }
 
@@ -114,7 +114,7 @@ fn ne_null_null() {
         Expr::binary_op(Value::Null, BinaryOp::Ne, Value::Null)
             .eval_const()
             .unwrap(),
-        Value::Bool(false)
+        Value::Null
     );
 }
 
@@ -255,51 +255,56 @@ fn le_greater() {
 }
 
 // ---------------------------------------------------------------------------
-// Ordered comparisons with NULL — always an error
+// Ordered comparisons with NULL propagate unknown
 // ---------------------------------------------------------------------------
 
 #[test]
-fn gt_null_lhs_is_error() {
-    assert!(
+fn gt_null_lhs_propagates() {
+    assert_eq!(
         Expr::binary_op(Value::Null, BinaryOp::Gt, 1i64)
             .eval_const()
-            .is_err()
+            .unwrap(),
+        Value::Null
     );
 }
 
 #[test]
-fn gt_null_rhs_is_error() {
-    assert!(
+fn gt_null_rhs_propagates() {
+    assert_eq!(
         Expr::binary_op(1i64, BinaryOp::Gt, Value::Null)
             .eval_const()
-            .is_err()
+            .unwrap(),
+        Value::Null
     );
 }
 
 #[test]
-fn ge_null_is_error() {
-    assert!(
+fn ge_null_propagates() {
+    assert_eq!(
         Expr::binary_op(Value::Null, BinaryOp::Ge, Value::Null)
             .eval_const()
-            .is_err()
+            .unwrap(),
+        Value::Null
     );
 }
 
 #[test]
-fn lt_null_is_error() {
-    assert!(
+fn lt_null_propagates() {
+    assert_eq!(
         Expr::binary_op(Value::Null, BinaryOp::Lt, 1i64)
             .eval_const()
-            .is_err()
+            .unwrap(),
+        Value::Null
     );
 }
 
 #[test]
-fn le_null_is_error() {
-    assert!(
+fn le_null_propagates() {
+    assert_eq!(
         Expr::binary_op(Value::Null, BinaryOp::Le, 1i64)
             .eval_const()
-            .is_err()
+            .unwrap(),
+        Value::Null
     );
 }
 

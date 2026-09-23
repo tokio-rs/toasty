@@ -57,7 +57,11 @@ pub(super) fn extract_values(
                 // one param.
                 stmt::Expr::InList(e) => {
                     self.visit_expr_mut(&mut e.expr);
-                    if let stmt::Expr::Value(stmt::Value::List(_)) = e.list.as_ref() {
+                    if let stmt::Expr::List(list) = e.list.as_mut() {
+                        for item in &mut list.items {
+                            self.visit_expr_mut(item);
+                        }
+                    } else if let stmt::Expr::Value(stmt::Value::List(_)) = e.list.as_ref() {
                         let stmt::Expr::Value(stmt::Value::List(items)) =
                             std::mem::replace(e.list.as_mut(), stmt::Expr::null())
                         else {

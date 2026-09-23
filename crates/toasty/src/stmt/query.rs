@@ -370,6 +370,7 @@ impl<T> Query<T> {
     pub fn to_list(mut self) -> Query<List<T>> {
         assert!(self.untyped.single, "not a single query");
         self.untyped.single = false;
+        self.untyped.optional = false;
 
         Query {
             untyped: self.untyped,
@@ -404,6 +405,7 @@ impl<T> Query<List<T>> {
     /// ```
     pub fn first(mut self) -> Query<Option<T>> {
         set_first(&mut self.untyped);
+        self.untyped.optional = true;
 
         Query {
             untyped: self.untyped,

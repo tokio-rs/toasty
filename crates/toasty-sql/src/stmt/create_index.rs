@@ -36,6 +36,7 @@ impl Statement {
                         IndexOp::Eq => None,
                         IndexOp::Sort(direction) => Some(direction),
                     },
+                    nulls_first: None,
                 })
                 .collect(),
             unique: index.unique,

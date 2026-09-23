@@ -122,10 +122,10 @@ fn into_expr_ref_delegates() {
 #[test]
 fn into_expr_some() {
     let expr: Expr<Option<i64>> = Some(10i64).into_expr();
-    // Some wraps via cast, so the inner value should be an i64
+    // The constructor retains presence independently of the payload.
     assert_eq!(
         untyped(expr),
-        core_stmt::Expr::Value(core_stmt::Value::I64(10))
+        core_stmt::Expr::OptionSome(Box::new(core_stmt::Expr::Value(core_stmt::Value::I64(10))))
     );
 }
 
@@ -134,7 +134,7 @@ fn into_expr_none() {
     let expr: Expr<Option<i64>> = None::<i64>.into_expr();
     assert_eq!(
         untyped(expr),
-        core_stmt::Expr::Value(core_stmt::Value::Null)
+        core_stmt::Expr::Value(core_stmt::Value::Option(None))
     );
 }
 
@@ -144,7 +144,7 @@ fn by_ref_some() {
     let expr: Expr<Option<i64>> = val.by_ref();
     assert_eq!(
         untyped(expr),
-        core_stmt::Expr::Value(core_stmt::Value::I64(10))
+        core_stmt::Expr::OptionSome(Box::new(core_stmt::Expr::Value(core_stmt::Value::I64(10))))
     );
 }
 
@@ -154,7 +154,7 @@ fn by_ref_none() {
     let expr: Expr<Option<i64>> = val.by_ref();
     assert_eq!(
         untyped(expr),
-        core_stmt::Expr::Value(core_stmt::Value::Null)
+        core_stmt::Expr::Value(core_stmt::Value::Option(None))
     );
 }
 
@@ -167,7 +167,7 @@ fn into_expr_value_as_option() {
     let expr: Expr<Option<i64>> = 42i64.into_expr();
     assert_eq!(
         untyped(expr),
-        core_stmt::Expr::Value(core_stmt::Value::I64(42))
+        core_stmt::Expr::OptionSome(Box::new(core_stmt::Expr::Value(core_stmt::Value::I64(42))))
     );
 }
 

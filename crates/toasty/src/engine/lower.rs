@@ -1,3 +1,4 @@
+mod app_expr;
 mod association;
 mod expr_or;
 mod include;
@@ -104,8 +105,7 @@ impl LoweringState<'_> {
         // BelongsTo→FK) fires inside the lowering walk itself via
         // `LowerStatement::visit_expr_binary_op_mut`.
         association::RewriteVia::new(expr_cx).rewrite(&mut stmt);
-        lift_in_subquery::LiftInSubquery::new(expr_cx, self.engine.capability.sql())
-            .rewrite(&mut stmt);
+        lift_in_subquery::LiftInSubquery::new(expr_cx, true).rewrite(&mut stmt);
         lift_update_query::LiftUpdateQuery::new().rewrite(&mut stmt);
 
         // Combine compatible IN subqueries after relation lifting and before
@@ -647,6 +647,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_order_by_expr_mut(&mut self, node: &mut stmt::OrderByExpr) {
+        if node.nulls_first.is_some() && self.app_is_none(&node.expr).is_false() {
+            node.nulls_first = None;
+        }
         // First, run the default visitor to lower sub-expressions
         self.visit_expr_mut(&mut node.expr);
 
@@ -667,10 +670,17 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         let mut lhs = node.expr.clone();
         let mut rhs = node.expr.take();
         self.lower_expr_binary_op(stmt::BinaryOp::Eq, &mut lhs, &mut rhs);
+        if node.nulls_first.is_some()
+            && self.capability().sql()
+            && self.expr_cx.infer_expr_ty(&lhs, &[]).is_string()
+        {
+            lhs = stmt::Expr::BinaryString(Box::new(lhs));
+        }
         node.expr = lhs;
     }
 
     fn visit_assignments_mut(&mut self, i: &mut stmt::Assignments) {
+        app_expr::EncodeOptions.visit_assignments_mut(i);
         let mut lowered = stmt::Assignments::default();
         let mapping = self.mapping_unwrap();
         let assignments = std::mem::take(i);
@@ -712,6 +722,18 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
         self.plan_typed_record_relations(expr);
         match expr {
+            stmt::Expr::App(_) => {
+                let stmt::Expr::App(app) = expr.take() else {
+                    unreachable!()
+                };
+                *expr = self.lower_app_expr(*app);
+            }
+            stmt::Expr::OptionSome(_) | stmt::Expr::Value(stmt::Value::Option(_))
+                if !self.cx.is_returning() =>
+            {
+                app_expr::EncodeOptions.visit_expr_mut(expr);
+                self.visit_expr_mut(expr);
+            }
             stmt::Expr::BinaryOp(e) => {
                 self.visit_expr_binary_op_mut(e);
 
@@ -841,6 +863,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 }
             }
             stmt::Expr::IsVariant(e) => {
+                let present = stmt::Expr::not(self.app_is_none(&e.expr));
                 // Look up the enum model and variant directly via VariantId
                 let enum_model = self
                     .schema()
@@ -874,6 +897,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     // Unit-only: compare directly
                     lowered_expr => stmt::Expr::eq(lowered_expr, stmt::Expr::Value(disc_value)),
                 };
+                *expr = stmt::Expr::and(present, expr.take());
             }
             stmt::Expr::Variant(e) => {
                 // The selected variant's payload. The base lowers to the
@@ -1196,6 +1220,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_stmt_insert_mut(&mut self, stmt: &mut stmt::Insert) {
+        app_expr::EncodeOptions.visit_stmt_query_mut(&mut stmt.source);
         // First, if an insertion scope is specified, lower the scope to be just "model"
         self.apply_insert_scope(&mut stmt.target, &mut stmt.source);
 
@@ -1304,6 +1329,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         self.visit_expr_set_mut(&mut stmt.body);
 
         self.rewrite_offset_after_as_filter(stmt);
+        if stmt.optional {
+            if let Some(stmt::Returning::Project(expr)) = stmt.returning_mut() {
+                *expr = stmt::Expr::OptionSome(Box::new(expr.take()));
+            }
+            stmt.optional = false;
+        }
     }
 
     fn visit_stmt_select_mut(&mut self, stmt: &mut stmt::Select) {
@@ -1317,6 +1348,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {
+        app_expr::EncodeOptions.visit_assignments_mut(&mut stmt.assignments);
         let mut lower = self.scope_expr(&stmt.target);
 
         let mut returning_changed = false;
@@ -1629,7 +1661,12 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     return None;
                 }
 
-                let target_ty = self.capability().native_type_for(&expr_cast.ty);
+                let target_ty = match &*expr_cast.expr {
+                    stmt::Expr::Reference(reference) if reference.is_column() => {
+                        self.expr_cx.infer_expr_reference_ty(reference)
+                    }
+                    _ => self.capability().native_type_for(&expr_cast.ty),
+                };
                 self.cast_expr(lhs, &target_ty);
                 self.cast_expr(rhs, &target_ty);
                 None
@@ -1925,11 +1962,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             // (model→PK, BelongsTo→FK) fires inside the lowering walk via
             // `LowerStatement::visit_expr_binary_op_mut`.
             association::RewriteVia::new(child.expr_cx).rewrite(&mut stmt);
-            lift_in_subquery::LiftInSubquery::new(
-                child.expr_cx,
-                child.state.engine.capability.sql(),
-            )
-            .rewrite(&mut stmt);
+            lift_in_subquery::LiftInSubquery::new(child.expr_cx, true).rewrite(&mut stmt);
             // Combine compatible IN subqueries before the lowering walk
             // extracts them into separate NoSQL statements.
             Simplify::with_context(child.expr_cx, child.state.engine.capability)

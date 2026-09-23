@@ -57,6 +57,15 @@ pub(crate) fn simplify_expr(
 
 impl VisitMut for Simplify<'_> {
     fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
+        if let Expr::App(inner) = i {
+            // Normalization can place a variant guard and its predicate
+            // inside one application marker. Merge their relation lookups
+            // before key-value planning extracts separate inputs.
+            if let Expr::And(and) = &mut **inner {
+                self.merge_in_subqueries(&mut and.operands);
+            }
+            return;
+        }
         // Only AND/OR propagate positive filtering to their operands. Under
         // NOT, IS NULL, or a returned expression, false and null must remain
         // distinguishable. Nested statement filters establish their own context.
