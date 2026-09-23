@@ -198,7 +198,7 @@ impl Expand<'_> {
                         let terminal_ty =
                             quote!(#toasty::List<<#ty as #toasty::ViaManyField>::Target>);
                         let full_path =
-                            expand_via_path(toasty, model_ident, segments, &terminal_ty);
+                            expand_has_many_via_path(toasty, model_ident, segments, &terminal_ty);
 
                         // A has-many collection is always present, never null.
                         nullable = quote!(false);
@@ -220,14 +220,13 @@ impl Expand<'_> {
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
                     let pair = expand_pair(toasty, quote!(#toasty::RelationOneField), ty, rel.pair.as_ref());
-                    // A has-one via reaches a single model; pin the path's
-                    // terminal to that model so a mismatched declaration is a
-                    // compile error rather than a runtime load failure.
-                    let via = expand_via(
+                    // Validate the terminal model and require every step to
+                    // be required when the via declaration is required.
+                    let via = expand_has_one_via_path(
                         toasty,
                         model_ident,
                         rel.via.as_ref(),
-                        &quote!(<#ty as #toasty::RelationOneField>::Target),
+                        ty,
                     );
 
                     nullable = quote!(<#ty as #toasty::RelationOneField>::NULLABLE);
@@ -668,33 +667,40 @@ fn expand_pair(
     }
 }
 
-/// Emit the `via` argument for `many_relation_field_ty` / `has_one_relation_field_ty`: a
-/// fully resolved [`stmt::Path`] built by chaining the named segments onto the
-/// model's `Fields` struct (e.g. `User::fields().comments().article()`).
+/// Emit the optional [`stmt::Path`] argument for `has_one_relation_field_ty`.
 ///
-/// Resolution happens at Rust-compile time — a misspelled segment surfaces as
-/// "no method named `foo` found for struct `UserFields`", not as a runtime
-/// schema validation error. The two `.into()` conversions go via
-/// `FieldsStruct: Into<Path<Origin, T>>` and `Path<T, U>: Into<stmt::Path>`;
-/// the intermediate `Path<#model_ident, _>` ascription is what disambiguates
-/// them.
-fn expand_via(
+/// Check each step's optionality against the declaration, then validate the
+/// terminal model and convert the typed path to a schema path.
+fn expand_has_one_via_path(
     toasty: &TokenStream,
     model_ident: &syn::Ident,
     via: Option<&Vec<syn::Ident>>,
-    terminal_ty: &TokenStream,
+    field_ty: &syn::Type,
 ) -> TokenStream {
     let Some(segments) = via else {
         return quote! { None };
     };
 
-    let path = expand_via_path(toasty, model_ident, segments, terminal_ty);
-    quote! { Some(#path) }
+    let steps = segments.iter().map(|segment| {
+        // Trait errors blame the declared type argument. Point it at the
+        // step being checked so an optional intermediate is identifiable.
+        let field_ty = util::respan(quote!(#field_ty), segment.span());
+        quote_spanned! { segment.span()=>
+            let __via_step = __via_step.#segment();
+            #toasty::via::check_one_step::<#field_ty, #model_ident, _>(&__via_step);
+        }
+    });
+    quote! {
+        Some({
+            let __via_step = #model_ident::fields();
+            #( #steps )*
+            #toasty::via::into_one_path::<#field_ty, #model_ident, _>(__via_step.into())
+        })
+    }
 }
 
-/// Emit the fully-resolved [`stmt::Path`] for a `via` relation: chain the named
-/// segments onto the model's `Fields` struct (e.g.
-/// `User::fields().comments().article()`) and convert to an `stmt::Path`.
+/// Emit the [`stmt::Path`] for a has-many `via` relation, validating the exact
+/// collection target type before converting the typed path to a schema path.
 ///
 /// Resolution happens at Rust-compile time — a misspelled segment surfaces as
 /// "no method named `foo` found", and an intermediate that is not navigable
@@ -706,16 +712,13 @@ fn expand_via(
 /// field whose declared element type disagrees with the path
 /// (`#[has_many(via = a.b.title)] x: Vec<i64>` where `title` is a `String`), so
 /// the mismatch is a compile error here instead of a runtime load failure.
-pub(super) fn expand_via_path(
+pub(super) fn expand_has_many_via_path(
     toasty: &TokenStream,
     model_ident: &syn::Ident,
     segments: &[syn::Ident],
     terminal_ty: &TokenStream,
 ) -> TokenStream {
-    let mut chain = quote! { #model_ident::fields() };
-    for segment in segments {
-        chain = quote_spanned! { segment.span()=> #chain.#segment() };
-    }
+    let chain = expand_field_accessor_chain(model_ident, segments);
 
     // Pin the typed path's terminal to `terminal_ty`. When it disagrees with
     // the path, the `.into()` has no matching conversion. Point that failure at
@@ -744,4 +747,14 @@ pub(super) fn expand_via_path(
             __via_untyped
         }
     }
+}
+
+/// Emit field accessor calls such as `User::fields().comments().article()`.
+/// Callers add target type validation and conversion to a schema path.
+fn expand_field_accessor_chain(model_ident: &syn::Ident, segments: &[syn::Ident]) -> TokenStream {
+    let mut chain = quote! { #model_ident::fields() };
+    for segment in segments {
+        chain = quote_spanned! { segment.span()=> #chain.#segment() };
+    }
+    chain
 }
