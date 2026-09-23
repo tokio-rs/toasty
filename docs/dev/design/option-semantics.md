@@ -2,11 +2,11 @@
 
 ## Summary
 
-Application values use Rust `Option<T>`, and application predicates return
-`bool`. Database nullability belongs to the storage mapping and driver
-interfaces. Lowering preserves application results while database operations
-retain their native semantics. This document defines the target contract;
-implementation follows in separate PRs.
+Application values use `Option<T>`, and application predicates return `bool`.
+Toasty follows Rust's rules for `Some` and `None`. When both values are
+present, their comparison follows the target database's rules. Database
+nullability belongs to the storage mapping and driver interfaces. This
+document defines the target contract; implementation follows in separate PRs.
 
 ## Motivation
 
@@ -26,8 +26,10 @@ User::filter(User::fields().nickname().ne("hello"));
 User::filter(User::fields().nickname().eq(None::<String>));
 ```
 
-The first query matches `Some("hello")`; the second matches every other
-nickname, including `None`. The third is equivalent to `is_none()`.
+The first query matches present nicknames the database considers equal to
+`"hello"`. Under a case-insensitive MySQL collation, this can include
+`Some("HELLO")`. The second query matches every other nickname, including
+`None`. The third is equivalent to `is_none()`.
 A required value, path, or expression supplied to an optional comparison
 implicitly lifts into `Some`. Elision never unwraps an option or omits a
 predicate.
@@ -53,53 +55,75 @@ use `nickname.is_some().and(nickname.ne("hello"))`.
 
 ## Behavior
 
-Equality follows Rust's `Option` semantics:
+Option equality checks presence first:
 
 | Left | Right | `eq` | `ne` |
 |---|---|---|---|
 | `None` | `None` | `true` | `false` |
 | `None` | `Some(b)` | `false` | `true` |
 | `Some(a)` | `None` | `false` | `true` |
-| `Some(a)` | `Some(b)` | `a == b` | `a != b` |
+| `Some(a)` | `Some(b)` | `value_eq(a, b)` | `!value_eq(a, b)` |
 
-Scalar payloads use Rust equality. Tuples and embedded values compare their
-corresponding application members. Relations compare model identity using
-their declared reference keys, including non-primary references.
+Apply the presence rules at every Option layer. For present scalar values,
+`value_eq` means the target database's equality for the mapped values,
+including their type and collation. Adding `Option` to a type changes how
+absence works and preserves how its present values compare.
 
-Membership is `candidates.iter().any(|candidate| subject == candidate)`.
-Duplicates do not affect it, and an empty candidate set yields `false`.
+For example, string equality can ignore case or trailing spaces under some
+MySQL and MariaDB collations. PostgreSQL considers floating-point NaN equal
+to itself, so `Some(NaN)` equals `Some(NaN)` there. These differences remain
+part of the database's behavior.
+
+Tuples and embedded values compare their corresponding application members,
+applying the same presence rules to optional members. Present scalar members
+use database equality. Relations compare model identity using their declared
+reference keys, including non-primary references.
+
+`in_list` and `in_query` succeed when at least one candidate compares equal
+under these rules. An absent candidate matches an absent subject. Duplicates
+do not affect membership, and an empty candidate set yields `false`.
 Subquery limits and offsets determine the candidate set before membership.
+Native collection and JSON operators retain their own comparison contracts.
 
 `ne(a, b)` is `not(eq(a, b))`. Predicates compose with ordinary boolean
 `and`, `or`, and `not`; the contract applies in filters, projections,
 relation predicates, conditional writes, and client evaluation. A variant
 guard belongs inside the complete predicate being negated.
 
-Where ordered comparisons are supported, `None < Some(_)` and present
-payloads use Rust's partial ordering. Ascending sorting places absence first;
-descending sorting places it last. Cursor pagination follows the same order.
+Where ordered comparisons are supported, `None < Some(_)`. Present values
+use the database's ordering. Ascending sorting places absence first;
+descending sorting places it last. Cursor pagination uses the same ordering
+and the database's equality for tied sort values, with a unique tie-breaker.
+For example, PostgreSQL's NaN values compare equal and sort after other float
+values. Pagination must use those rules too. A pagination form without a
+deterministic order and compatible cursor comparisons returns an
+`unsupported_feature` error.
+
 Optional string predicates return `false` for `None`; present values retain
 the operation's contract, including native `LIKE` and `ILIKE` matching rules.
 
 Assigning `None` clears an optional field. Omitting an update assignment
 leaves it unchanged; omitting a create field allows its default to apply.
-Selecting `Option<T>` and calling `.first()` returns `Option<Option<T>>`:
-`None` means no row, `Some(None)` means a row with an absent field, and
-`Some(Some(value))` means a row with a present field.
+Field presence and row presence are separate. Selecting an optional nickname
+and calling `.first()` returns `Option<Option<String>>`:
+
+- `None`: no user was found.
+- `Some(None)`: a user was found, but they have no nickname.
+- `Some(Some("Sam"))`: a user was found, and their nickname is `"Sam"`.
+
+These states remain distinct. Likewise, an absent address differs from a
+present address whose optional fields are all absent. For `Deferred`, a value
+that has not been loaded differs from one that was loaded and found absent.
 
 ## Edge cases
 
-Presence levels must remain distinct: `Some(None) != None`, and a present
-embedded value with absent members differs from an absent embed. Stored
-nested options require a lossless mapping; reject unsupported nesting at
-model compilation, including through aliases and transparent wrappers.
-Nested query results remain valid. Unloaded `Deferred` state is separate
-from loaded absence, and malformed stored data produces a decoding error.
+Stored nested options require a mapping that keeps every presence state.
+Reject unsupported nesting at model compilation, including through aliases
+and transparent wrappers. Nested query results remain valid.
 
-Rust equality distinguishes string case and trailing spaces; NaN is unequal
-to itself. A supported storage conversion must preserve these values and
-comparisons or return an unsupported-feature error. It must not silently
-turn a present value into absence.
+A supported storage conversion must not silently turn a present value into
+absence. A driver may reject a value it cannot store. Invalid stored data
+produces a decoding error instead of `None`.
 
 Equality of absent values does not create a relationship. Relation lookup
 requires a present reference key, including every part of a composite key.
@@ -113,10 +137,17 @@ must not redefine database equality used for joins or other native operations.
 No new driver operation or capability is required by this contract; concrete
 interface additions, if needed, belong to the implementation proposals.
 
-Lowering accounts for presence before choosing database comparisons and
-membership operators. Native null-safe operators are suitable only when
-their payload comparison also agrees with the application contract.
-Rewrites must preserve evaluation counts for volatile operands.
+Lowering adds presence handling around the database's value comparisons and
+membership operators. Native null-safe operators are suitable when they
+preserve both the presence rules and the value comparison. Presence handling
+must preserve the existing collation and float comparison rules.
+
+Optimizations and client-side query evaluation must preserve the same
+database comparison results. A comparison may be evaluated in Rust only
+when doing so agrees with the target database; otherwise it must stay in the
+database or use an equivalent evaluation for that backend. This also applies
+to comparisons used for projections, membership, and relation merging.
+Rewrites preserve evaluation counts for volatile operands.
 
 SQL nulls and omitted DynamoDB attributes can encode absence; DynamoDB's
 explicit `NULL` attributes also decode as absence. Presence predicates agree
