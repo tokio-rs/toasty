@@ -527,7 +527,7 @@ impl Expand<'_> {
         let span = field_ident.span();
 
         quote_spanned! { span=>
-            #vis fn #field_ident(&self) -> <<#ty as #field_trait>::Target as #toasty::Model>::OneField<__Origin> {
+            #vis fn #field_ident(&self) -> RelationOnePath<#ty, __Origin> {
                 <<#ty as #field_trait>::Target as #toasty::ModelCodegen>::new_one_field(
                     #parent_path.chain(
                         <#model_ident as #schema_trait>::path_field(#field_offset)
@@ -576,14 +576,12 @@ fn wrap_in_const(code: TokenStream) -> TokenStream {
     quote! {
         const _: () = {
             use toasty as _toasty;
-            // Import the setter-bound names unqualified so the `impl Trait`
-            // parameter types on create/update setters render as
-            // `impl IntoExpr<FieldExprTarget<..>>` in compiler errors rather
-            // than the much longer `_toasty::codegen_support::..` paths. Not
-            // every model uses all three (a model with only relation setters
-            // never names `Assign` here), so silence the unused-import lint.
+            // Import signature types unqualified so compiler errors can show
+            // `impl IntoExpr<FieldExprTarget<..>>` and `RelationOnePath<..>`
+            // without the longer `_toasty::codegen_support::..` paths.
+            // Not every model uses every import.
             #[allow(unused_imports)]
-            use _toasty::codegen_support::{Assign, FieldExprTarget, IntoExpr};
+            use _toasty::codegen_support::{Assign, FieldExprTarget, IntoExpr, RelationOnePath};
             #code
         };
     }

@@ -21,6 +21,11 @@ pub trait Load {
     /// Returns the [`stmt::Type`] that describes values of this type.
     fn ty() -> stmt::Type;
 
+    /// The application value type before storage mapping.
+    fn app_ty() -> stmt::Type {
+        Self::ty()
+    }
+
     /// Returns the [`stmt::Type`] used when this type appears as a relation
     /// target. The default delegates to [`ty()`](Load::ty).
     fn ty_relation() -> stmt::Type {
@@ -77,6 +82,10 @@ impl<T: Load<Output = T>> Load for Vec<T> {
         stmt::Type::list(T::ty())
     }
 
+    fn app_ty() -> stmt::Type {
+        stmt::Type::list(T::app_ty())
+    }
+
     fn load(value: stmt::Value) -> Result<Self::Output, Error> {
         match value {
             stmt::Value::List(items) => items.into_iter().map(T::load).collect(),
@@ -106,6 +115,10 @@ impl<M: Load> Load for List<M> {
         stmt::Type::list(M::ty())
     }
 
+    fn app_ty() -> stmt::Type {
+        stmt::Type::list(M::app_ty())
+    }
+
     fn load(value: stmt::Value) -> Result<Self::Output, Error> {
         match value {
             stmt::Value::List(items) => items.into_iter().map(M::load).collect(),
@@ -122,6 +135,10 @@ macro_rules! impl_load_for_tuple {
 
             fn ty() -> stmt::Type {
                 stmt::Type::Record(vec![ $( $T::ty() ),+ ])
+            }
+
+            fn app_ty() -> stmt::Type {
+                stmt::Type::Record(vec![ $( $T::app_ty() ),+ ])
             }
 
             fn load(value: stmt::Value) -> Result<Self::Output, Error> {
@@ -211,6 +228,10 @@ impl<T: Load<Output = T>> Load for std::sync::Arc<T> {
         T::ty()
     }
 
+    fn app_ty() -> stmt::Type {
+        T::app_ty()
+    }
+
     fn load(value: stmt::Value) -> Result<Self::Output, Error> {
         <T as Load>::load(value).map(std::sync::Arc::new)
     }
@@ -228,6 +249,10 @@ impl<T: Load<Output = T>> Load for std::rc::Rc<T> {
         T::ty()
     }
 
+    fn app_ty() -> stmt::Type {
+        T::app_ty()
+    }
+
     fn load(value: stmt::Value) -> Result<Self::Output, Error> {
         <T as Load>::load(value).map(std::rc::Rc::new)
     }
@@ -243,6 +268,10 @@ impl<T: Load<Output = T>> Load for Box<T> {
 
     fn ty() -> stmt::Type {
         T::ty()
+    }
+
+    fn app_ty() -> stmt::Type {
+        T::app_ty()
     }
 
     fn load(value: stmt::Value) -> Result<Self::Output, Error> {

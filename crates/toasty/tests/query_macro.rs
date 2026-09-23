@@ -77,37 +77,43 @@ fn query_all() {
 #[test]
 fn filter_eq_string() {
     let expr = filter_expr(toasty::query!(User filter .name == "Alice"));
-    assert_eq!(expr, core_stmt::Expr::eq(field_ref(1), str_val("Alice")));
+    assert_eq!(
+        expr,
+        core_stmt::Expr::eq(field_ref(1), str_val("Alice")).app()
+    );
 }
 
 #[test]
 fn filter_ne_string() {
     let expr = filter_expr(toasty::query!(User filter .name != "Bob"));
-    assert_eq!(expr, core_stmt::Expr::ne(field_ref(1), str_val("Bob")));
+    assert_eq!(
+        expr,
+        core_stmt::Expr::not(core_stmt::Expr::eq(field_ref(1), str_val("Bob")).app())
+    );
 }
 
 #[test]
 fn filter_gt() {
     let expr = filter_expr(toasty::query!(User filter .age > 18));
-    assert_eq!(expr, core_stmt::Expr::gt(field_ref(2), i64_val(18)));
+    assert_eq!(expr, core_stmt::Expr::gt(field_ref(2), i64_val(18)).app());
 }
 
 #[test]
 fn filter_ge() {
     let expr = filter_expr(toasty::query!(User filter .age >= 21));
-    assert_eq!(expr, core_stmt::Expr::ge(field_ref(2), i64_val(21)));
+    assert_eq!(expr, core_stmt::Expr::ge(field_ref(2), i64_val(21)).app());
 }
 
 #[test]
 fn filter_lt() {
     let expr = filter_expr(toasty::query!(User filter .age < 65));
-    assert_eq!(expr, core_stmt::Expr::lt(field_ref(2), i64_val(65)));
+    assert_eq!(expr, core_stmt::Expr::lt(field_ref(2), i64_val(65)).app());
 }
 
 #[test]
 fn filter_le() {
     let expr = filter_expr(toasty::query!(User filter .age <= 99));
-    assert_eq!(expr, core_stmt::Expr::le(field_ref(2), i64_val(99)));
+    assert_eq!(expr, core_stmt::Expr::le(field_ref(2), i64_val(99)).app());
 }
 
 // ---------------------------------------------------------------------------
@@ -121,8 +127,8 @@ fn filter_and() {
     assert_eq!(
         expr,
         core_stmt::Expr::and(
-            core_stmt::Expr::eq(field_ref(1), str_val("Alice")),
-            core_stmt::Expr::gt(field_ref(2), i64_val(18)),
+            core_stmt::Expr::eq(field_ref(1), str_val("Alice")).app(),
+            core_stmt::Expr::gt(field_ref(2), i64_val(18)).app(),
         )
     );
 }
@@ -134,8 +140,8 @@ fn filter_or() {
     assert_eq!(
         expr,
         core_stmt::Expr::or(
-            core_stmt::Expr::eq(field_ref(1), str_val("Alice")),
-            core_stmt::Expr::eq(field_ref(1), str_val("Bob")),
+            core_stmt::Expr::eq(field_ref(1), str_val("Alice")).app(),
+            core_stmt::Expr::eq(field_ref(1), str_val("Bob")).app(),
         )
     );
 }
@@ -146,7 +152,7 @@ fn filter_not() {
 
     assert_eq!(
         expr,
-        core_stmt::Expr::not(core_stmt::Expr::eq(field_ref(3), bool_val(true)))
+        core_stmt::Expr::not(core_stmt::Expr::eq(field_ref(3), bool_val(true)).app())
     );
 }
 
@@ -166,10 +172,10 @@ fn filter_parens_override_precedence() {
         expr,
         core_stmt::Expr::and(
             core_stmt::Expr::or(
-                core_stmt::Expr::eq(field_ref(1), str_val("Alice")),
-                core_stmt::Expr::eq(field_ref(1), str_val("Bob")),
+                core_stmt::Expr::eq(field_ref(1), str_val("Alice")).app(),
+                core_stmt::Expr::eq(field_ref(1), str_val("Bob")).app(),
             ),
-            core_stmt::Expr::gt(field_ref(2), i64_val(18)),
+            core_stmt::Expr::gt(field_ref(2), i64_val(18)).app(),
         )
     );
 }
@@ -181,13 +187,19 @@ fn filter_parens_override_precedence() {
 #[test]
 fn filter_bool_true() {
     let expr = filter_expr(toasty::query!(User filter .active == true));
-    assert_eq!(expr, core_stmt::Expr::eq(field_ref(3), bool_val(true)));
+    assert_eq!(
+        expr,
+        core_stmt::Expr::eq(field_ref(3), bool_val(true)).app()
+    );
 }
 
 #[test]
 fn filter_bool_false() {
     let expr = filter_expr(toasty::query!(User filter .active == false));
-    assert_eq!(expr, core_stmt::Expr::eq(field_ref(3), bool_val(false)));
+    assert_eq!(
+        expr,
+        core_stmt::Expr::eq(field_ref(3), bool_val(false)).app()
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -198,7 +210,10 @@ fn filter_bool_false() {
 fn filter_external_variable() {
     let name = String::from("Carl");
     let expr = filter_expr(toasty::query!(User filter .name == #name));
-    assert_eq!(expr, core_stmt::Expr::eq(field_ref(1), str_val("Carl")));
+    assert_eq!(
+        expr,
+        core_stmt::Expr::eq(field_ref(1), str_val("Carl")).app()
+    );
 }
 
 #[test]
@@ -208,7 +223,10 @@ fn filter_external_expression() {
     }
 
     let expr = filter_expr(toasty::query!(User filter .name == #(make_name())));
-    assert_eq!(expr, core_stmt::Expr::eq(field_ref(1), str_val("Computed")));
+    assert_eq!(
+        expr,
+        core_stmt::Expr::eq(field_ref(1), str_val("Computed")).app()
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -218,13 +236,19 @@ fn filter_external_expression() {
 #[test]
 fn filter_keyword_uppercase() {
     let expr = filter_expr(toasty::query!(User FILTER .name == "test"));
-    assert_eq!(expr, core_stmt::Expr::eq(field_ref(1), str_val("test")));
+    assert_eq!(
+        expr,
+        core_stmt::Expr::eq(field_ref(1), str_val("test")).app()
+    );
 }
 
 #[test]
 fn filter_keyword_mixed_case() {
     let expr = filter_expr(toasty::query!(User Filter .name == "test"));
-    assert_eq!(expr, core_stmt::Expr::eq(field_ref(1), str_val("test")));
+    assert_eq!(
+        expr,
+        core_stmt::Expr::eq(field_ref(1), str_val("test")).app()
+    );
 }
 
 #[test]
@@ -264,10 +288,10 @@ fn complex_and_or_not_with_parens() {
     assert_eq!(
         expr,
         core_stmt::Expr::and(
-            core_stmt::Expr::not(core_stmt::Expr::eq(field_ref(3), bool_val(true))),
+            core_stmt::Expr::not(core_stmt::Expr::eq(field_ref(3), bool_val(true)).app()),
             core_stmt::Expr::or(
-                core_stmt::Expr::eq(field_ref(1), str_val("Alice")),
-                core_stmt::Expr::ge(field_ref(2), i64_val(21)),
+                core_stmt::Expr::eq(field_ref(1), str_val("Alice")).app(),
+                core_stmt::Expr::ge(field_ref(2), i64_val(21)).app(),
             ),
         )
     );
@@ -301,10 +325,10 @@ fn or_precedence_lower_than_and() {
         expr,
         core_stmt::Expr::or(
             core_stmt::Expr::and(
-                core_stmt::Expr::eq(field_ref(1), str_val("A")),
-                core_stmt::Expr::gt(field_ref(2), i64_val(0)),
+                core_stmt::Expr::eq(field_ref(1), str_val("A")).app(),
+                core_stmt::Expr::gt(field_ref(2), i64_val(0)).app(),
             ),
-            core_stmt::Expr::eq(field_ref(3), bool_val(false)),
+            core_stmt::Expr::eq(field_ref(3), bool_val(false)).app(),
         )
     );
 }
@@ -315,10 +339,9 @@ fn double_not() {
 
     assert_eq!(
         expr,
-        core_stmt::Expr::not(core_stmt::Expr::not(core_stmt::Expr::eq(
-            field_ref(3),
-            bool_val(true)
-        )))
+        core_stmt::Expr::not(core_stmt::Expr::not(
+            core_stmt::Expr::eq(field_ref(3), bool_val(true)).app()
+        ))
     );
 }
 
@@ -364,7 +387,7 @@ fn filter_query_is_not_single() {
 #[test]
 fn filter_integer_literal() {
     let expr = filter_expr(toasty::query!(User filter .age == 42));
-    assert_eq!(expr, core_stmt::Expr::eq(field_ref(2), i64_val(42)));
+    assert_eq!(expr, core_stmt::Expr::eq(field_ref(2), i64_val(42)).app());
 }
 
 // ---------------------------------------------------------------------------
@@ -379,10 +402,10 @@ fn filter_different_fields() {
         expr,
         core_stmt::Expr::and(
             core_stmt::Expr::and(
-                core_stmt::Expr::eq(field_ref(0), i64_val(1)),
-                core_stmt::Expr::eq(field_ref(1), str_val("X")),
+                core_stmt::Expr::eq(field_ref(0), i64_val(1)).app(),
+                core_stmt::Expr::eq(field_ref(1), str_val("X")).app(),
             ),
-            core_stmt::Expr::gt(field_ref(2), i64_val(0)),
+            core_stmt::Expr::gt(field_ref(2), i64_val(0)).app(),
         )
     );
 }
@@ -401,10 +424,10 @@ fn nested_parens() {
         expr,
         core_stmt::Expr::and(
             core_stmt::Expr::or(
-                core_stmt::Expr::eq(field_ref(1), str_val("A")),
-                core_stmt::Expr::eq(field_ref(1), str_val("B")),
+                core_stmt::Expr::eq(field_ref(1), str_val("A")).app(),
+                core_stmt::Expr::eq(field_ref(1), str_val("B")).app(),
             ),
-            core_stmt::Expr::gt(field_ref(2), i64_val(0)),
+            core_stmt::Expr::gt(field_ref(2), i64_val(0)).app(),
         )
     );
 }
@@ -447,6 +470,7 @@ fn filter_in_list_integers() {
                 items: vec![i64_val(1), i64_val(2), i64_val(3)],
             }),
         )
+        .app()
     );
 }
 
@@ -462,6 +486,7 @@ fn filter_in_list_strings() {
                 items: vec![str_val("Alice"), str_val("Bob")],
             }),
         )
+        .app()
     );
 }
 
@@ -478,6 +503,7 @@ fn filter_in_list_external_variable() {
                 items: vec![i64_val(1), i64_val(2), i64_val(3)],
             }),
         )
+        .app()
     );
 }
 
@@ -493,8 +519,9 @@ fn filter_in_list_with_and() {
                 core_stmt::Expr::List(core_stmt::ExprList {
                     items: vec![i64_val(1), i64_val(2)],
                 }),
-            ),
-            core_stmt::Expr::eq(field_ref(3), bool_val(true)),
+            )
+            .app(),
+            core_stmt::Expr::eq(field_ref(3), bool_val(true)).app(),
         )
     );
 }
@@ -511,5 +538,6 @@ fn filter_in_list_case_insensitive() {
                 items: vec![i64_val(1), i64_val(2), i64_val(3)],
             }),
         )
+        .app()
     );
 }

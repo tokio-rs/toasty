@@ -742,7 +742,8 @@ impl Expand<'_> {
             shared,
         } = parts;
 
-        quote! {
+        quote! {{
+            const _: bool = #nullable;
             #toasty::core::schema::app::Field {
                 id: #toasty::core::schema::app::FieldId {
                     model: id,
@@ -765,7 +766,7 @@ impl Expand<'_> {
                 }),
                 shared: #shared,
             }
-        }
+        }}
     }
 
     /// Emits compile-time checks for variant fields that declare a shared

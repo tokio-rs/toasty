@@ -384,7 +384,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
     pub fn infer_stmt_ty(&self, stmt: &Statement, args: &[Type]) -> Type {
         let cx = self.scope(stmt);
 
-        match stmt {
+        let ty = match stmt {
             Statement::Delete(stmt) => stmt
                 .returning
                 .as_ref()
@@ -416,6 +416,11 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 .as_ref()
                 .map(|returning| cx.infer_returning_ty(returning, args, false))
                 .unwrap_or(Type::Unit),
+        };
+        if matches!(stmt, Statement::Query(query) if query.optional) {
+            Type::Option(Box::new(ty))
+        } else {
+            ty
         }
     }
 
@@ -451,7 +456,13 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
     fn infer_expr_ty2(&self, args: &ArgTyStack<'_>, expr: &Expr, returning_expr: bool) -> Type {
         match expr {
             Expr::Arg(e) => args.resolve_arg_ty(e).clone(),
-            Expr::And(_) => Type::Bool,
+            Expr::OptionSome(expr) => {
+                Type::Option(Box::new(self.infer_expr_ty2(args, expr, returning_expr)))
+            }
+            Expr::BinaryString(expr) => self.infer_expr_ty2(args, expr, returning_expr),
+            Expr::App(_) | Expr::And(_) | Expr::Like(_) | Expr::StartsWith(_) | Expr::IsNan(_) => {
+                Type::Bool
+            }
             Expr::Any(_) | Expr::AnyOp(_) | Expr::AllOp(_) | Expr::InList(_) => Type::Bool,
             Expr::BinaryOp(_) => Type::Bool,
             Expr::Cast(e) => e.ty.clone(),
@@ -625,8 +636,28 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             ResolvedRef::Column(column) => column.ty.clone(),
             ResolvedRef::Field(field) => field.expr_ty().clone(),
             ResolvedRef::Cte { .. } => todo!("type inference for CTE columns not implemented"),
-            ResolvedRef::Derived(_) => {
-                todo!("type inference for derived table columns not implemented")
+            ResolvedRef::Derived(derived) => {
+                let mut parent = self;
+                for _ in 0..derived.nesting {
+                    parent = parent.parent.expect("invalid derived reference nesting");
+                }
+                let query = &*derived.derived.subquery;
+                let cx = parent.scope(query);
+                let ty = match &query.body {
+                    ExprSet::Values(values) => values
+                        .rows
+                        .first()
+                        .map(|row| cx.infer_expr_ty(row, &[]))
+                        .unwrap_or(Type::Unknown),
+                    _ => cx.infer_returning_ty(query.returning_unwrap(), &[], true),
+                };
+                match ty {
+                    Type::Record(mut fields) => fields.swap_remove(derived.index),
+                    ty => {
+                        assert_eq!(derived.index, 0, "scalar derived column index");
+                        ty
+                    }
+                }
             }
         }
     }

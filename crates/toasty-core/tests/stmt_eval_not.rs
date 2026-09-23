@@ -66,7 +66,6 @@ fn not_non_bool_is_error() {
 }
 
 #[test]
-fn not_null_is_error() {
-    // Null is not a Bool, so this errors rather than returning Null.
-    assert!(Expr::not(Value::Null).eval_const().is_err());
+fn not_null_propagates() {
+    assert_eq!(Expr::not(Value::Null).eval_const().unwrap(), Value::Null);
 }

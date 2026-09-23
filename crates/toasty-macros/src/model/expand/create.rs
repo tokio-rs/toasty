@@ -85,8 +85,8 @@ impl Expand<'_> {
             (quote!(#model_ident), into_expr, by_ref),
             (
                 quote!(#toasty::Option<#model_ident>),
-                quote!(<Self as #toasty::IntoExpr<#model_ident>>::into_expr(self).cast()),
-                quote!(<Self as #toasty::IntoExpr<#model_ident>>::by_ref(self).cast()),
+                quote!(<Self as #toasty::IntoExpr<#model_ident>>::into_expr(self).some()),
+                quote!(<Self as #toasty::IntoExpr<#model_ident>>::by_ref(self).some()),
             ),
         ]
         .into_iter()

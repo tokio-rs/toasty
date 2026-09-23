@@ -55,27 +55,25 @@ fn in_list_not_found_string() {
 }
 
 // ---------------------------------------------------------------------------
-// Null in list — uses Rust structural equality (null == null is true)
+// Null in list propagates database unknown
 // ---------------------------------------------------------------------------
 
 #[test]
 fn in_list_null_found() {
-    // Null is in [Null, I64(1)] → true (Rust PartialEq: Null == Null)
     let expr = Expr::in_list(
         Value::Null,
         Expr::list([Expr::from(Value::Null), Expr::from(1i64)]),
     );
-    assert_eq!(expr.eval_const().unwrap(), Value::Bool(true));
+    assert_eq!(expr.eval_const().unwrap(), Value::Null);
 }
 
 #[test]
 fn in_list_null_not_found() {
-    // Null is not in [I64(1), I64(2)] → false
     let expr = Expr::in_list(
         Value::Null,
         Expr::list([Expr::from(1i64), Expr::from(2i64)]),
     );
-    assert_eq!(expr.eval_const().unwrap(), Value::Bool(false));
+    assert_eq!(expr.eval_const().unwrap(), Value::Null);
 }
 
 // ---------------------------------------------------------------------------

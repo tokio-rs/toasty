@@ -18,12 +18,12 @@ help: the trait `toasty::schema::Field` is not implemented for `Profile`
              IpCidr
              IpInet
              MacAddr6
-             Option<T>
              Rc<T>
+             TimeZone
            and $N others
-   = note: required for `Option<Profile>` to implement `toasty::schema::Field`
+   = note: required for `std::option::Option<Profile>` to implement `toasty::schema::Field`
    = note: 1 redundant requirement hidden
-   = note: required for `Deferred<Option<Profile>>` to implement `toasty::schema::Field`
+   = note: required for `Deferred<std::option::Option<Profile>>` to implement `toasty::schema::Field`
 
 error[E0277]: `Profile` cannot be used as a field type
   --> tests/ui/relation_has_one_requires_attr.rs:1:10
@@ -45,25 +45,26 @@ help: the trait `toasty::schema::Field` is not implemented for `Profile`
              IpCidr
              IpInet
              MacAddr6
-             Option<T>
              Rc<T>
+             TimeZone
            and $N others
-   = note: required for `Option<Profile>` to implement `toasty::schema::Field`
+   = note: required for `std::option::Option<Profile>` to implement `toasty::schema::Field`
    = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0277]: the trait bound `impl IntoExpr<FieldExprTarget<toasty::Deferred<Option<Profile>>>>: IntoExpr<Option<Profile>>` is not satisfied
+error[E0277]: the trait bound `impl IntoExpr<FieldExprTarget<toasty::Deferred<Option<Profile>>>>: IntoExpr<std::option::Option<Profile>>` is not satisfied
  --> tests/ui/relation_has_one_requires_attr.rs:1:10
   |
 1 | #[derive(toasty::Model)]
-  |          ^^^^^^^^^^^^^ the trait `IntoExpr<Option<Profile>>` is not implemented for `impl IntoExpr<FieldExprTarget<toasty::Deferred<Option<Profile>>>>`
+  |          ^^^^^^^^^^^^^ unsatisfied trait bound
   |
+  = help: the trait `IntoExpr<std::option::Option<Profile>>` is not implemented for `impl IntoExpr<FieldExprTarget<toasty::Deferred<Option<Profile>>>>`
   = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0277]: the trait bound `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>: Assign<Option<Profile>>` is not satisfied
+error[E0277]: the trait bound `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>: Assign<std::option::Option<Profile>>` is not satisfied
  --> tests/ui/relation_has_one_requires_attr.rs:1:10
   |
 1 | #[derive(toasty::Model)]
-  |          ^^^^^^^^^^^^^ the trait `Assign<Option<Profile>>` is not implemented for `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>`
+  |          ^^^^^^^^^^^^^ the trait `Assign<std::option::Option<Profile>>` is not implemented for `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>`
   |
   = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
 
@@ -87,12 +88,12 @@ help: the trait `toasty::schema::Field` is not implemented for `Profile`
              IpCidr
              IpInet
              MacAddr6
-             Option<T>
              Rc<T>
+             TimeZone
            and $N others
-   = note: required for `Option<Profile>` to implement `toasty::schema::Field`
+   = note: required for `std::option::Option<Profile>` to implement `toasty::schema::Field`
    = note: 1 redundant requirement hidden
-   = note: required for `Deferred<Option<Profile>>` to implement `toasty::schema::Field`
+   = note: required for `Deferred<std::option::Option<Profile>>` to implement `toasty::schema::Field`
    = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: `Profile` cannot be used as a field type
@@ -115,12 +116,12 @@ help: the trait `toasty::schema::Field` is not implemented for `Profile`
              IpCidr
              IpInet
              MacAddr6
-             Option<T>
              Rc<T>
+             TimeZone
            and $N others
-   = note: required for `Option<Profile>` to implement `toasty::schema::Field`
+   = note: required for `std::option::Option<Profile>` to implement `toasty::schema::Field`
    = note: 1 redundant requirement hidden
-   = note: required for `Deferred<Option<Profile>>` to implement `toasty::schema::Field`
+   = note: required for `Deferred<std::option::Option<Profile>>` to implement `toasty::schema::Field`
 
 error[E0277]: `Profile` cannot be used as a field type
   --> tests/ui/relation_has_one_requires_attr.rs:7:5
@@ -142,16 +143,16 @@ help: the trait `toasty::schema::Field` is not implemented for `Profile`
              IpCidr
              IpInet
              MacAddr6
-             Option<T>
              Rc<T>
+             TimeZone
            and $N others
-   = note: required for `Option<Profile>` to implement `toasty::schema::Field`
+   = note: required for `std::option::Option<Profile>` to implement `toasty::schema::Field`
 
-error[E0277]: the trait bound `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>: Assign<Option<Profile>>` is not satisfied
+error[E0277]: the trait bound `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>: Assign<std::option::Option<Profile>>` is not satisfied
  --> tests/ui/relation_has_one_requires_attr.rs:7:5
   |
 7 |     profile: toasty::Deferred<Option<Profile>>,
-  |     ^^^^^^^ the trait `Assign<Option<Profile>>` is not implemented for `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>`
+  |     ^^^^^^^ the trait `Assign<std::option::Option<Profile>>` is not implemented for `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>`
   |
 note: required by a bound in `UserUpdate::<__toasty_T>::set_profile`
  --> tests/ui/relation_has_one_requires_attr.rs:1:10
@@ -163,12 +164,13 @@ note: required by a bound in `UserUpdate::<__toasty_T>::set_profile`
   |     ------- required by a bound in this associated function
   = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0277]: the trait bound `impl IntoExpr<FieldExprTarget<toasty::Deferred<Option<Profile>>>>: IntoExpr<Option<Profile>>` is not satisfied
+error[E0277]: the trait bound `impl IntoExpr<FieldExprTarget<toasty::Deferred<Option<Profile>>>>: IntoExpr<std::option::Option<Profile>>` is not satisfied
  --> tests/ui/relation_has_one_requires_attr.rs:1:10
   |
 1 | #[derive(toasty::Model)]
-  |          ^^^^^^^^^^^^^ the trait `IntoExpr<Option<Profile>>` is not implemented for `impl IntoExpr<FieldExprTarget<toasty::Deferred<Option<Profile>>>>`
+  |          ^^^^^^^^^^^^^ unsatisfied trait bound
   |
+  = help: the trait `IntoExpr<std::option::Option<Profile>>` is not implemented for `impl IntoExpr<FieldExprTarget<toasty::Deferred<Option<Profile>>>>`
 note: required by a bound in `toasty::codegen_support::into_untyped_expr`
  --> $WORKSPACE/crates/toasty/src/codegen_support.rs
   |

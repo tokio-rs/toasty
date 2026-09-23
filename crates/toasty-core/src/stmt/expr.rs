@@ -36,6 +36,20 @@ use std::fmt;
 /// ```
 #[derive(Clone, PartialEq)]
 pub enum Expr {
+    /// An application predicate. Comparisons and membership inside this
+    /// boundary use Rust option semantics until lowering. Database folding
+    /// rules must not enter this expression.
+    App(Box<Expr>),
+
+    /// Construct a present application option. This is evaluated by the engine,
+    /// never serialized as a database scalar.
+    OptionSome(Box<Expr>),
+    /// A database string operand compared by its exact bytes.
+    BinaryString(Box<Expr>),
+
+    /// Whether a floating-point value is NaN. Null produces false.
+    IsNan(Box<Expr>),
+
     /// `lhs <op> ALL(rhs)` predicate against an array-valued operand. See [`ExprAllOp`].
     AllOp(ExprAllOp),
 
@@ -168,6 +182,11 @@ pub enum Expr {
 }
 
 impl Expr {
+    /// Marks a predicate as an application operation.
+    pub fn app(self) -> Self {
+        Self::App(Box::new(self))
+    }
+
     /// The boolean `true` constant expression.
     pub const TRUE: Expr = Expr::Value(Value::Bool(true));
 
@@ -238,6 +257,11 @@ impl Expr {
             return types.iter().any(|t| self.is_a(resolve, t));
         }
         match self {
+            Self::OptionSome(expr) => {
+                matches!(ty, Type::Option(inner) if expr.is_a(resolve, inner))
+            }
+            Self::BinaryString(expr) => expr.is_a(resolve, ty),
+            Self::App(_) | Self::IsNan(_) => ty.is_bool(),
             Self::Value(value) => value.is_a(resolve, ty),
             Self::Record(expr_record) => match ty {
                 Type::Record(field_tys) if expr_record.fields.len() == field_tys.len() => {
@@ -318,30 +342,14 @@ impl Expr {
     /// prove are non-nullable.
     pub fn is_always_non_nullable(&self) -> bool {
         match self {
+            Self::App(_) | Self::OptionSome(_) | Self::IsNan(_) => true,
             // A constant value is non-nullable if it's not null.
             Self::Value(value) => !value.is_null(),
-            // Boolean logic expressions always evaluate to true or false.
-            Self::And(_) | Self::Or(_) | Self::Not(_) => true,
-            // ANY returns true if any item matches, always boolean.
-            Self::Any(_) => true,
-            // ANY/ALL array predicates always evaluate to true or false.
-            Self::AnyOp(_) | Self::AllOp(_) => true,
-            // BETWEEN always evaluates to true or false.
-            Self::Between(_) => true,
-            // Comparisons always evaluate to true or false.
-            Self::BinaryOp(_) => true,
-            // IS NULL checks always evaluate to true or false.
-            Self::IsNull(_) => true,
-            // Variant checks always evaluate to true or false.
-            Self::IsVariant(_) => true,
-            // EXISTS checks always evaluate to true or false.
-            Self::Exists(_) => true,
-            // IN expressions always evaluate to true or false.
-            Self::InList(_) | Self::InSubquery(_) => true,
-            // Array predicates always evaluate to true or false.
-            Self::IsSuperset(_) | Self::Intersects(_) => true,
-            // Array length is an integer — non-null when the array is non-null.
-            Self::Length(_) => true,
+            Self::And(expr) => expr.operands.iter().all(Self::is_always_non_nullable),
+            Self::Or(expr) => expr.operands.iter().all(Self::is_always_non_nullable),
+            Self::Not(expr) => expr.expr.is_always_non_nullable(),
+            Self::BinaryString(expr) => expr.is_always_non_nullable(),
+            Self::IsNull(_) | Self::IsVariant(_) | Self::Exists(_) => true,
             // For other expressions, we cannot prove non-nullability.
             _ => false,
         }
@@ -376,6 +384,10 @@ impl Expr {
     /// An expression is stable if it yields the same value each time it is evaluated
     pub fn is_stable(&self) -> bool {
         match self {
+            Self::App(expr)
+            | Self::OptionSome(expr)
+            | Self::BinaryString(expr)
+            | Self::IsNan(expr) => expr.is_stable(),
             // Always stable - constant values
             Self::Value(_) | Self::Static(_) => true,
 
@@ -473,6 +485,10 @@ impl Expr {
     /// introduced by one of those `Map`s and does not count as external input.
     fn is_const_at_depth(&self, map_depth: usize) -> bool {
         match self {
+            Self::App(expr)
+            | Self::OptionSome(expr)
+            | Self::BinaryString(expr)
+            | Self::IsNan(expr) => expr.is_const_at_depth(map_depth),
             // Always constant
             Self::Value(_) | Self::Static(_) => true,
 
@@ -581,6 +597,10 @@ impl Expr {
     /// Evaluation can still fail for invalid values or missing arguments.
     pub fn is_eval(&self) -> bool {
         match self {
+            Self::App(expr)
+            | Self::OptionSome(expr)
+            | Self::BinaryString(expr)
+            | Self::IsNan(expr) => expr.is_eval(),
             // Always evaluable
             Self::Value(_) | Self::Static(_) => true,
 
@@ -599,7 +619,6 @@ impl Expr {
             | Self::Incoming(_)
             | Self::Stmt(_)
             | Self::InSubquery(_)
-            | Self::StartsWith(_)
             | Self::Like(_)
             | Self::Between(_)
             | Self::IsVariant(_)
@@ -612,6 +631,7 @@ impl Expr {
             Self::Record(expr_record) => expr_record.iter().all(|expr| expr.is_eval()),
             Self::List(expr_list) => expr_list.items.iter().all(|expr| expr.is_eval()),
             Self::Cast(expr_cast) => expr_cast.expr.is_eval(),
+            Self::StartsWith(expr) => expr.expr.is_eval() && expr.prefix.is_eval(),
             Self::BinaryOp(expr_binary) => expr_binary.lhs.is_eval() && expr_binary.rhs.is_eval(),
             Self::And(expr_and) => expr_and.iter().all(|expr| expr.is_eval()),
             Self::Any(expr_any) => expr_any.expr.is_eval(),
@@ -790,6 +810,10 @@ where
 impl fmt::Debug for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::App(expr) => f.debug_tuple("App").field(expr).finish(),
+            Self::OptionSome(expr) => f.debug_tuple("Some").field(expr).finish(),
+            Self::BinaryString(expr) => f.debug_tuple("BinaryString").field(expr).finish(),
+            Self::IsNan(expr) => f.debug_tuple("IsNan").field(expr).finish(),
             Self::AllOp(e) => e.fmt(f),
             Self::And(e) => e.fmt(f),
             Self::Any(e) => e.fmt(f),

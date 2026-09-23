@@ -586,7 +586,8 @@ impl<'a> VerifyExpr<'a, '_> {
         use stmt::Expr::*;
 
         match expr {
-            And(_)
+            App(_)
+            | And(_)
             | AllOp(_)
             | AnyOp(_)
             | Between(_)
@@ -672,6 +673,30 @@ impl stmt::Visit for VerifyExpr<'_, '_> {
 
     fn visit_expr_binary_op(&mut self, i: &stmt::ExprBinaryOp) {
         stmt::visit::visit_expr_binary_op(self, i);
+
+        if !self.capability.sql()
+            && let (Some(PathTarget::Field(lhs)), Some(PathTarget::Field(rhs))) = (
+                self.resolve_expr_path(&i.lhs),
+                self.resolve_expr_path(&i.rhs),
+            )
+            && lhs.relation_target_id().is_some()
+            && rhs.relation_target_id().is_some()
+        {
+            let matching_keys = match (&lhs.ty, &rhs.ty) {
+                (app::FieldTy::BelongsTo(lhs), app::FieldTy::BelongsTo(rhs)) => lhs
+                    .foreign_key
+                    .fields
+                    .iter()
+                    .map(|f| f.target)
+                    .eq(rhs.foreign_key.fields.iter().map(|f| f.target)),
+                _ => false,
+            };
+            if !matching_keys {
+                self.record(Error::unsupported_feature(
+                    "comparing relation fields with different reference keys requires SQL",
+                ));
+            }
+        }
 
         // Comparing a `#[document]` field against a whole embed value is not
         // yet supported (document value equality is planned — see the design

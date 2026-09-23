@@ -17,6 +17,22 @@ impl Exec<'_> {
                 f.substitute(&input);
             }
         }
+        if let Some(filter) = &mut row_filter {
+            let cx = stmt::ExprContext::new(&*self.engine.schema);
+            let cx = cx.scope(self.engine.schema.db.table(action.table));
+            crate::engine::simplify::simplify_expr(cx, self.engine.capability(), filter);
+            self.engine.legalize_table_expr(filter);
+            if filter.is_false() || filter.is_value_null() {
+                return Ok(ExecResponse {
+                    values: Rows::Stream(stmt::ValueStream::from_vec(vec![])),
+                    next_cursor: None,
+                    prev_cursor: None,
+                });
+            }
+            if filter.is_true() {
+                row_filter = None;
+            }
+        }
 
         let res = self
             .connection

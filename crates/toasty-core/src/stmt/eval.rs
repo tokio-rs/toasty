@@ -25,6 +25,41 @@ use crate::{
 };
 use std::cmp::Ordering;
 
+fn app_value_eq(lhs: &Value, rhs: &Value) -> bool {
+    match (lhs, rhs) {
+        (Value::Option(None) | Value::Null, Value::Option(None) | Value::Null) => true,
+        (Value::Option(None) | Value::Null, _) | (_, Value::Option(None) | Value::Null) => false,
+        (Value::Option(Some(lhs)), Value::Option(Some(rhs))) => app_value_eq(lhs, rhs),
+        (Value::Option(Some(lhs)), rhs) => app_value_eq(lhs, rhs),
+        (lhs, Value::Option(Some(rhs))) => app_value_eq(lhs, rhs),
+        (Value::Record(lhs), Value::Record(rhs)) => {
+            lhs.len() == rhs.len()
+                && lhs
+                    .iter()
+                    .zip(rhs.iter())
+                    .all(|(lhs, rhs)| app_value_eq(lhs, rhs))
+        }
+        (Value::List(lhs), Value::List(rhs)) => {
+            lhs.len() == rhs.len() && lhs.iter().zip(rhs).all(|(lhs, rhs)| app_value_eq(lhs, rhs))
+        }
+        _ => lhs == rhs,
+    }
+}
+
+fn app_value_cmp(lhs: &Value, rhs: &Value) -> Option<Ordering> {
+    match (lhs, rhs) {
+        (Value::Option(None) | Value::Null, Value::Option(None) | Value::Null) => {
+            Some(Ordering::Equal)
+        }
+        (Value::Option(None) | Value::Null, _) => Some(Ordering::Less),
+        (_, Value::Option(None) | Value::Null) => Some(Ordering::Greater),
+        (Value::Option(Some(lhs)), Value::Option(Some(rhs))) => app_value_cmp(lhs, rhs),
+        (Value::Option(Some(lhs)), rhs) => app_value_cmp(lhs, rhs),
+        (lhs, Value::Option(Some(rhs))) => app_value_cmp(lhs, rhs),
+        _ => lhs.partial_cmp(rhs),
+    }
+}
+
 enum ScopeStack<'a> {
     Root,
     Scope {
@@ -77,12 +112,20 @@ impl Statement {
                             "single-row query requires body to evaluate to a list",
                         ));
                     };
+                    if query.optional && items.is_empty() {
+                        return Ok(Value::Option(None));
+                    }
                     if items.len() != 1 {
                         return Err(crate::Error::expression_evaluation_failed(
                             "single-row query did not return exactly one row",
                         ));
                     }
-                    return Ok(items.remove(0));
+                    let value = items.remove(0);
+                    return Ok(if query.optional {
+                        Value::Option(Some(Box::new(value)))
+                    } else {
+                        value
+                    });
                 }
 
                 Ok(result)
@@ -172,16 +215,93 @@ impl Expr {
 
     fn eval_ref(&self, scope: &ScopeStack<'_>, input: &mut impl Input) -> Result<Value> {
         match self {
+            Expr::OptionSome(expr) => {
+                Ok(Value::Option(Some(Box::new(expr.eval_ref(scope, input)?))))
+            }
+            Expr::BinaryString(expr) => expr.eval_ref(scope, input),
+            Expr::IsNan(expr) => Ok(match expr.eval_ref(scope, input)? {
+                Value::F32(value) => value.is_nan(),
+                Value::F64(value) => value.is_nan(),
+                _ => false,
+            }
+            .into()),
+            Expr::StartsWith(expr) => {
+                let subject = expr.expr.eval_ref(scope, input)?;
+                let prefix = expr.prefix.eval_ref(scope, input)?;
+                match (subject, prefix) {
+                    (Value::Null, _) | (_, Value::Null) => Ok(Value::Null),
+                    (Value::String(subject), Value::String(prefix)) => {
+                        Ok(subject.starts_with(&prefix).into())
+                    }
+                    _ => Err(crate::Error::expression_evaluation_failed(
+                        "starts_with requires strings",
+                    )),
+                }
+            }
+            Expr::App(expr) => {
+                if let Expr::BinaryOp(binary) = &**expr {
+                    let lhs = binary.lhs.eval_ref(scope, input)?;
+                    let rhs = binary.rhs.eval_ref(scope, input)?;
+                    let ordering = app_value_cmp(&lhs, &rhs);
+                    let result = match binary.op {
+                        BinaryOp::Eq => app_value_eq(&lhs, &rhs),
+                        BinaryOp::Ne => !app_value_eq(&lhs, &rhs),
+                        BinaryOp::Lt => ordering.is_some_and(Ordering::is_lt),
+                        BinaryOp::Le => ordering.is_some_and(Ordering::is_le),
+                        BinaryOp::Gt => ordering.is_some_and(Ordering::is_gt),
+                        BinaryOp::Ge => ordering.is_some_and(Ordering::is_ge),
+                        _ => return expr.eval_ref(scope, input),
+                    };
+                    Ok(result.into())
+                } else if let Expr::IsNull(check) = &**expr {
+                    let value = check.expr.eval_ref(scope, input)?;
+                    Ok(
+                        (matches!(value, Value::Option(None) | Value::Null) != check.negated)
+                            .into(),
+                    )
+                } else if let Expr::InList(membership) = &**expr {
+                    let subject = membership.expr.eval_ref(scope, input)?;
+                    let Value::List(items) = membership.list.eval_ref(scope, input)? else {
+                        return Err(crate::Error::expression_evaluation_failed(
+                            "membership requires a list",
+                        ));
+                    };
+                    Ok(items.iter().any(|item| app_value_eq(&subject, item)).into())
+                } else if let Expr::StartsWith(predicate) = &**expr {
+                    let subject = predicate.expr.eval_ref(scope, input)?;
+                    let prefix = predicate.prefix.eval_ref(scope, input)?;
+                    let subject = match subject {
+                        Value::Option(None) | Value::Null => return Ok(false.into()),
+                        Value::Option(Some(value)) => *value,
+                        value => value,
+                    };
+                    match (subject, prefix) {
+                        (Value::String(subject), Value::String(prefix)) => {
+                            Ok(subject.starts_with(&prefix).into())
+                        }
+                        _ => Err(crate::Error::expression_evaluation_failed(
+                            "starts_with requires strings",
+                        )),
+                    }
+                } else {
+                    expr.eval_ref(scope, input)
+                }
+            }
             Expr::And(expr_and) => {
-                debug_assert!(!expr_and.operands.is_empty());
-
+                let mut unknown = false;
                 for operand in &expr_and.operands {
-                    if !operand.eval_ref_bool(scope, input)? {
-                        return Ok(false.into());
+                    match operand.eval_ref(scope, input)? {
+                        Value::Bool(false) => return Ok(false.into()),
+                        Value::Bool(true) => {}
+                        Value::Null => unknown = true,
+                        _ => {
+                            return Err(crate::Error::expression_evaluation_failed(
+                                "AND requires booleans",
+                            ));
+                        }
                     }
                 }
-
-                Ok(true.into())
+                Ok(if unknown { Value::Null } else { true.into() })
             }
             Expr::Arg(expr_arg) => {
                 let Some(expr) = scope.resolve_arg(expr_arg, &Projection::identity(), input) else {
@@ -194,6 +314,10 @@ impl Expr {
             Expr::BinaryOp(expr_binary_op) => {
                 let lhs = expr_binary_op.lhs.eval_ref(scope, input)?;
                 let rhs = expr_binary_op.rhs.eval_ref(scope, input)?;
+
+                if lhs.is_null() || rhs.is_null() {
+                    return Ok(Value::Null);
+                }
 
                 match expr_binary_op.op {
                     BinaryOp::Eq => Ok((lhs == rhs).into()),
@@ -245,10 +369,13 @@ impl Expr {
                 let scope = scope.scope(&args);
                 expr_let.body.eval_ref(&scope, input)
             }
-            Expr::Not(expr_not) => {
-                let value = expr_not.expr.eval_ref_bool(scope, input)?;
-                Ok((!value).into())
-            }
+            Expr::Not(expr_not) => match expr_not.expr.eval_ref(scope, input)? {
+                Value::Bool(value) => Ok((!value).into()),
+                Value::Null => Ok(Value::Null),
+                _ => Err(crate::Error::expression_evaluation_failed(
+                    "NOT requires a boolean",
+                )),
+            },
             Expr::List(exprs) => {
                 let mut ret = vec![];
 
@@ -320,15 +447,20 @@ impl Expr {
                 expr.eval_ref(scope, input)
             }
             Expr::Or(expr_or) => {
-                debug_assert!(!expr_or.operands.is_empty());
-
+                let mut unknown = false;
                 for operand in &expr_or.operands {
-                    if operand.eval_ref_bool(scope, input)? {
-                        return Ok(true.into());
+                    match operand.eval_ref(scope, input)? {
+                        Value::Bool(true) => return Ok(true.into()),
+                        Value::Bool(false) => {}
+                        Value::Null => unknown = true,
+                        _ => {
+                            return Err(crate::Error::expression_evaluation_failed(
+                                "OR requires booleans",
+                            ));
+                        }
                     }
                 }
-
-                Ok(false.into())
+                Ok(if unknown { Value::Null } else { false.into() })
             }
             Expr::Any(expr_any) => {
                 let list = expr_any.expr.eval_ref(scope, input)?;
@@ -363,7 +495,18 @@ impl Expr {
                     ));
                 };
 
-                Ok(items.iter().any(|item| item == &needle).into())
+                if items
+                    .iter()
+                    .any(|item| !item.is_null() && !needle.is_null() && item == &needle)
+                {
+                    Ok(true.into())
+                } else if !items.is_empty()
+                    && (needle.is_null() || items.iter().any(Value::is_null))
+                {
+                    Ok(Value::Null)
+                } else {
+                    Ok(false.into())
+                }
             }
             Expr::AnyOp(e) => {
                 let lhs = e.lhs.eval_ref(scope, input)?;

@@ -466,6 +466,20 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         true
                     }
                 }
+                stmt::Expr::Like(_) | stmt::Expr::StartsWith(_)
+                    if is_returning_projection && self.planner.engine.capability().sql() =>
+                {
+                    let index = self
+                        .stmt_info
+                        .load_data_select_items
+                        .get()
+                        .unwrap()
+                        .get_index_of(&SelectItem::Computed(Box::new(expr.clone())))
+                        .unwrap();
+                    reads_row = true;
+                    *expr = stmt::Expr::arg_project(0, [index]);
+                    false
+                }
                 stmt::Expr::Reference(expr_reference) if is_returning_projection => {
                     let column = self.load_data_expr_reference_position(expr_reference);
                     reads_row = true;
@@ -515,6 +529,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     fn extract_columns_from_returning(&mut self, returning: &Returning) {
         stmt::visit::for_each_expr(returning, |expr| match expr {
+            stmt::Expr::Like(_) | stmt::Expr::StartsWith(_)
+                if self.planner.engine.capability().sql() =>
+            {
+                self.load_data
+                    .select_items
+                    .insert(SelectItem::Computed(Box::new(expr.clone())));
+            }
             stmt::Expr::Reference(expr_reference) => {
                 assert!(
                     expr_reference.is_column(),
@@ -1275,8 +1296,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let mut cursor_column_indices = Vec::new();
 
         for order_expr in &order_by.exprs {
+            let expr = match &order_expr.expr {
+                stmt::Expr::BinaryString(inner) => &**inner,
+                expr => expr,
+            };
             // Try to convert the ORDER BY expression to an ExprReference
-            if let Some(expr_ref) = order_expr.expr.as_expr_reference().copied() {
+            if let Some(expr_ref) = expr.as_expr_reference().copied() {
                 // Add to load_data if not already present
                 let (index, _) = self
                     .load_data

@@ -6,13 +6,16 @@ impl Simplify<'_> {
     /// folding, cast stripping) runs in `fold::expr_is_null` before this is
     /// reached.
     pub(super) fn simplify_expr_is_null(&self, expr: &mut stmt::ExprIsNull) -> Option<stmt::Expr> {
-        let stmt::Expr::Reference(f @ stmt::ExprReference::Field { .. }) = &mut *expr.expr else {
+        let stmt::Expr::Reference(reference) = &*expr.expr else {
             return None;
         };
 
-        let field = self.cx.resolve_expr_reference(f).as_field_unwrap();
-
-        if !field.nullable() {
+        let nullable = match self.cx.resolve_expr_reference(reference) {
+            stmt::ResolvedRef::Field(field) => field.nullable(),
+            stmt::ResolvedRef::Column(column) => column.nullable,
+            _ => return None,
+        };
+        if !nullable {
             // `is_null` on a non-nullable field evaluates to `false`, and
             // `is_not_null` to `true`.
             return Some(stmt::Expr::Value(stmt::Value::Bool(expr.negated)));

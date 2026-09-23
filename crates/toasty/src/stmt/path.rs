@@ -40,6 +40,16 @@ pub struct Path<T, U> {
 }
 
 impl<T, U> Path<T, U> {
+    /// Convert this path to an expression of its declared application type.
+    pub fn into_expr(self) -> Expr<U> {
+        <Self as IntoExpr<U>>::into_expr(self)
+    }
+
+    /// Borrow this path as an expression of its declared application type.
+    pub fn by_ref(&self) -> Expr<U> {
+        <Self as IntoExpr<U>>::by_ref(self)
+    }
+
     /// Create a path rooted at the model (or embedded type) identified by
     /// `model`.
     ///
@@ -154,9 +164,9 @@ impl<T, U> Path<T, U> {
     /// # }
     /// let filter = User::fields().name().eq("Alice");
     /// ```
-    pub fn eq(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
-        let rhs = rhs.into_expr().untyped;
-        self.build_filter(move |path| stmt::Expr::eq(path, rhs))
+    pub fn eq(self, rhs: impl super::IntoComparison<U>) -> Expr<bool> {
+        let rhs = rhs.into_comparison().untyped;
+        self.build_filter(move |path| stmt::Expr::eq(path, rhs).app())
     }
 
     /// Test whether this field does not equal `rhs`.
@@ -172,9 +182,9 @@ impl<T, U> Path<T, U> {
     /// # }
     /// let filter = User::fields().name().ne("Alice");
     /// ```
-    pub fn ne(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
-        let rhs = rhs.into_expr().untyped;
-        self.build_filter(move |path| stmt::Expr::ne(path, rhs))
+    pub fn ne(self, rhs: impl super::IntoComparison<U>) -> Expr<bool> {
+        let rhs = rhs.into_comparison().untyped;
+        self.build_filter(move |path| stmt::Expr::not(stmt::Expr::eq(path, rhs).app()))
     }
 
     /// Test whether this field is greater than `rhs`.
@@ -190,9 +200,9 @@ impl<T, U> Path<T, U> {
     /// # }
     /// let filter = User::fields().id().gt(10);
     /// ```
-    pub fn gt(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
-        let rhs = rhs.into_expr().untyped;
-        self.build_filter(move |path| stmt::Expr::gt(path, rhs))
+    pub fn gt(self, rhs: impl super::IntoComparison<U>) -> Expr<bool> {
+        let rhs = rhs.into_comparison().untyped;
+        self.build_filter(move |path| stmt::Expr::gt(path, rhs).app())
     }
 
     /// Test whether this field is greater than or equal to `rhs`.
@@ -208,9 +218,9 @@ impl<T, U> Path<T, U> {
     /// # }
     /// let filter = User::fields().id().ge(1);
     /// ```
-    pub fn ge(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
-        let rhs = rhs.into_expr().untyped;
-        self.build_filter(move |path| stmt::Expr::ge(path, rhs))
+    pub fn ge(self, rhs: impl super::IntoComparison<U>) -> Expr<bool> {
+        let rhs = rhs.into_comparison().untyped;
+        self.build_filter(move |path| stmt::Expr::ge(path, rhs).app())
     }
 
     /// Test whether this field is less than `rhs`.
@@ -226,9 +236,9 @@ impl<T, U> Path<T, U> {
     /// # }
     /// let filter = User::fields().id().lt(100);
     /// ```
-    pub fn lt(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
-        let rhs = rhs.into_expr().untyped;
-        self.build_filter(move |path| stmt::Expr::lt(path, rhs))
+    pub fn lt(self, rhs: impl super::IntoComparison<U>) -> Expr<bool> {
+        let rhs = rhs.into_comparison().untyped;
+        self.build_filter(move |path| stmt::Expr::lt(path, rhs).app())
     }
 
     /// Test whether this field is less than or equal to `rhs`.
@@ -244,9 +254,9 @@ impl<T, U> Path<T, U> {
     /// # }
     /// let filter = User::fields().id().le(100);
     /// ```
-    pub fn le(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
-        let rhs = rhs.into_expr().untyped;
-        self.build_filter(move |path| stmt::Expr::le(path, rhs))
+    pub fn le(self, rhs: impl super::IntoComparison<U>) -> Expr<bool> {
+        let rhs = rhs.into_comparison().untyped;
+        self.build_filter(move |path| stmt::Expr::le(path, rhs).app())
     }
 
     /// Test whether this field's value is in the inclusive range `[low, high]`.
@@ -268,7 +278,7 @@ impl<T, U> Path<T, U> {
     pub fn between(self, low: impl IntoExpr<U>, high: impl IntoExpr<U>) -> Expr<bool> {
         let low = low.into_expr().untyped;
         let high = high.into_expr().untyped;
-        self.build_filter(move |path| stmt::Expr::between(path, low, high))
+        self.build_filter(move |path| stmt::Expr::between(path, low, high).app())
     }
 
     /// Test whether this field's value is in `rhs`.
@@ -289,7 +299,7 @@ impl<T, U> Path<T, U> {
     /// ```
     pub fn in_list(self, rhs: impl IntoExpr<List<U>>) -> Expr<bool> {
         let rhs = rhs.into_expr().untyped;
-        self.build_filter(move |path| stmt::Expr::in_list(path, rhs))
+        self.build_filter(move |path| stmt::Expr::in_list(path, rhs).app())
     }
 
     /// Test whether this field's value appears in the result set of a
@@ -313,12 +323,13 @@ impl<T, U> Path<T, U> {
     /// let subquery = Query::<List<User>>::all().filter(User::fields().name().eq("Alice"));
     /// let filter = path.in_query(subquery);
     /// ```
-    pub fn in_query<Q>(self, rhs: Q) -> Expr<bool>
+    pub fn in_query<Q, V>(self, rhs: Q) -> Expr<bool>
     where
-        Q: IntoStatement<Returning = List<U>>,
+        Q: IntoStatement<Returning = List<V>>,
+        V: super::QueryTarget<U>,
     {
         let query = rhs.into_statement().into_untyped_query();
-        self.build_filter(move |path| stmt::Expr::in_subquery(path, query))
+        self.build_filter(move |path| stmt::Expr::in_subquery(path, query).app())
     }
 
     /// Produce an ascending [`OrderByExpr`] for this path.
@@ -339,6 +350,7 @@ impl<T, U> Path<T, U> {
         OrderByExpr {
             expr: self.untyped.into_stmt(),
             order: Some(Direction::Asc),
+            nulls_first: Some(true),
         }
     }
 
@@ -360,6 +372,7 @@ impl<T, U> Path<T, U> {
         OrderByExpr {
             expr: self.untyped.into_stmt(),
             order: Some(Direction::Desc),
+            nulls_first: Some(false),
         }
     }
 }
@@ -468,7 +481,7 @@ where
     /// ```
     pub fn contains(self, value: impl IntoExpr<U>) -> Expr<bool> {
         let value = value.into_expr().untyped;
-        self.build_filter(move |path| stmt::Expr::any_op(value, stmt::BinaryOp::Eq, path))
+        self.build_filter(move |path| stmt::Expr::any_op(value, stmt::BinaryOp::Eq, path).app())
     }
 
     /// Test whether the array contains every element of `values`.
@@ -510,7 +523,7 @@ where
 }
 
 impl<T, U> Path<T, Option<U>> {
-    /// Test whether this optional field is `NULL`.
+    /// Test whether this optional field is `None`.
     ///
     /// # Examples
     ///
@@ -525,10 +538,10 @@ impl<T, U> Path<T, Option<U>> {
     /// let filter = User::fields().bio().is_none();
     /// ```
     pub fn is_none(self) -> Expr<bool> {
-        self.build_filter(stmt::Expr::is_null)
+        self.build_filter(|path| stmt::Expr::is_null(path).app())
     }
 
-    /// Test whether this optional field is not `NULL`.
+    /// Test whether this optional field is `Some`.
     ///
     /// # Examples
     ///
@@ -543,7 +556,7 @@ impl<T, U> Path<T, Option<U>> {
     /// let filter = User::fields().bio().is_some();
     /// ```
     pub fn is_some(self) -> Expr<bool> {
-        self.build_filter(stmt::Expr::is_not_null)
+        self.build_filter(|path| stmt::Expr::is_not_null(path).app())
     }
 }
 
@@ -573,7 +586,7 @@ where
     /// ```
     pub fn starts_with(self, prefix: impl IntoExpr<String>) -> Expr<bool> {
         let prefix = prefix.into_expr().untyped;
-        self.build_filter(move |path| stmt::Expr::starts_with(path, prefix))
+        self.build_filter(move |path| stmt::Expr::starts_with(path, prefix).app())
     }
 
     /// Test whether this string field matches a SQL `LIKE` pattern.
@@ -604,7 +617,7 @@ where
     /// ```
     pub fn like(self, pattern: impl IntoExpr<String>) -> Expr<bool> {
         let pattern = pattern.into_expr().untyped;
-        self.build_filter(move |path| stmt::Expr::like(path, pattern))
+        self.build_filter(move |path| stmt::Expr::like(path, pattern).app())
     }
 
     /// Case-insensitive variant of [`like`](Self::like), mapping to
@@ -632,7 +645,7 @@ where
     /// ```
     pub fn ilike(self, pattern: impl IntoExpr<String>) -> Expr<bool> {
         let pattern = pattern.into_expr().untyped;
-        self.build_filter(move |path| stmt::Expr::ilike(path, pattern))
+        self.build_filter(move |path| stmt::Expr::ilike(path, pattern).app())
     }
 
     /// Test whether this string field matches a SQL `LIKE` pattern using an
@@ -681,12 +694,12 @@ where
     /// // Match names starting with the literal text "Alice%".
     /// let filter = User::fields().name().like_with_escape("Alice\\%%".to_string(), '\\');
     ///
-    /// // Also works on nullable string fields.
+    /// // Also works on optional string fields.
     /// let filter = User::fields().nickname().like_with_escape("Al%".to_string(), '\\');
     /// ```
     pub fn like_with_escape(self, pattern: impl IntoExpr<String>, escape: char) -> Expr<bool> {
         let pattern = pattern.into_expr().untyped;
-        self.build_filter(move |path| stmt::Expr::like_with_escape(path, pattern, escape))
+        self.build_filter(move |path| stmt::Expr::like_with_escape(path, pattern, escape).app())
     }
 
     /// Test whether this string field matches a case-insensitive SQL `LIKE`
@@ -732,7 +745,7 @@ where
     /// ```
     pub fn ilike_with_escape(self, pattern: impl IntoExpr<String>, escape: char) -> Expr<bool> {
         let pattern = pattern.into_expr().untyped;
-        self.build_filter(move |path| stmt::Expr::ilike_with_escape(path, pattern, escape))
+        self.build_filter(move |path| stmt::Expr::ilike_with_escape(path, pattern, escape).app())
     }
 }
 

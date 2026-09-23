@@ -69,20 +69,22 @@ impl Simplify<'_> {
             if i >= operands.len() {
                 break;
             }
-            let Expr::InSubquery(first) = &operands[i] else {
+            let Some((first, application)) = membership(&operands[i]) else {
                 continue;
             };
-            if !self.can_merge_membership(first) {
+            if !self.can_merge_membership(first, application) {
                 continue;
             }
 
             let mut j = i + 1;
             while j < operands.len() {
-                let Expr::InSubquery(first) = &operands[i] else {
-                    unreachable!();
-                };
-                let compatible = match &operands[j] {
-                    Expr::InSubquery(other) if self.can_merge_membership(other) => {
+                let (first, application) = membership(&operands[i]).unwrap();
+                let compatible = match membership(&operands[j]) {
+                    Some((other, other_application))
+                        if (application == other_application
+                            || self.non_nullable_key(&first.expr))
+                            && self.can_merge_membership(other, application) =>
+                    {
                         let a = first.query.body.as_select_unwrap();
                         let b = other.query.body.as_select_unwrap();
                         first.expr.is_equivalent_to(&other.expr)
@@ -97,12 +99,9 @@ impl Simplify<'_> {
                     continue;
                 }
 
-                let Expr::InSubquery(other) = operands.remove(j) else {
-                    unreachable!();
-                };
-                let Expr::InSubquery(first) = &mut operands[i] else {
-                    unreachable!();
-                };
+                let mut other = operands.remove(j);
+                let other = membership_mut(&mut other);
+                let first = membership_mut(&mut operands[i]);
                 let select = first.query.body.as_select_mut_unwrap();
                 select.add_filter(other.query.body.as_select_unwrap().filter.clone());
                 // Combining filters can expose further memberships at a deeper
@@ -113,7 +112,7 @@ impl Simplify<'_> {
         }
     }
 
-    fn can_merge_membership(&self, membership: &stmt::ExprInSubquery) -> bool {
+    fn can_merge_membership(&self, membership: &stmt::ExprInSubquery, application: bool) -> bool {
         if membership.negated || !membership.expr.is_stable() {
             return false;
         }
@@ -121,7 +120,8 @@ impl Simplify<'_> {
         // NULL IN their intersection is false. They select the same rows in
         // a positive filter, but are not interchangeable as values or under NOT.
         // NoSQL membership uses value equality and always returns a boolean.
-        if self.capability.sql()
+        if !application
+            && self.capability.sql()
             && !self.positive_filter
             && !self.non_nullable_key(&membership.expr)
         {
@@ -271,5 +271,24 @@ impl Visit for SafeQuery {
             ExprReference::Column(column) => column.nesting,
         };
         self.0 &= nesting == 0;
+    }
+}
+
+fn membership(expr: &Expr) -> Option<(&stmt::ExprInSubquery, bool)> {
+    match expr {
+        Expr::InSubquery(query) => Some((query, false)),
+        Expr::App(inner) => match &**inner {
+            Expr::InSubquery(query) => Some((query, true)),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn membership_mut(expr: &mut Expr) -> &mut stmt::ExprInSubquery {
+    match expr {
+        Expr::InSubquery(query) => query,
+        Expr::App(inner) => membership_mut(inner),
+        _ => unreachable!("expected membership"),
     }
 }

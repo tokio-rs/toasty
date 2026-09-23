@@ -38,6 +38,7 @@ toasty_driver_integration_suite::generate_driver_tests!(
     native_macaddr8: false,
     native_array: false,
     native_ilike: false,
+    native_float_nan: false,
     native_json: false,
     native_jsonb: false,
     native_enum: false,

@@ -185,6 +185,10 @@ pub struct Capability {
     /// Whether the database has native support for Decimal types.
     pub native_decimal: bool,
 
+    /// Whether floating-point storage preserves NaN instead of rejecting it
+    /// or converting it to null. Application comparisons exclude NaN payloads.
+    pub native_float_nan: bool,
+
     /// Whether BigDecimal driver support is implemented.
     /// TODO: Remove this flag when PostgreSQL BigDecimal support is implemented.
     /// Currently only MySQL has implemented BigDecimal driver support.
@@ -699,6 +703,7 @@ impl Capability {
 
         // SQLite does not have native decimal types
         native_decimal: false,
+        native_float_nan: false,
         decimal_arbitrary_precision: false,
 
         index_or_predicate: true,
@@ -799,6 +804,7 @@ impl Capability {
 
         // PostgreSQL has native NUMERIC type with arbitrary precision
         native_decimal: true,
+        native_float_nan: true,
         decimal_arbitrary_precision: true,
 
         test_connection_pool: true,
@@ -861,6 +867,7 @@ impl Capability {
 
         // MySQL has DECIMAL type but requires fixed precision/scale upfront
         native_decimal: true,
+        native_float_nan: false,
         decimal_arbitrary_precision: false,
 
         test_connection_pool: true,
@@ -966,6 +973,7 @@ impl Capability {
 
         // DynamoDB does not have native decimal types
         native_decimal: false,
+        native_float_nan: false,
         decimal_arbitrary_precision: false,
 
         index_or_predicate: false,

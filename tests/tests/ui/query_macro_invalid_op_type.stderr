@@ -1,4 +1,4 @@
-error[E0277]: the trait bound `{integer}: IntoExpr<std::string::String>` is not satisfied
+error[E0277]: the trait bound `{integer}: IntoComparison<std::string::String>` is not satisfied
   --> tests/ui/query_macro_invalid_op_type.rs:12:49
    |
 12 |     let _ = toasty::query!(User filter .name == 42);
@@ -17,8 +17,9 @@ error[E0277]: the trait bound `{integer}: IntoExpr<std::string::String>` is not 
              `isize` implements `IntoExpr<isize>`
              `u16` implements `IntoExpr<u16>`
            and $N others
+   = note: required for `{integer}` to implement `IntoComparison<std::string::String>`
 note: required by a bound in `toasty::stmt::Path::<T, U>::eq`
   --> $WORKSPACE/crates/toasty/src/stmt/path.rs
    |
-   |     pub fn eq(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
-   |                               ^^^^^^^^^^^ required by this bound in `Path::<T, U>::eq`
+   |     pub fn eq(self, rhs: impl super::IntoComparison<U>) -> Expr<bool> {
+   |                               ^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Path::<T, U>::eq`

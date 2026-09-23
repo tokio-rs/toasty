@@ -34,6 +34,8 @@ use std::cmp::Ordering;
 /// ```
 #[derive(Debug, Default, Clone, PartialEq)]
 pub enum Value {
+    /// Application option presence, independent of database NULL.
+    Option(Option<Box<Value>>),
     /// Boolean value
     Bool(bool),
 
@@ -326,6 +328,9 @@ impl Value {
             return types.iter().any(|t| self.is_a(resolve, t));
         }
         match self {
+            Value::Option(value) => {
+                matches!(ty, Type::Option(inner) if value.as_ref().is_none_or(|v| v.is_a(resolve, inner)))
+            }
             Self::Null => true,
             Self::Bool(_) => ty.is_bool(),
             Self::I8(_) => ty.is_i8(),
@@ -448,6 +453,9 @@ impl Value {
     /// ```
     pub fn infer_ty(&self) -> Type {
         match self {
+            Value::Option(value) => Type::Option(Box::new(
+                value.as_deref().map_or(Type::Unknown, Value::infer_ty),
+            )),
             Value::Bool(_) => Type::Bool,
             Value::I8(_) => Type::I8,
             Value::I16(_) => Type::I16,
@@ -603,7 +611,11 @@ impl Value {
             // which have no element type.
             Value::List(_) => DbType::from_app(&self.infer_ty(), None, storage)
                 .map_err(|err| err.context(cannot_infer()))?,
-            Value::Null | Value::Record(_) | Value::Object(_) | Value::SparseRecord(_) => {
+            Value::Option(_)
+            | Value::Null
+            | Value::Record(_)
+            | Value::Object(_)
+            | Value::SparseRecord(_) => {
                 return Err(cannot_infer());
             }
         })
@@ -669,6 +681,10 @@ impl PartialOrd for Value {
     /// - Types without natural ordering (records, lists, etc.)
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
+            (Value::Option(None), Value::Option(None)) => Some(Ordering::Equal),
+            (Value::Option(None), Value::Option(Some(_))) => Some(Ordering::Less),
+            (Value::Option(Some(_)), Value::Option(None)) => Some(Ordering::Greater),
+            (Value::Option(Some(lhs)), Value::Option(Some(rhs))) => lhs.partial_cmp(rhs),
             // `null` comparisons are undefined.
             (Value::Null, _) | (_, Value::Null) => None,
 

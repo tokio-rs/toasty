@@ -1,4 +1,4 @@
-error[E0599]: no method named `nonexistent` found for struct `UserFields<__Origin>` in the current scope
+error[E0599]: no method named `nonexistent` found for struct `UserFields<__Origin, __Target>` in the current scope
   --> tests/ui/query_macro_invalid_field.rs:11:41
    |
  2 | struct User {

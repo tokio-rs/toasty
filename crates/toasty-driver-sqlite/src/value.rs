@@ -91,6 +91,16 @@ impl ToSql for Value {
             Value::U16(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
             Value::U32(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
             Value::U64(v) => Ok(ToSqlOutput::Owned(SqlValue::Integer(*v as i64))),
+            Value::F32(v) if v.is_nan() => Err(rusqlite::Error::ToSqlConversionFailure(Box::new(
+                toasty_core::Error::unsupported_feature(
+                    "SQLite cannot preserve NaN separately from an absent value",
+                ),
+            ))),
+            Value::F64(v) if v.is_nan() => Err(rusqlite::Error::ToSqlConversionFailure(Box::new(
+                toasty_core::Error::unsupported_feature(
+                    "SQLite cannot preserve NaN separately from an absent value",
+                ),
+            ))),
             Value::F32(v) => Ok(ToSqlOutput::Owned(SqlValue::Real(*v as f64))),
             Value::F64(v) => Ok(ToSqlOutput::Owned(SqlValue::Real(*v))),
             Value::String(v) => Ok(ToSqlOutput::Borrowed(ValueRef::Text(v.as_bytes()))),

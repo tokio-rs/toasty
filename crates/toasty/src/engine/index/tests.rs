@@ -660,6 +660,7 @@ impl TestCx {
             with: None,
             body: stmt::ExprSet::Select(Box::new(stmt::Select::new(source, filter))),
             single: false,
+            optional: false,
             order_by: None,
             limit: None,
             locks: vec![],

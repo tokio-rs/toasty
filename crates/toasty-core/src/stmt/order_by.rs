@@ -11,6 +11,7 @@ use super::OrderByExpr;
 ///     exprs: vec![OrderByExpr {
 ///         expr: Expr::null(),
 ///         order: Some(Direction::Asc),
+///     nulls_first: None,
 ///     }],
 /// };
 /// ```

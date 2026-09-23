@@ -1,0 +1,21 @@
+error[E0080]: evaluation panicked: nested stored Option fields require a lossless encoding and are not supported
+ --> $RUST/core/src/panic.rs
+  |
+  |           $crate::panicking::panic_fmt($crate::const_format_args!($($t)+));
+  |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ evaluation of `<std::option::Option<std::boxed::Box<std::option::Option<std::string::String>>> as toasty::schema::Field>::NULLABLE` failed here
+  |
+ ::: $WORKSPACE/crates/toasty/src/schema/field.rs
+  |
+  | /         assert!(
+  | |             !T::NULLABLE,
+  | |             "nested stored Option fields require a lossless encoding and are not supported"
+  | |         );
+  | |_________- in this macro invocation
+
+note: erroneous constant encountered
+ --> tests/ui/nested_option_field.rs:3:17
+  |
+3 | #[derive(Debug, toasty::Model)]
+  |                 ^^^^^^^^^^^^^
+  |
+  = note: this note originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)

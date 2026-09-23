@@ -117,8 +117,14 @@ pub async fn compare_embedded_relations_preserves_both_variant_guards(
         (lhs().id().into_expr().ne(rhs().id()), unequal),
     ] {
         let found = Object::filter(predicate).exec(&mut db).await?;
-        assert_eq!(found.len(), 1);
-        assert_eq!(Some(found[0].id), expected);
+        if expected == unequal {
+            // Inequality complements the complete guarded equality.
+            assert_eq!(found.len(), 7);
+            assert!(found.iter().all(|object| Some(object.id) != equal));
+        } else {
+            assert_eq!(found.len(), 1);
+            assert_eq!(Some(found[0].id), expected);
+        }
     }
 
     // Negating the equality negates the whole guarded comparison: every row

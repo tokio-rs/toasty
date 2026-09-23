@@ -409,7 +409,13 @@ impl<T: Field> Field for Option<T> {
     type ListPath<Origin> = stmt::Path<Origin, List<Self::ExprTarget>>;
     type Update<'a> = ();
     type Inner = T::Inner;
-    const NULLABLE: bool = true;
+    const NULLABLE: bool = {
+        assert!(
+            !T::NULLABLE,
+            "nested stored Option fields require a lossless encoding and are not supported"
+        );
+        true
+    };
 
     fn new_path<Origin>(path: stmt::Path<Origin, Self>) -> Self::Path<Origin> {
         path
@@ -450,6 +456,7 @@ impl<T: Field> Field for Option<T> {
 }
 
 impl<T: Field> Field for std::sync::Arc<T> {
+    const NULLABLE: bool = T::NULLABLE;
     const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = T::REQUIRES_EXPLICIT_COLUMN_TYPE;
 
     type ExprTarget = Self;
@@ -490,6 +497,7 @@ impl<T: Field> Field for std::sync::Arc<T> {
 }
 
 impl<T: Field> Field for std::rc::Rc<T> {
+    const NULLABLE: bool = T::NULLABLE;
     const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = T::REQUIRES_EXPLICIT_COLUMN_TYPE;
 
     type ExprTarget = Self;
@@ -530,6 +538,7 @@ impl<T: Field> Field for std::rc::Rc<T> {
 }
 
 impl<T: Field> Field for Box<T> {
+    const NULLABLE: bool = T::NULLABLE;
     const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = T::REQUIRES_EXPLICIT_COLUMN_TYPE;
 
     type ExprTarget = Self;

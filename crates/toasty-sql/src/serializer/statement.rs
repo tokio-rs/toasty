@@ -513,6 +513,14 @@ impl ToSql for &stmt::OrderBy {
 
 impl ToSql for &stmt::OrderByExpr {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
+        if let Some(first) = self.nulls_first {
+            let direction = if first {
+                stmt::Direction::Desc
+            } else {
+                stmt::Direction::Asc
+            };
+            fmt!(f, "(" self.expr " IS NULL) " direction ", ");
+        }
         if let Some(order) = &self.order {
             fmt!(f, self.expr " " order);
         } else {

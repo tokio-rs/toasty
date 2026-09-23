@@ -365,6 +365,19 @@ fn item_to_record<'a, 'stmt>(
     ))
 }
 
+fn ddb_operand(
+    cx: &ExprContext<'_, db::Schema>,
+    attrs: &mut ExprAttrs,
+    primary: bool,
+    expr: &stmt::Expr,
+) -> String {
+    match expr {
+        stmt::Expr::Reference(reference) => column_alias(cx, attrs, reference).1,
+        stmt::Expr::Func(stmt::ExprFunc::JsonExtract(func)) => document_path(cx, attrs, func).0,
+        _ => ddb_expression(cx, attrs, primary, expr),
+    }
+}
+
 fn ddb_expression(
     cx: &ExprContext<'_, db::Schema>,
     attrs: &mut ExprAttrs,
@@ -373,14 +386,14 @@ fn ddb_expression(
 ) -> String {
     match expr {
         stmt::Expr::Between(expr_between) => {
-            let field = ddb_expression(cx, attrs, primary, &expr_between.expr);
-            let low = ddb_expression(cx, attrs, primary, &expr_between.low);
-            let high = ddb_expression(cx, attrs, primary, &expr_between.high);
+            let field = ddb_operand(cx, attrs, primary, &expr_between.expr);
+            let low = ddb_operand(cx, attrs, primary, &expr_between.low);
+            let high = ddb_operand(cx, attrs, primary, &expr_between.high);
             format!("{field} BETWEEN {low} AND {high}")
         }
         stmt::Expr::BinaryOp(expr_binary_op) => {
-            let lhs = ddb_expression(cx, attrs, primary, &expr_binary_op.lhs);
-            let rhs = ddb_expression(cx, attrs, primary, &expr_binary_op.rhs);
+            let lhs = ddb_operand(cx, attrs, primary, &expr_binary_op.lhs);
+            let rhs = ddb_operand(cx, attrs, primary, &expr_binary_op.rhs);
 
             match expr_binary_op.op {
                 stmt::BinaryOp::Eq => format!("{lhs} = {rhs}"),
@@ -447,7 +460,7 @@ fn ddb_expression(
             format!("({})", operands.join(" OR "))
         }
         stmt::Expr::InList(in_list) => {
-            let expr = ddb_expression(cx, attrs, primary, &in_list.expr);
+            let expr = ddb_operand(cx, attrs, primary, &in_list.expr);
 
             // Extract the list items and create individual attribute values
             let items = match &*in_list.list {
@@ -479,10 +492,13 @@ fn ddb_expression(
                 }
                 other => ddb_expression(cx, attrs, primary, other),
             };
+            let null_type = attrs.ddb_value(aws_sdk_dynamodb::types::AttributeValue::S(
+                "NULL".to_owned(),
+            ));
             if expr_is_null.negated {
-                format!("attribute_exists({inner})")
+                format!("(attribute_exists({inner}) AND NOT attribute_type({inner}, {null_type}))")
             } else {
-                format!("attribute_not_exists({inner})")
+                format!("(attribute_not_exists({inner}) OR attribute_type({inner}, {null_type}))")
             }
         }
         stmt::Expr::Not(expr_not) => {

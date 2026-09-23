@@ -99,7 +99,10 @@ fn lhs_note() -> Expr {
 fn comparison_requires_the_selected_variant() {
     let filter = normalize(Object::fields().lhs().primary().id().eq(1));
 
-    assert_eq!(filter, Expr::and(lhs_is_primary(), Expr::eq(lhs_id(), 1)));
+    assert_eq!(
+        filter,
+        Expr::and(lhs_is_primary(), Expr::eq(lhs_id(), 1)).app()
+    );
 }
 
 #[test]
@@ -115,11 +118,14 @@ fn guards_are_collected_from_both_operands() {
 
     assert_eq!(
         filter,
-        Expr::and_from_vec(vec![
-            lhs_is_primary(),
-            rhs_is_primary(),
-            Expr::ne(lhs_id(), rhs_id()),
-        ])
+        Expr::not(
+            Expr::and_from_vec(vec![
+                lhs_is_primary(),
+                rhs_is_primary(),
+                Expr::eq(lhs_id(), rhs_id()),
+            ])
+            .app()
+        )
     );
 }
 
@@ -159,7 +165,7 @@ fn negating_a_predicate_negates_the_guarded_predicate() {
 
     assert_eq!(
         filter,
-        Expr::not(Expr::and(lhs_is_primary(), Expr::eq(lhs_id(), 1)))
+        Expr::not(Expr::and(lhs_is_primary(), Expr::eq(lhs_id(), 1)).app())
     );
 }
 
@@ -169,14 +175,14 @@ fn negative_null_check_is_guarded_as_a_whole() {
     let filter = normalize(Object::fields().lhs().primary().note().is_some());
     assert_eq!(
         filter,
-        Expr::and(lhs_is_primary(), Expr::not(Expr::is_null(lhs_note())))
+        Expr::and(lhs_is_primary(), Expr::not(Expr::is_null(lhs_note()))).app()
     );
 
     // `is_none().not()` negates the guarded predicate instead.
     let filter = normalize(Object::fields().lhs().primary().note().is_none().not());
     assert_eq!(
         filter,
-        Expr::not(Expr::and(lhs_is_primary(), Expr::is_null(lhs_note())))
+        Expr::not(Expr::and(lhs_is_primary(), Expr::is_null(lhs_note())).app())
     );
 }
 
@@ -206,9 +212,10 @@ fn nested_predicate_is_guarded_at_its_own_boundary() {
     assert_eq!(
         filter,
         Expr::eq(
-            Expr::and(lhs_is_primary(), Expr::is_null(lhs_note())),
+            Expr::and(lhs_is_primary(), Expr::is_null(lhs_note())).app(),
             false
         )
+        .app()
     );
 }
 

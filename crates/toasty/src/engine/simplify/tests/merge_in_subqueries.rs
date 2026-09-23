@@ -429,6 +429,7 @@ fn preserves_ordering_and_ctes() {
         exprs: vec![stmt::OrderByExpr {
             expr: field::<User>(0),
             order: Some(stmt::Direction::Asc),
+            nulls_first: None,
         }],
     });
     let mut with = users(active());

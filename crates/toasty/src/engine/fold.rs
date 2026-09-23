@@ -37,6 +37,9 @@ struct Fold;
 
 impl VisitMut for Fold {
     fn visit_expr_mut(&mut self, i: &mut Expr) {
+        if matches!(i, Expr::App(_)) {
+            return;
+        }
         // Recurse into children first so parent rules see canonical input.
         stmt::visit_mut::visit_expr_mut(self, i);
 
@@ -75,7 +78,11 @@ fn fold_one(i: &mut Expr) -> Option<Expr> {
         // No fold rules yet — leaves and not-yet-migrated variants pass
         // through untouched. Listed explicitly so adding a new `Expr`
         // variant forces a decision about whether it has cheap rewrites.
-        Expr::AllOp(_)
+        Expr::App(_)
+        | Expr::OptionSome(_)
+        | Expr::BinaryString(_)
+        | Expr::IsNan(_)
+        | Expr::AllOp(_)
         | Expr::Any(_)
         | Expr::AnyOp(_)
         | Expr::Arg(_)

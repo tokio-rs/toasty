@@ -117,14 +117,18 @@ impl VisitMut for LiftInSubquery<'_> {
             stmt::Expr::InSubquery(e) if !e.negated => {
                 lift_in_subquery(&self.cx, &e.expr, &e.query)
             }
-            stmt::Expr::BinaryOp(_) | stmt::Expr::Like(_) | stmt::Expr::IsVariant(_) => {
-                try_lift_relation_path_predicate(&self.cx, expr)
-            }
+            stmt::Expr::App(_)
+            | stmt::Expr::BinaryOp(_)
+            | stmt::Expr::Like(_)
+            | stmt::Expr::IsVariant(_) => try_lift_relation_path_predicate(&self.cx, expr),
             _ => None,
         };
 
         if let Some(mut lifted) = lifted {
             self.exclude_nulls(&mut lifted);
+            if matches!(expr, Expr::App(_)) {
+                lifted = lifted.app();
+            }
             *expr = lifted;
         }
 
@@ -558,6 +562,10 @@ fn resolve_relation_predicate<'a>(
     expr: &stmt::Expr,
 ) -> Option<(RelationPath<'a>, stmt::Expr)> {
     match expr {
+        Expr::App(inner) => {
+            let (path, filter) = resolve_relation_predicate(cx, inner)?;
+            Some((path, filter.app()))
+        }
         Expr::BinaryOp(e) => {
             let comparison = |op: stmt::BinaryOp, subject: &Expr, other: &Expr| {
                 resolve_relation_path_predicate(cx, subject, |target_lhs| {

@@ -76,6 +76,63 @@ pub(super) fn resolve<'a>(cx: &ExprContext<'a>, expr: &Expr) -> Option<ResolvedR
     }
 }
 
+/// Whether a field path can be absent in the application value. Selected
+/// variants are guarded by normalization; their inactive storage columns do
+/// not make a required variant field optional.
+pub(super) fn is_optional_path(cx: &ExprContext<'_>, expr: &Expr) -> Option<bool> {
+    enum Target<'a> {
+        Field(&'a app::Field),
+        Variant(EmbedTarget<'a>),
+    }
+    fn walk<'a>(cx: &ExprContext<'a>, expr: &Expr) -> Option<(Target<'a>, bool)> {
+        match expr {
+            Expr::Reference(reference) => {
+                let ResolvedRef::Field(field) = cx.resolve_expr_reference(reference) else {
+                    return None;
+                };
+                Some((Target::Field(field), field.nullable()))
+            }
+            Expr::Variant(variant) => {
+                let (Target::Field(field), optional) = walk(cx, &variant.base)? else {
+                    return None;
+                };
+                let FieldTy::Embedded(embedded) = &field.ty else {
+                    return None;
+                };
+                let target = EmbedTarget::embed(&cx.schema().app, embedded.target)?
+                    .select(variant.variant)?;
+                Some((Target::Variant(target), optional))
+            }
+            Expr::Project(project) => {
+                let (mut target, mut optional) = walk(cx, &project.base)?;
+                for &index in project.projection.as_slice() {
+                    let field = match target {
+                        Target::Variant(embed) => embed.field_at(index)?,
+                        Target::Field(field) => match &field.ty {
+                            FieldTy::Embedded(embedded) => {
+                                EmbedTarget::embed(&cx.schema().app, embedded.target)?
+                                    .field_at(index)?
+                            }
+                            _ => cx
+                                .schema()
+                                .app
+                                .model(field.relation_target_id()?)
+                                .as_root()?
+                                .fields
+                                .get(index)?,
+                        },
+                    };
+                    optional |= field.nullable();
+                    target = Target::Field(field);
+                }
+                Some((target, optional))
+            }
+            _ => None,
+        }
+    }
+    walk(cx, expr).map(|(_, optional)| optional)
+}
+
 enum PathTarget<'a> {
     Embed(EmbedTarget<'a>),
     Relation(ResolvedRelation<'a>),

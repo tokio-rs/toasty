@@ -84,12 +84,13 @@ impl<M: Load> Page<M> {
     /// ```
     pub async fn next(&self, executor: &mut dyn Executor) -> Result<Option<Page<M::Output>>> {
         match &self.next_cursor {
-            Some(cursor) => Ok(Some(
-                Paginate::from(self.query.clone())
+            Some(cursor) => {
+                let page = Paginate::from(self.query.clone())
                     .after(cursor.clone())
                     .exec(executor)
-                    .await?,
-            )),
+                    .await?;
+                Ok((!page.is_empty() || page.next_cursor.is_some()).then_some(page))
+            }
             None => Ok(None),
         }
     }
@@ -112,12 +113,13 @@ impl<M: Load> Page<M> {
     /// ```
     pub async fn prev(&self, executor: &mut dyn Executor) -> Result<Option<Page<M::Output>>> {
         match &self.prev_cursor {
-            Some(cursor) => Ok(Some(
-                Paginate::from(self.query.clone())
+            Some(cursor) => {
+                let page = Paginate::from(self.query.clone())
                     .before(cursor.clone())
                     .exec(executor)
-                    .await?,
-            )),
+                    .await?;
+                Ok((!page.is_empty() || page.prev_cursor.is_some()).then_some(page))
+            }
             None => Ok(None),
         }
     }

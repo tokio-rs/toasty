@@ -40,7 +40,7 @@ impl Model for Dummy {
     type Path<Origin> = Path<Origin, Self>;
     type PrimaryKey = i64;
     type ManyField<Origin> = ();
-    type OneField<Origin> = ();
+    type OneField<Origin, Target> = ();
 
     fn id() -> schema::app::ModelId {
         schema::app::ModelId(usize::MAX)

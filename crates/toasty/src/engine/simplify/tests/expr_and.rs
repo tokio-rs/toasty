@@ -128,8 +128,8 @@ fn complement_basic() {
     let schema = test_schema();
     let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
-    // `a and not(a)` → `false` (where a is a non-nullable comparison)
-    let a = Expr::eq(Expr::arg(0), Expr::arg(1));
+    // `a and not(a)` → `false` (where a is an application comparison)
+    let a = Expr::eq(Expr::arg(0), Expr::arg(1)).app();
     let mut expr = ExprAnd {
         operands: vec![a.clone(), Expr::Not(ExprNot { expr: Box::new(a) })],
     };
@@ -147,7 +147,7 @@ fn complement_with_other_operands() {
     let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a and b and not(a)` → `false`
-    let a = Expr::eq(Expr::arg(0), Expr::arg(1));
+    let a = Expr::eq(Expr::arg(0), Expr::arg(1)).app();
     let mut expr = ExprAnd {
         operands: vec![
             a.clone(),
@@ -186,7 +186,7 @@ fn complement_multiple_repetitions() {
     let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `a and a and not(a) and not(a)` → `false`
-    let a = Expr::eq(Expr::arg(0), Expr::arg(1));
+    let a = Expr::eq(Expr::arg(0), Expr::arg(1)).app();
     let mut expr = ExprAnd {
         operands: vec![
             a.clone(),

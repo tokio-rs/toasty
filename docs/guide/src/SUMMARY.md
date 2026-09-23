@@ -19,6 +19,7 @@
 
 - [Indexes and Unique Constraints](./indexes-and-unique-constraints.md)
 - [Field Options](./field-options.md)
+- [Optional Values](./optional-values.md)
 - [Embedded Types](./embedded-types.md)
 - [`#[document]` Fields](./document-fields.md)
 - [JSON Encoding](./json-encoding.md)

@@ -64,6 +64,7 @@ impl Normalize<'_> {
             order_by.exprs.push(stmt::OrderByExpr {
                 expr: stmt::Expr::column(*column),
                 order: direction,
+                nulls_first: None,
             });
         }
     }

@@ -58,10 +58,15 @@ impl<T: AsExpr> Func<T> {
     }
 
     pub(crate) fn eval_bool(&self, schema: &Schema, input: impl stmt::Input) -> Result<bool> {
-        use stmt::TypedInput;
-
-        let input = TypedInput::new(stmt::ExprContext::new(schema), &self.args, input);
-        self.expr.as_expr().eval_bool(input)
+        // These functions evaluate lowered filters, whose unknown result
+        // excludes a row just as it does in a database WHERE clause.
+        match self.eval(schema, input)? {
+            stmt::Value::Bool(value) => Ok(value),
+            stmt::Value::Null => Ok(false),
+            _ => Err(toasty_core::Error::expression_evaluation_failed(
+                "expected boolean value",
+            )),
+        }
     }
 }
 

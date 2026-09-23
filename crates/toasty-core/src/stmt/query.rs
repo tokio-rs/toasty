@@ -36,6 +36,9 @@ pub struct Query {
     /// instead of `List`.
     pub single: bool,
 
+    /// A single-row query whose result preserves optional row presence.
+    pub optional: bool,
+
     /// Optional `ORDER BY` clause.
     pub order_by: Option<OrderBy>,
 
@@ -92,6 +95,7 @@ impl Query {
             with: None,
             body: body.into(),
             single: false,
+            optional: false,
             order_by: None,
             limit: None,
             locks: vec![],
@@ -104,6 +108,7 @@ impl Query {
             with: None,
             body: body.into(),
             single: true,
+            optional: false,
             order_by: None,
             limit: None,
             locks: vec![],
@@ -133,6 +138,7 @@ impl Query {
             with: None,
             body: ExprSet::Values(values.into()),
             single: false,
+            optional: false,
             order_by: None,
             limit: None,
             locks: vec![],

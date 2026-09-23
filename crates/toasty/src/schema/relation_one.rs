@@ -8,27 +8,27 @@ use toasty_core::stmt;
 /// relation.
 ///
 /// Implemented by `M`, `Option<M>`, `Deferred<M>`, and `Deferred<Option<M>>`
-/// where `M: Model`. The `Option<...>` wrappers carry nullability; the
+/// where `M: Model`. The `Option<...>` wrappers carry optionality; the
 /// `Deferred<...>` wrappers carry deferred loading. Anything outside this
 /// shape does not satisfy the trait.
 pub trait RelationOneField: Load<Output = Self> {
     /// The target model that this field references.
     type Target: Model;
 
-    /// The query type produced by the relation accessor. For non-nullable
-    /// impls this is `<Target as Model>::Query<Target>`; for nullable impls it is
+    /// The query type produced by the relation accessor. For required
+    /// impls this is `<Target as Model>::Query<Target>`; for optional impls it is
     /// `<Target as Model>::Query<Option<Target>>`.
     type One;
 
-    /// The expression-level type used in create/update setters. Resolves to
-    /// the unwrapped `Self::Target` for non-nullable impls and `Option<Self::Target>`
-    /// for nullable impls.
+    /// The path target and expression type used in create/update setters.
+    /// Resolves to `Self::Target` for required impls and
+    /// `Option<Self::Target>` for optional impls.
     type Expr;
 
     /// Whether the field stores its value in a deferred load slot.
     const DEFERRED: bool;
 
-    /// Whether the field is nullable (i.e. wrapped in `Option`).
+    /// Whether the field is optional (i.e. wrapped in `Option`).
     const NULLABLE: bool;
 
     /// Reloads this relation field from a returned value.
@@ -37,8 +37,8 @@ pub trait RelationOneField: Load<Output = Self> {
     }
 
     /// Narrow a list query targeting the related model into the appropriate
-    /// "one" query — `Query<Model>` for non-nullable impls and
-    /// `Query<Option<Model>>` for nullable impls.
+    /// "one" query — `Query<Model>` for required impls and
+    /// `Query<Option<Model>>` for optional impls.
     ///
     /// Relation accessors build the list query (from a filter or by wrapping a
     /// singular association via [`Model::wrap_query`]) and pass it here; the

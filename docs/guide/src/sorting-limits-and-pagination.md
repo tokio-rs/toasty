@@ -38,6 +38,10 @@ let items = Item::all()
 `Item::fields().order()` returns a field path. Calling `.asc()` or `.desc()` on
 it produces an ordering expression that `.order_by()` accepts.
 
+For an `Option<T>` field, ascending order places `None` first and descending
+order places it last. Cursor pagination uses the same ordering. See
+[Optional Values](./optional-values.md).
+
 ### Sorting by multiple fields
 
 Pass a tuple of ordering expressions to sort by several fields at once. Each

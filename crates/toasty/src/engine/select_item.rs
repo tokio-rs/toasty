@@ -5,16 +5,18 @@ use toasty_core::stmt;
 /// Represents an item that the engine can select from the database.
 ///
 /// This generalizes `ExprReference` to support both column references and
-/// computed expressions like `COUNT(*)`. Using an enum that derives `Hash` and
-/// `Eq` allows the planner to continue deduplicating select items via
-/// `SelectItems`.
-#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
+/// computed expressions like `COUNT(*)`. Select items retain their expression so the planner can deduplicate
+/// repeated projections.
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum SelectItem {
     /// A reference to a column or field — the traditional case.
     ExprReference(stmt::ExprReference),
 
     /// The `COUNT(*)` aggregate. SQL-only.
     CountStar,
+
+    /// A predicate evaluated by the target database.
+    Computed(Box<stmt::Expr>),
 }
 
 impl SelectItem {
@@ -32,14 +34,16 @@ impl SelectItem {
         match self {
             SelectItem::ExprReference(expr_reference) => cx.infer_expr_reference_ty(expr_reference),
             SelectItem::CountStar => stmt::Type::U64,
+            SelectItem::Computed(expr) => cx.infer_expr_ty(expr, &[]),
         }
     }
 
     /// Convert this select item into the corresponding expression.
-    pub(crate) fn to_expr(self) -> stmt::Expr {
+    pub(crate) fn to_expr(&self) -> stmt::Expr {
         match self {
-            SelectItem::ExprReference(expr_reference) => stmt::Expr::from(expr_reference),
+            SelectItem::ExprReference(expr_reference) => stmt::Expr::from(*expr_reference),
             SelectItem::CountStar => stmt::Expr::count_star(),
+            SelectItem::Computed(expr) => (**expr).clone(),
         }
     }
 }
@@ -50,14 +54,30 @@ impl From<stmt::ExprReference> for SelectItem {
     }
 }
 
-/// A set of [`SelectItem`]s backed by an [`IndexSet`](indexmap::IndexSet) for
-/// deduplication and index-based lookup.
+/// An ordered collection of distinct [`SelectItem`]s with positional lookup.
 #[derive(Debug, Default, Clone)]
-pub(crate) struct SelectItems(indexmap::IndexSet<SelectItem>);
+pub(crate) struct SelectItems(Vec<SelectItem>);
 
 impl SelectItems {
+    pub(crate) fn get_index_of(&self, item: &SelectItem) -> Option<usize> {
+        self.0.iter().position(|candidate| candidate == item)
+    }
+
+    pub(crate) fn insert_full(&mut self, item: SelectItem) -> (usize, bool) {
+        if let Some(index) = self.get_index_of(&item) {
+            return (index, false);
+        }
+        let index = self.0.len();
+        self.0.push(item);
+        (index, true)
+    }
+
+    pub(crate) fn insert(&mut self, item: SelectItem) -> bool {
+        self.insert_full(item).1
+    }
+
     pub(crate) fn new() -> Self {
-        Self(indexmap::IndexSet::new())
+        Self(Vec::new())
     }
 
     /// Find the index of an `ExprReference` item, returning `None` if not
@@ -67,7 +87,7 @@ impl SelectItems {
         expr_reference: impl Into<stmt::ExprReference>,
     ) -> Option<usize> {
         let item = SelectItem::ExprReference(expr_reference.into());
-        self.0.get_index_of(&item)
+        self.get_index_of(&item)
     }
 
     /// Find the index of an `ExprReference` item.
@@ -81,7 +101,7 @@ impl SelectItems {
 
     /// Find the index of the `CountStar` item.
     pub(crate) fn get_index_of_count_star(&self) -> usize {
-        self.0.get_index_of(&SelectItem::CountStar).unwrap()
+        self.get_index_of(&SelectItem::CountStar).unwrap()
     }
 
     /// Returns `Type::List(Type::Record(field_tys))` where each `field_ty` is
@@ -104,7 +124,7 @@ impl SelectItems {
 
 impl<'a> IntoIterator for &'a SelectItems {
     type Item = &'a SelectItem;
-    type IntoIter = indexmap::set::Iter<'a, SelectItem>;
+    type IntoIter = std::slice::Iter<'a, SelectItem>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter()
@@ -112,7 +132,7 @@ impl<'a> IntoIterator for &'a SelectItems {
 }
 
 impl Deref for SelectItems {
-    type Target = indexmap::IndexSet<SelectItem>;
+    type Target = Vec<SelectItem>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
