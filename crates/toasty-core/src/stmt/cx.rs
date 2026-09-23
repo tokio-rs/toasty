@@ -224,6 +224,10 @@ impl<'a, T> ExprContext<'a, T> {
 
     /// Return the target at a specific nesting
     pub fn target_at(&self, nesting: usize) -> &ExprTarget<'a> {
+        &self.context_at(nesting).target
+    }
+
+    fn context_at(&self, nesting: usize) -> &Self {
         let mut curr = self;
 
         // Walk up the stack to the correct nesting level
@@ -235,7 +239,7 @@ impl<'a, T> ExprContext<'a, T> {
             curr = parent;
         }
 
-        &curr.target
+        curr
     }
 }
 
@@ -646,10 +650,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             ResolvedRef::Cte { .. } => todo!("type inference for CTE columns not implemented"),
             ResolvedRef::Derived(derived) => {
                 // Resolve the subquery from the scope that owns the derived table.
-                let mut owner = self;
-                for _ in 0..derived.nesting {
-                    owner = owner.parent.expect("invalid derived reference nesting");
-                }
+                let owner = self.context_at(derived.nesting);
 
                 let query = &*derived.derived.subquery;
                 let cx = owner.scope(query);
