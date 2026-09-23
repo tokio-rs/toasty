@@ -220,14 +220,13 @@ impl Expand<'_> {
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
                     let pair = expand_pair(toasty, quote!(#toasty::RelationOneField), ty, rel.pair.as_ref());
-                    // A has-one via reaches a single model. Validate that
-                    // model while allowing the path's optionality to differ
-                    // from the declaration.
+                    // Validate the terminal model and require every step to
+                    // be required when the via declaration is required.
                     let via = expand_has_one_via_path(
                         toasty,
                         model_ident,
                         rel.via.as_ref(),
-                        &quote!(<#ty as #toasty::RelationOneField>::Target),
+                        ty,
                     );
 
                     nullable = quote!(<#ty as #toasty::RelationOneField>::NULLABLE);
@@ -670,35 +669,32 @@ fn expand_pair(
 
 /// Emit the optional [`stmt::Path`] argument for `has_one_relation_field_ty`.
 ///
-/// Validate the terminal model through `RelationOneField::Target`, allowing
-/// either `Model` or `Option<Model>` as the path target, then convert the typed
-/// path to a schema path.
+/// Check each step's optionality against the declaration, then validate the
+/// terminal model and convert the typed path to a schema path.
 fn expand_has_one_via_path(
     toasty: &TokenStream,
     model_ident: &syn::Ident,
     via: Option<&Vec<syn::Ident>>,
-    terminal_ty: &TokenStream,
+    field_ty: &syn::Type,
 ) -> TokenStream {
     let Some(segments) = via else {
         return quote! { None };
     };
 
-    let chain = expand_field_accessor_chain(model_ident, segments);
+    let steps = segments.iter().map(|segment| {
+        // Trait errors blame the declared type argument. Point it at the
+        // step being checked so an optional intermediate is identifiable.
+        let field_ty = util::respan(quote!(#field_ty), segment.span());
+        quote_spanned! { segment.span()=>
+            let __via_step = __via_step.#segment();
+            #toasty::via::check_one_step::<#field_ty, #model_ident, _>(&__via_step);
+        }
+    });
     quote! {
         Some({
-            // The via and its terminal can differ in optionality. Validate
-            // the model they reference without changing either path target.
-            fn __into_relation_path<__Origin, __Target>(
-                path: #toasty::Path<__Origin, __Target>,
-            ) -> #toasty::core::stmt::Path
-            where
-                __Target: #toasty::RelationOneField<Target = #terminal_ty>,
-            {
-                path.into()
-            }
-
-            let __via_typed: #toasty::Path<#model_ident, _> = #chain.into();
-            __into_relation_path(__via_typed)
+            let __via_step = #model_ident::fields();
+            #( #steps )*
+            #toasty::via::into_one_path::<#field_ty, #model_ident, _>(__via_step.into())
         })
     }
 }

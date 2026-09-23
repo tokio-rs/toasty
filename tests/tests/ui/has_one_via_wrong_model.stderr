@@ -4,9 +4,12 @@ error[E0271]: type mismatch resolving `<Parent as RelationOneField>::Target == O
 1 | #[derive(Debug, toasty::Model)]
   |                 ^^^^^^^^^^^^^ expected `Other`, found `Parent`
   |
-note: required by a bound in `__into_relation_path`
- --> tests/ui/has_one_via_wrong_model.rs:1:17
+note: required by a bound in `toasty::codegen_support::via::into_one_path`
+ --> $WORKSPACE/crates/toasty/src/codegen_support/via.rs
   |
-1 | #[derive(Debug, toasty::Model)]
-  |                 ^^^^^^^^^^^^^ required by this bound in `__into_relation_path`
+  | pub fn into_one_path<F, Origin, Target>(path: Path<Origin, Target>) -> stmt::Path
+  |        ------------- required by a bound in this function
+...
+  |     Target: RelationOneField<Target = F::Target>,
+  |                              ^^^^^^^^^^^^^^^^^^ required by this bound in `into_one_path`
   = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)

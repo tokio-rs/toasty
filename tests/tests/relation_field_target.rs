@@ -116,6 +116,60 @@ fn has_one_target_types() {
         Account::fields().optional_via_required();
 }
 
+#[test]
+fn has_one_via_target_types() {
+    type OptionalRelations = Option<Relations>;
+    type DeferredOptionalRelations = Deferred<OptionalRelations>;
+
+    #[derive(Debug, toasty::Model)]
+    struct ViaRelations {
+        #[key]
+        id: uuid::Uuid,
+        relations_id: uuid::Uuid,
+        optional_relations_id: Option<uuid::Uuid>,
+        #[belongs_to(key = relations_id)]
+        eager: Relations,
+        #[belongs_to(key = optional_relations_id)]
+        eager_optional: OptionalRelations,
+        #[belongs_to(key = relations_id)]
+        deferred: Deferred<Relations>,
+        #[belongs_to(key = optional_relations_id)]
+        deferred_optional: DeferredOptionalRelations,
+        #[has_one(via = eager.eager_alias)]
+        required_eager: RequiredUser,
+        #[has_one(via = deferred.deferred_alias)]
+        required_deferred: DeferredUser,
+        #[has_one(via = eager.eager)]
+        optional_from_required: OptionalUser,
+        #[has_one(via = eager_optional.eager)]
+        optional_eager_intermediate: Option<User>,
+        #[has_one(via = deferred_optional.deferred)]
+        optional_deferred_intermediate: DeferredOptionalUser,
+        #[has_one(via = eager.eager_optional_alias)]
+        optional_eager_terminal: OptionalUser,
+        #[has_one(via = deferred.deferred_optional_alias)]
+        optional_deferred_terminal: DeferredOptionalUser,
+        #[has_one(via = eager_optional.eager_optional)]
+        optional_both: Option<User>,
+        #[has_one(via = required_deferred)]
+        required_nested: DeferredUser,
+        #[has_one(via = optional_deferred_intermediate)]
+        optional_nested: DeferredOptionalUser,
+    }
+
+    let fields = ViaRelations::fields();
+    required::<ViaRelations>(fields.required_eager());
+    required::<ViaRelations>(fields.required_deferred());
+    optional::<ViaRelations>(fields.optional_from_required());
+    optional::<ViaRelations>(fields.optional_eager_intermediate());
+    optional::<ViaRelations>(fields.optional_deferred_intermediate());
+    optional::<ViaRelations>(fields.optional_eager_terminal());
+    optional::<ViaRelations>(fields.optional_deferred_terminal());
+    optional::<ViaRelations>(fields.optional_both());
+    required::<ViaRelations>(fields.required_nested());
+    optional::<ViaRelations>(fields.optional_nested());
+}
+
 #[derive(Debug, toasty::Embed)]
 struct Attribution {
     user_id: uuid::Uuid,
