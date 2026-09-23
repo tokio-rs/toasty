@@ -37,6 +37,13 @@ pub use toasty_core as core;
 /// signatures (and out of the compiler errors they produce).
 pub type FieldExprTarget<F> = <F as Field>::ExprTarget;
 
+/// The field accessor for a singular relation declared as `F`, rooted at
+/// `Origin`. Resolves to the target model's fields with the path target from
+/// [`RelationOneField::Expr`], preserving optionality for eager and deferred
+/// relations.
+pub type RelationOnePath<F, Origin> =
+    <<F as RelationOneField>::Target as Model>::OneField<Origin, <F as RelationOneField>::Expr>;
+
 /// Internal constructors used by generated model field accessors.
 pub trait ModelCodegen: Model {
     /// Construct the field accessor for a singular relation to this model.
