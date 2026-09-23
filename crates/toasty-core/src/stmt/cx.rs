@@ -421,7 +421,15 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
 
     fn infer_returning_ty(&self, returning: &Returning, args: &[Type], single: bool) -> Type {
         let arg_ty_stack = ArgTyStack::new(args);
+        self.infer_returning_ty2(returning, &arg_ty_stack, single)
+    }
 
+    fn infer_returning_ty2(
+        &self,
+        returning: &Returning,
+        args: &ArgTyStack<'_>,
+        single: bool,
+    ) -> Type {
         match returning {
             Returning::Model { .. } => {
                 let ty = Type::Model(
@@ -434,11 +442,11 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             }
             Returning::Changed => todo!(),
             Returning::Project(expr) => {
-                let ty = self.infer_expr_ty2(&arg_ty_stack, expr, false);
+                let ty = self.infer_expr_ty2(args, expr, false);
 
                 if single { ty } else { Type::list(ty) }
             }
-            Returning::Expr(expr) => self.infer_expr_ty2(&arg_ty_stack, expr, true),
+            Returning::Expr(expr) => self.infer_expr_ty2(args, expr, true),
         }
     }
 
@@ -460,7 +468,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     !returning_expr,
                     "should have been handled in Expr::Project. Invalid expr?"
                 );
-                self.infer_expr_reference_ty(expr_ref)
+                self.infer_expr_reference_ty2(expr_ref, args)
             }
             Expr::IsNull(_) => Type::Bool,
             Expr::IsVariant(_) => Type::Bool,
@@ -526,7 +534,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                             // returning expression is *not* a projection. Referencing a
                             // column implies a *list* of
                             assert!(e.projection.as_slice().len() == 1);
-                            return self.infer_expr_reference_ty(expr_reference);
+                            return self.infer_expr_reference_ty2(expr_reference, args);
                         }
                         _ => {}
                     }
@@ -619,14 +627,55 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
     }
 
     /// Infers the type of an expression reference (field or column).
+    ///
+    /// Derived columns use the types in the `VALUES` rows or the `SELECT` projection.
+    /// An empty `VALUES` body has no type information and yields [`Type::Unknown`].
     pub fn infer_expr_reference_ty(&self, expr_reference: &ExprReference) -> Type {
+        self.infer_expr_reference_ty2(expr_reference, &ArgTyStack::new(&[]))
+    }
+
+    fn infer_expr_reference_ty2(
+        &self,
+        expr_reference: &ExprReference,
+        args: &ArgTyStack<'_>,
+    ) -> Type {
         match self.resolve_expr_reference(expr_reference) {
             ResolvedRef::Model(model) => Type::Model(model.id),
             ResolvedRef::Column(column) => column.ty.clone(),
             ResolvedRef::Field(field) => field.expr_ty().clone(),
             ResolvedRef::Cte { .. } => todo!("type inference for CTE columns not implemented"),
-            ResolvedRef::Derived(_) => {
-                todo!("type inference for derived table columns not implemented")
+            ResolvedRef::Derived(derived) => {
+                // Resolve the subquery from the scope that owns the derived table.
+                let mut owner = self;
+                for _ in 0..derived.nesting {
+                    owner = owner.parent.expect("invalid derived reference nesting");
+                }
+
+                let query = &*derived.derived.subquery;
+                let cx = owner.scope(query);
+                let column_ty = |row_ty| match row_ty {
+                    Type::Record(mut fields) => fields.swap_remove(derived.index),
+                    ty => {
+                        assert_eq!(derived.index, 0, "scalar derived column index");
+                        ty
+                    }
+                };
+
+                match &query.body {
+                    ExprSet::Values(values) => {
+                        if values.is_empty() {
+                            return Type::Unknown;
+                        }
+                        let mut union = TypeUnion::new();
+                        for row in &values.rows {
+                            union.insert(column_ty(cx.infer_expr_ty2(args, row, false)));
+                        }
+                        union.simplify()
+                    }
+                    // A derived column refers to one row, regardless of how many
+                    // rows the subquery returns.
+                    _ => column_ty(cx.infer_returning_ty2(query.returning_unwrap(), args, true)),
+                }
             }
         }
     }
