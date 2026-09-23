@@ -378,7 +378,7 @@
 <a href=#378 id=378 data-nosnippet>378</a>                <span class="kw">let </span>assoc = #toasty::#chain_builder::&lt;#model_ident, #target&gt;(
 <a href=#379 id=379 data-nosnippet>379</a>                    <span class="self">self</span>.stmt,
 <a href=#380 id=380 data-nosnippet>380</a>                    #field_offset,
-<a href=#381 id=381 data-nosnippet>381</a>                    #model_ident::fields().#field_ident().into(),
+<a href=#381 id=381 data-nosnippet>381</a>                    &lt;#model_ident <span class="kw">as </span>#toasty::Model&gt;::path_field(#field_offset),
 <a href=#382 id=382 data-nosnippet>382</a>                );
 <a href=#383 id=383 data-nosnippet>383</a>                &lt;#toasty::QueryMany&lt;#target&gt;&gt;::from_assoc_many(assoc)
 <a href=#384 id=384 data-nosnippet>384</a>            }

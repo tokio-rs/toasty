@@ -527,7 +527,7 @@
 <a href=#527 id=527 data-nosnippet>527</a>        <span class="kw">let </span>span = field_ident.span();
 <a href=#528 id=528 data-nosnippet>528</a>
 <a href=#529 id=529 data-nosnippet>529</a>        <span class="macro">quote_spanned!</span> { span=&gt;
-<a href=#530 id=530 data-nosnippet>530</a>            #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;&lt;#ty <span class="kw">as </span>#field_trait&gt;::Target <span class="kw">as </span>#toasty::Model&gt;::OneField&lt;__Origin&gt; {
+<a href=#530 id=530 data-nosnippet>530</a>            #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; RelationOnePath&lt;#ty, __Origin&gt; {
 <a href=#531 id=531 data-nosnippet>531</a>                &lt;&lt;#ty <span class="kw">as </span>#field_trait&gt;::Target <span class="kw">as </span>#toasty::ModelCodegen&gt;::new_one_field(
 <a href=#532 id=532 data-nosnippet>532</a>                    #parent_path.chain(
 <a href=#533 id=533 data-nosnippet>533</a>                        &lt;#model_ident <span class="kw">as </span>#schema_trait&gt;::path_field(#field_offset)
@@ -576,16 +576,14 @@
 <a href=#576 id=576 data-nosnippet>576</a>    <span class="macro">quote!</span> {
 <a href=#577 id=577 data-nosnippet>577</a>        <span class="kw">const _</span>: () = {
 <a href=#578 id=578 data-nosnippet>578</a>            <span class="kw">use </span>toasty <span class="kw">as </span>_toasty;
-<a href=#579 id=579 data-nosnippet>579</a>            <span class="comment">// Import the setter-bound names unqualified so the `impl Trait`
-<a href=#580 id=580 data-nosnippet>580</a>            // parameter types on create/update setters render as
-<a href=#581 id=581 data-nosnippet>581</a>            // `impl IntoExpr&lt;FieldExprTarget&lt;..&gt;&gt;` in compiler errors rather
-<a href=#582 id=582 data-nosnippet>582</a>            // than the much longer `_toasty::codegen_support::..` paths. Not
-<a href=#583 id=583 data-nosnippet>583</a>            // every model uses all three (a model with only relation setters
-<a href=#584 id=584 data-nosnippet>584</a>            // never names `Assign` here), so silence the unused-import lint.
-<a href=#585 id=585 data-nosnippet>585</a>            </span><span class="attr">#[allow(unused_imports)]
-<a href=#586 id=586 data-nosnippet>586</a>            </span><span class="kw">use </span>_toasty::codegen_support::{Assign, FieldExprTarget, IntoExpr};
-<a href=#587 id=587 data-nosnippet>587</a>            #code
-<a href=#588 id=588 data-nosnippet>588</a>        };
-<a href=#589 id=589 data-nosnippet>589</a>    }
-<a href=#590 id=590 data-nosnippet>590</a>}
+<a href=#579 id=579 data-nosnippet>579</a>            <span class="comment">// Import signature types unqualified so compiler errors can show
+<a href=#580 id=580 data-nosnippet>580</a>            // `impl IntoExpr&lt;FieldExprTarget&lt;..&gt;&gt;` and `RelationOnePath&lt;..&gt;`
+<a href=#581 id=581 data-nosnippet>581</a>            // without the longer `_toasty::codegen_support::..` paths.
+<a href=#582 id=582 data-nosnippet>582</a>            // Not every model uses every import.
+<a href=#583 id=583 data-nosnippet>583</a>            </span><span class="attr">#[allow(unused_imports)]
+<a href=#584 id=584 data-nosnippet>584</a>            </span><span class="kw">use </span>_toasty::codegen_support::{Assign, FieldExprTarget, IntoExpr, RelationOnePath};
+<a href=#585 id=585 data-nosnippet>585</a>            #code
+<a href=#586 id=586 data-nosnippet>586</a>        };
+<a href=#587 id=587 data-nosnippet>587</a>    }
+<a href=#588 id=588 data-nosnippet>588</a>}
 </code></pre></div></section></main></body></html>

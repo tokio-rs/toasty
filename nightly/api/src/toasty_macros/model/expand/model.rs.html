@@ -143,7 +143,7 @@
 <a href=#143 id=143 data-nosnippet>143</a>                <span class="kw">type </span>Path&lt;__Origin&gt; = #field_struct_ident&lt;__Origin&gt;;
 <a href=#144 id=144 data-nosnippet>144</a>                <span class="kw">type </span>PrimaryKey = #primary_key_ty;
 <a href=#145 id=145 data-nosnippet>145</a>                <span class="kw">type </span>ManyField&lt;__Origin&gt; = #field_list_struct_ident&lt;__Origin&gt;;
-<a href=#146 id=146 data-nosnippet>146</a>                <span class="kw">type </span>OneField&lt;__Origin&gt; = #field_struct_ident&lt;__Origin&gt;;
+<a href=#146 id=146 data-nosnippet>146</a>                <span class="kw">type </span>OneField&lt;__Origin, __Target&gt; = #field_struct_ident&lt;__Origin, __Target&gt;;
 <a href=#147 id=147 data-nosnippet>147</a>
 <a href=#148 id=148 data-nosnippet>148</a>                <span class="kw">fn </span>id() -&gt; #toasty::core::schema::app::ModelId {
 <a href=#149 id=149 data-nosnippet>149</a>                    <span class="kw">static </span>ID: std::sync::OnceLock&lt;#toasty::core::schema::app::ModelId&gt; = std::sync::OnceLock::new();
@@ -212,9 +212,9 @@
 <a href=#212 id=212 data-nosnippet>212</a>                    )
 <a href=#213 id=213 data-nosnippet>213</a>                }
 <a href=#214 id=214 data-nosnippet>214</a>
-<a href=#215 id=215 data-nosnippet>215</a>                <span class="kw">fn </span>new_one_field&lt;__Origin&gt;(
-<a href=#216 id=216 data-nosnippet>216</a>                    path: #toasty::Path&lt;__Origin, <span class="self">Self</span>&gt;,
-<a href=#217 id=217 data-nosnippet>217</a>                ) -&gt; <span class="self">Self</span>::OneField&lt;__Origin&gt; {
+<a href=#215 id=215 data-nosnippet>215</a>                <span class="kw">fn </span>new_one_field&lt;__Origin, __Target&gt;(
+<a href=#216 id=216 data-nosnippet>216</a>                    path: #toasty::Path&lt;__Origin, __Target&gt;,
+<a href=#217 id=217 data-nosnippet>217</a>                ) -&gt; <span class="self">Self</span>::OneField&lt;__Origin, __Target&gt; {
 <a href=#218 id=218 data-nosnippet>218</a>                    #field_struct_ident { path }
 <a href=#219 id=219 data-nosnippet>219</a>                }
 <a href=#220 id=220 data-nosnippet>220</a>            }

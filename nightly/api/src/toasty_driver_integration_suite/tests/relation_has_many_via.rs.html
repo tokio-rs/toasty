@@ -780,13 +780,13 @@
 <a href=#780 id=780 data-nosnippet>780</a>    .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#781 id=781 data-nosnippet>781</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#782 id=782 data-nosnippet>782</a>
-<a href=#783 id=783 data-nosnippet>783</a>    <span class="kw">let </span>subscriptions: Vec&lt;Subscription&gt; = User::filter(User::fields().name().eq(<span class="string">"Alice"</span>))
+<a href=#783 id=783 data-nosnippet>783</a>    <span class="kw">let </span>subscriptions: Vec&lt;<span class="prelude-ty">Option</span>&lt;Subscription&gt;&gt; = User::filter(User::fields().name().eq(<span class="string">"Alice"</span>))
 <a href=#784 id=784 data-nosnippet>784</a>        .select(User::fields().subscription())
 <a href=#785 id=785 data-nosnippet>785</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#786 id=786 data-nosnippet>786</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#787 id=787 data-nosnippet>787</a>
 <a href=#788 id=788 data-nosnippet>788</a>    <span class="macro">assert_eq!</span>(<span class="number">1</span>, subscriptions.len());
-<a href=#789 id=789 data-nosnippet>789</a>    <span class="macro">assert_eq!</span>(subscriptions[<span class="number">0</span>].plan, <span class="string">"pro"</span>);
+<a href=#789 id=789 data-nosnippet>789</a>    <span class="macro">assert_eq!</span>(subscriptions[<span class="number">0</span>].as_ref().unwrap().plan, <span class="string">"pro"</span>);
 <a href=#790 id=790 data-nosnippet>790</a>
 <a href=#791 id=791 data-nosnippet>791</a>    <span class="prelude-val">Ok</span>(())
 <a href=#792 id=792 data-nosnippet>792</a>}
