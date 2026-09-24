@@ -845,8 +845,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     }
 
     fn rewrite_arg_dependencies(&mut self, expr: &mut stmt::Expr) {
-        visit_mut::for_each_expr_mut(expr, |expr| {
-            if let stmt::Expr::Arg(expr_arg) = expr {
+        visit_mut::walk_expr_scoped_mut(expr, 0, |expr, scope_depth| {
+            if let stmt::Expr::Arg(expr_arg) = expr
+                && expr_arg.nesting == scope_depth
+            {
                 match &self.stmt_info.args[expr_arg.position] {
                     hir::Arg::Ref {
                         stmt_id: target_id,
@@ -862,7 +864,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
 
                         *expr = stmt::Expr::arg_project(
-                            data_load_input.get().unwrap(),
+                            stmt::ExprArg {
+                                position: data_load_input.get().unwrap(),
+                                nesting: scope_depth,
+                            },
                             [batch_load_index.get().unwrap(), column],
                         );
                     }
@@ -872,10 +877,16 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             "{:#?} | is this needed?",
                             self.load_data
                         );
-                        *expr = stmt::Expr::arg(input.get().unwrap());
+                        *expr = stmt::Expr::arg(stmt::ExprArg {
+                            position: input.get().unwrap(),
+                            nesting: scope_depth,
+                        });
                     }
                 }
+                // The replacement already uses data-loading positions.
+                return false;
             }
+            true
         });
     }
 

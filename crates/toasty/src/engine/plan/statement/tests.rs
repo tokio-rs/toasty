@@ -246,3 +246,97 @@ fn local_arguments_do_not_count_as_parent_references() {
         .is_none()
     );
 }
+
+#[test]
+fn query_arg_dependencies_preserve_map_and_let_scopes() {
+    let engine = Engine::new(test_schema().into(), &Capability::SQLITE);
+    let mut hir = HirStatement::new();
+    let root = hir.new_statement_info(IndexMap::new());
+    let parent = hir.new_statement_info(IndexMap::new());
+    let column = stmt::ExprReference::column(0, 7);
+    hir[parent].back_refs.insert(
+        root,
+        hir::BackRef {
+            exprs: [column].into(),
+            ..Default::default()
+        },
+    );
+
+    // HIR arg 0 is unused. The subquery at arg 1 becomes input 0, and
+    // the parent reference at arg 2 becomes a projection of input 1.
+    for input in [None, Some(0)] {
+        hir[root].args.push(hir::Arg::Sub {
+            stmt_id: parent,
+            returning: false,
+            input: Cell::new(input),
+            batch_load_index: Cell::new(None),
+        });
+    }
+    hir[root].args.push(hir::Arg::Ref {
+        stmt_id: parent,
+        target_expr_ref: column,
+        nesting: 1,
+        data_load_input: Cell::new(Some(1)),
+        returning_input: Cell::new(None),
+        batch_load_index: Cell::new(Some(0)),
+    });
+    let mut mir = mir::Store::new();
+    let values = [
+        Value::from(42i64),
+        Value::List(vec![Value::record_from_vec(vec![42i64.into()])]),
+    ];
+    let inputs = values
+        .iter()
+        .map(|value| {
+            mir.insert(mir::Const {
+                ty: value.infer_ty(),
+                value: value.clone(),
+            })
+        })
+        .collect();
+    let mut planner = HirPlanner {
+        engine: &engine,
+        hir: &hir,
+        mir,
+    };
+    let predicate = ExprLet {
+        bindings: vec![Expr::arg(1)],
+        body: Box::new(Expr::any(Expr::map(
+            Expr::list([9i64, 42]),
+            Expr::and_from_vec(vec![
+                Expr::eq(Expr::arg(0), scoped_arg(0, 1)),
+                Expr::eq(Expr::arg(0), scoped_arg(1, 2)),
+                Expr::eq(Expr::arg(0), scoped_arg(2, 2)),
+            ]),
+        ))),
+    };
+    let mut query = stmt::Query::new_select(toasty_core::schema::app::ModelId(0), predicate);
+    PlanStatement {
+        planner: &mut planner,
+        stmt_id: root,
+        stmt_info: &hir[root],
+        load_data: LoadData {
+            inputs,
+            select_items: SelectItems::new(),
+            batch_load_args: IndexSet::new(),
+        },
+        remaining_deps: vec![],
+    }
+    .rewrite_stmt_query_arg_dependencies(&mut query);
+
+    let predicate = query
+        .body
+        .as_select_mut_unwrap()
+        .filter
+        .expr
+        .take()
+        .unwrap();
+    let func = eval::Func::from_stmt(predicate, values.iter().map(Value::infer_ty).collect());
+    for (value, expected) in [(42i64, true), (9, false), (8, false)] {
+        assert_eq!(
+            func.eval_bool(&engine.schema, [value.into(), values[1].clone()])
+                .unwrap(),
+            expected,
+        );
+    }
+}
