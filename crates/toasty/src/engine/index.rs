@@ -119,7 +119,15 @@ pub(crate) fn plan_index_path<'a>(
     // For backends that do not support OR in key conditions (e.g. DynamoDB), rewrite
     // any OR in the index filter to canonical ANY(MAP(...)) fan-out form.
     let index_filter = if !capability.index_or_predicate {
-        or_rewrite::index_filter_to_any_map(index_filter)
+        match or_rewrite::index_filter_to_any_map(index_filter) {
+            Some(filter) => filter,
+            None if capability.scan && stmt.is_query() => return Ok(None),
+            None => {
+                return Err(toasty_core::Error::unsupported_feature(
+                    "this OR filter requires a full-table scan, which is not supported for this operation",
+                ));
+            }
+        }
     } else {
         index_filter
     };
