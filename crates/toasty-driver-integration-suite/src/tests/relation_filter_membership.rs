@@ -207,6 +207,17 @@ pub async fn limited_membership_preserves_candidates(t: &mut Test) -> Result<()>
     }
 
     let candidates = Document::filter_by_group("selected")
+        .filter(toasty::stmt::Expr::from_untyped(false))
+        .limit(1);
+    let filter = User::fields().document().in_query(candidates);
+    t.log().clear();
+    assert!(User::filter(filter.clone()).exec(&mut db).await?.is_empty());
+    assert_eq!(t.log().len(), 0);
+    t.log().clear();
+    assert_eq!(User::filter(filter.not()).exec(&mut db).await?.len(), 1);
+    assert_eq!(t.log().len(), 1);
+
+    let candidates = Document::filter_by_group("selected")
         .filter(Document::fields().user().in_query(User::all()))
         .order_by(Document::fields().position().asc())
         .limit(1);

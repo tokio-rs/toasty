@@ -89,8 +89,7 @@ impl<'a> LiftInSubquery<'a> {
     fn exclude_null_returning_fields(&self, in_subquery: &mut stmt::ExprInSubquery) {
         let select = in_subquery.query.body.as_select_mut_unwrap();
         let target = select.source.model_id_unwrap();
-        let returning = select.returning.as_project_unwrap().clone();
-        let fields = Self::scalar_or_record_fields(&returning);
+        let fields = Self::scalar_or_record_fields(select.returning.as_project_unwrap());
         let nullable = self.nullable_returning_fields(target, fields);
 
         if nullable.is_empty() {
@@ -98,14 +97,15 @@ impl<'a> LiftInSubquery<'a> {
         }
 
         if in_subquery.query.limit.is_some() {
-            Self::filter_limited_candidates(in_subquery, &returning, &nullable);
-        } else {
-            let guards = nullable
-                .iter()
-                .map(|&index| stmt::Expr::is_not_null(fields[index].clone()))
-                .collect();
-            Self::add_non_null_filters(in_subquery, guards);
+            Self::wrap_limited_candidates(in_subquery);
         }
+        let select = in_subquery.query.body.as_select_mut_unwrap();
+        let fields = Self::scalar_or_record_fields(select.returning.as_project_unwrap());
+        let guards = nullable
+            .iter()
+            .map(|&index| stmt::Expr::is_not_null(fields[index].clone()))
+            .collect();
+        select.add_filter(stmt::Expr::and_from_vec(guards));
     }
 
     fn nullable_returning_fields(&self, target: ModelId, fields: &[stmt::Expr]) -> Vec<usize> {
@@ -121,17 +121,18 @@ impl<'a> LiftInSubquery<'a> {
         nullable
     }
 
-    /// Filters null relation keys without changing which rows LIMIT/OFFSET selects.
+    /// Wraps LIMIT/OFFSET so null keys can be filtered from the selected rows.
     ///
     /// For example, if `LIMIT 1` selects a row with a null relation key, the result
     /// must be empty even if later rows have non-null keys.
-    fn filter_limited_candidates(
-        in_subquery: &mut stmt::ExprInSubquery,
-        returning: &stmt::Expr,
-        nullable: &[usize],
-    ) {
-        let fields = Self::scalar_or_record_fields(returning);
-        let columns: Vec<_> = (0..fields.len())
+    fn wrap_limited_candidates(in_subquery: &mut stmt::ExprInSubquery) {
+        let mut candidates = std::mem::replace(&mut *in_subquery.query, stmt::Query::unit());
+        let returning = candidates.returning_mut_unwrap().as_project_mut_unwrap();
+        let scalar = !returning.is_record();
+        if scalar {
+            *returning = stmt::Expr::record([returning.take()]);
+        }
+        let columns: Vec<_> = (0..returning.as_record_unwrap().len())
             .map(|column| {
                 stmt::Expr::column(stmt::ExprColumn {
                     nesting: 0,
@@ -141,36 +142,17 @@ impl<'a> LiftInSubquery<'a> {
             })
             .collect();
 
-        let guards = nullable
-            .iter()
-            .map(|&index| stmt::Expr::is_not_null(columns[index].clone()))
-            .collect();
-
-        let projection = if returning.is_record() {
-            stmt::Expr::record_from_vec(columns)
-        } else {
+        let projection = if scalar {
             columns.into_iter().next().unwrap()
+        } else {
+            stmt::Expr::record_from_vec(columns)
         };
-        let mut candidates = std::mem::replace(&mut *in_subquery.query, stmt::Query::unit());
-        let returning = candidates.returning_mut_unwrap().as_project_mut_unwrap();
-        if !returning.is_record() {
-            *returning = stmt::Expr::record([returning.take()]);
-        }
         let source = stmt::TableRef::Derived(stmt::TableDerived {
             subquery: Box::new(candidates),
         });
-        *in_subquery.query =
-            stmt::Query::builder(stmt::Select::new(source, stmt::Expr::and_from_vec(guards)))
-                .returning_project(projection)
-                .build();
-    }
-
-    fn add_non_null_filters(in_subquery: &mut stmt::ExprInSubquery, guards: Vec<stmt::Expr>) {
-        let select = in_subquery.query.body.as_select_mut_unwrap();
-
-        for guard in guards {
-            select.add_filter(guard);
-        }
+        *in_subquery.query = stmt::Query::builder(stmt::Select::new(source, true))
+            .returning_project(projection)
+            .build();
     }
 
     fn require_non_null_membership_key(expr: &mut stmt::Expr) {
@@ -847,15 +829,11 @@ impl Visit for LiftBelongsTo<'_> {
 
 impl LiftBelongsTo<'_> {
     fn limit_is_redundant(&self, limit: Option<&stmt::Limit>) -> bool {
-        let Some(limit) = limit else {
-            return true;
-        };
-
-        let stmt::Limit::Offset(limit) = limit else {
-            return false;
-        };
-
-        self.offset_limit_is_redundant(limit)
+        match limit {
+            None => true,
+            Some(stmt::Limit::Offset(limit)) => self.offset_limit_is_redundant(limit),
+            Some(stmt::Limit::Cursor(_)) => false,
+        }
     }
 
     fn offset_limit_is_redundant(&self, limit: &stmt::LimitOffset) -> bool {

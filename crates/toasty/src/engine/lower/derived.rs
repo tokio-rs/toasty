@@ -2,7 +2,7 @@ use super::LowerStatement;
 use toasty_core::stmt::{self, VisitMut};
 
 impl LowerStatement<'_, '_> {
-    /// Lower derived inputs before their consumers so their columns carry
+    /// Lower a single derived input before its consumers so its columns carry
     /// storage types, with decoding casts applied where each column is used.
     pub(super) fn lower_derived_select_source(&mut self, select: &mut stmt::Select) -> bool {
         let stmt::Source::Table(source) = &mut select.source else {
@@ -12,26 +12,21 @@ impl LowerStatement<'_, '_> {
             return false;
         }
 
-        if !self.capability().sql() && !Self::single_derived_source(source) {
+        if !Self::single_derived_source(source) {
             self.state
                 .errors
                 .push(toasty_core::Error::unsupported_feature(
-                    "NoSQL derived queries require a single source without joins",
+                    "derived query lowering requires a single source without joins",
                 ));
             return true;
         }
 
-        for (table, source) in source.tables.iter_mut().enumerate() {
-            let stmt::TableRef::Derived(derived) = source else {
-                continue;
-            };
-            let casts = self.lower_derived_query(&mut derived.subquery);
-            if let Some(filter) = &mut select.filter.expr {
-                Self::decode_derived_columns(filter, table, &casts);
-            }
-            if let stmt::Returning::Project(returning) = &mut select.returning {
-                Self::decode_derived_columns(returning, table, &casts);
-            }
+        let casts = self.lower_derived_query(&mut source.tables[0]);
+        if let Some(filter) = &mut select.filter.expr {
+            Self::decode_derived_columns(filter, &casts);
+        }
+        if let stmt::Returning::Project(returning) = &mut select.returning {
+            Self::decode_derived_columns(returning, &casts);
         }
         true
     }
@@ -45,7 +40,11 @@ impl LowerStatement<'_, '_> {
         source.tables.len() == 1 && single_source
     }
 
-    fn lower_derived_query(&mut self, query: &mut stmt::Query) -> Vec<Option<stmt::ExprCast>> {
+    fn lower_derived_query(&mut self, source: &mut stmt::TableRef) -> Vec<Option<stmt::ExprCast>> {
+        let stmt::TableRef::Derived(derived) = source else {
+            unreachable!()
+        };
+        let query = &mut *derived.subquery;
         if self.capability().sql() {
             self.visit_stmt_query_mut(query);
             return Self::take_derived_output_casts(query);
@@ -62,9 +61,21 @@ impl LowerStatement<'_, '_> {
             return casts;
         }
 
-        // The inline query describes the derived columns; the HIR statement
-        // owns execution and any dependencies of the derived query.
-        let mut query: stmt::Statement = query.clone().into();
+        let returning = query.returning_unwrap().as_project_unwrap();
+        let ty = self
+            .state
+            .engine
+            .expr_cx_for(&*query)
+            .infer_expr_ty(returning, &[]);
+        let stmt::Type::Record(columns) = ty else {
+            unreachable!("derived queries return records")
+        };
+        let stmt::TableRef::Derived(derived) =
+            std::mem::replace(source, stmt::TableRef::Input(columns))
+        else {
+            unreachable!()
+        };
+        let mut query: stmt::Statement = (*derived.subquery).into();
         self.state.engine.simplify_stmt(&mut query);
         self.state.hir[target_id].stmt = Some(Box::new(query));
         self.curr_stmt_info().derived_source = Some(target_id);
@@ -76,11 +87,9 @@ impl LowerStatement<'_, '_> {
     /// outer column references, just as model-field lowering inserts them.
     fn take_derived_output_casts(query: &mut stmt::Query) -> Vec<Option<stmt::ExprCast>> {
         let returning = query.returning_mut_unwrap().as_project_mut_unwrap();
-        let fields = match returning {
-            stmt::Expr::Record(record) => record.fields.as_mut_slice(),
-            expr => std::slice::from_mut(expr),
-        };
-        fields
+        returning
+            .as_record_mut_unwrap()
+            .fields
             .iter_mut()
             .map(|field| {
                 if !field.is_cast() {
@@ -95,22 +104,21 @@ impl LowerStatement<'_, '_> {
             .collect()
     }
 
-    fn decode_derived_columns(
-        expr: &mut stmt::Expr,
-        table: usize,
-        casts: &[Option<stmt::ExprCast>],
-    ) {
+    fn decode_derived_columns(expr: &mut stmt::Expr, casts: &[Option<stmt::ExprCast>]) {
         stmt::visit_mut::walk_expr_scoped_mut(expr, 0, |expr, depth| {
             let stmt::Expr::Reference(stmt::ExprReference::Column(column)) = expr else {
                 return true;
             };
-            if column.nesting != depth || column.table != table {
+            if column.nesting != depth || column.table != 0 {
                 return true;
             }
             if let Some(cast) = &casts[column.column] {
-                let mut cast = cast.clone();
-                cast.expr = Box::new(expr.take());
-                *expr = cast.into();
+                *expr = stmt::ExprCast {
+                    expr: Box::new(expr.take()),
+                    from: cast.from.clone(),
+                    ty: cast.ty.clone(),
+                }
+                .into();
                 return false;
             }
             true

@@ -1,6 +1,6 @@
 use crate::stmt::{ExprArg, TableDerived};
 
-use super::TableId;
+use super::{TableId, Type};
 
 /// A reference to a table within a [`SourceTable`](super::SourceTable).
 ///
@@ -33,6 +33,10 @@ pub enum TableRef {
     /// A derived table (inline subquery).
     Derived(TableDerived),
 
+    /// Rows supplied by another engine statement, described by their column
+    /// types. HIR tracks the producing statement separately.
+    Input(Vec<Type>),
+
     /// A schema-defined table.
     Table(TableId),
 
@@ -47,6 +51,7 @@ impl TableRef {
         match self {
             Self::Cte { .. } => false,
             Self::Derived { .. } => false,
+            Self::Input(_) => false,
             Self::Table(id) => id == &table_id,
             Self::Arg { .. } => todo!(),
         }

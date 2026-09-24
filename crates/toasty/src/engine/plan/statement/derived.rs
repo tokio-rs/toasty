@@ -5,10 +5,10 @@ impl PlanStatement<'_, '_> {
     /// In particular, its LIMIT/OFFSET has already taken effect.
     pub(super) fn plan_derived_source(
         &mut self,
-        stmt: stmt::Statement,
+        mut stmt: stmt::Statement,
         source: hir::StmtId,
     ) -> Result<mir::NodeId> {
-        let query = stmt.as_query().ok_or_else(|| {
+        let query = stmt.as_query_mut().ok_or_else(|| {
             toasty_core::Error::unsupported_feature("NoSQL derived sources require a SELECT")
         })?;
         let select = query.body.as_select_unwrap();
@@ -17,17 +17,34 @@ impl PlanStatement<'_, '_> {
             || query.with.is_some()
             || !query.locks.is_empty()
             || select.distinct
+            || !self.load_data.inputs.is_empty()
         {
             return Err(toasty_core::Error::unsupported_feature(
-                "NoSQL derived queries support filtering and projection",
+                "NoSQL derived queries support filtering and projection without external arguments",
             ));
         }
 
+        let mut filter = query.body.as_select_mut_unwrap().filter.expr.take();
         let input = self.planner.hir[source]
             .output
             .get()
             .expect("derived input planned");
-        let input = self.filter_derived_rows(input, &select.filter);
+        if matches!(&self.planner.mir[input].op, mir::Operation::Const(c) if c.value == stmt::Value::List(vec![]))
+        {
+            let ty = self
+                .load_data
+                .select_items
+                .infer_record_list_ty(&self.planner.engine.expr_cx_for(&stmt));
+            return Ok(self.insert_mir_with_deps(mir::Const {
+                value: stmt::Value::List(vec![]),
+                ty,
+            }));
+        }
+        if let Some(filter) = &mut filter {
+            Self::rewrite_derived_columns(filter);
+        }
+        let ty = self.planner.mir[input].ty().clone();
+        let input = self.apply_post_filter(input, filter, ty);
         let row_ty = self.planner.mir[input].ty().as_list_unwrap().clone();
 
         let mut projection = stmt::Expr::record(
@@ -36,60 +53,20 @@ impl PlanStatement<'_, '_> {
                 .iter()
                 .map(|item| item.to_expr()),
         );
-        Self::rewrite_derived_columns(&mut projection, &row_ty);
+        Self::rewrite_derived_columns(&mut projection);
         let projection = eval::Func::from_stmt(projection, vec![row_ty]);
         let node = mir::Eval::map_over(&self.planner.mir, input, IndexSet::new(), projection);
         Ok(self.insert_mir_with_deps(node))
     }
 
-    fn filter_derived_rows(&mut self, input: mir::NodeId, filter: &stmt::Filter) -> mir::NodeId {
-        let Some(mut predicate) = filter.expr.clone() else {
-            return input;
-        };
-        let input_ty = self.planner.mir[input].ty().clone();
-        let row_ty = input_ty.as_list_unwrap().clone();
-
-        // Filter args have already been rewritten to load_data positions.
-        // Reserve arg(0) for the current input row before rewriting columns.
-        visit_mut::walk_expr_scoped_mut(&mut predicate, 0, |expr, depth| {
-            if let stmt::Expr::Arg(arg) = expr
-                && arg.nesting == depth
-            {
-                arg.position += 1;
-            }
-            true
-        });
-        Self::rewrite_derived_columns(&mut predicate, &row_ty);
-
-        let mut arg_tys = vec![row_ty];
-        arg_tys.extend(
-            self.load_data
-                .inputs
-                .iter()
-                .map(|id| self.planner.mir[*id].ty().clone()),
-        );
-        let predicate = eval::Func::from_stmt(predicate, arg_tys);
-        self.insert_mir_with_deps(mir::Filter {
-            input,
-            args: self.load_data.inputs.clone(),
-            predicate,
-            ty: input_ty,
-        })
-    }
-
-    fn rewrite_derived_columns(expr: &mut stmt::Expr, row_ty: &stmt::Type) {
+    fn rewrite_derived_columns(expr: &mut stmt::Expr) {
         visit_mut::walk_expr_scoped_mut(expr, 0, |expr, depth| {
             if depth == 0
                 && let stmt::Expr::Reference(stmt::ExprReference::Column(column)) = expr
             {
                 assert_eq!(column.nesting, 0);
                 assert_eq!(column.table, 0);
-                *expr = if row_ty.is_record() {
-                    stmt::Expr::arg_project(0, [column.column])
-                } else {
-                    assert_eq!(column.column, 0);
-                    stmt::Expr::arg(0)
-                };
+                *expr = stmt::Expr::arg_project(0, [column.column]);
             }
             true
         });

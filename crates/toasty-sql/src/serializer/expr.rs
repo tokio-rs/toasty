@@ -214,6 +214,9 @@ impl ToSql for &stmt::Expr {
                         ResolvedRef::Field(field) => {
                             panic!("Field references cannot be serialized to SQL; field={field:?}")
                         }
+                        ResolvedRef::Input(_) => {
+                            panic!("engine input cannot be serialized to SQL")
+                        }
                     }
                 } else {
                     let column =

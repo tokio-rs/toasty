@@ -63,6 +63,12 @@ fn fold_one(i: &mut Expr) -> Option<Expr> {
         }
         Expr::Cast(expr) => expr_cast::fold_expr_cast(expr),
         Expr::InList(expr) => expr_in_list::fold_expr_in_list(expr),
+        Expr::InSubquery(expr) => match &expr.query.body {
+            stmt::ExprSet::Values(values) if values.is_empty() && expr.query.with.is_none() => {
+                Some(expr.negated.into())
+            }
+            _ => None,
+        },
         Expr::Intersects(expr) => expr_intersects::fold_expr_intersects(expr),
         Expr::IsNull(expr) => expr_is_null::fold_expr_is_null(expr),
         Expr::IsSuperset(expr) => expr_is_superset::fold_expr_is_superset(expr),
@@ -85,7 +91,6 @@ fn fold_one(i: &mut Expr) -> Option<Expr> {
         | Expr::Exists(_)
         | Expr::Func(_)
         | Expr::Ident(_)
-        | Expr::InSubquery(_)
         | Expr::Incoming(_)
         | Expr::IsVariant(_)
         | Expr::Length(_)
