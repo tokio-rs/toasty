@@ -8,11 +8,7 @@ impl LowerStatement<'_, '_> {
         let stmt::Source::Table(source) = &mut select.source else {
             return false;
         };
-        if !source
-            .tables
-            .iter()
-            .any(|table| matches!(table, stmt::TableRef::Derived(_)))
-        {
+        if !source.tables.iter().any(stmt::TableRef::is_derived) {
             return false;
         }
 

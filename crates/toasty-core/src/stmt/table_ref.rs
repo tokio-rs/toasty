@@ -56,6 +56,11 @@ impl TableRef {
     pub fn is_cte(&self) -> bool {
         matches!(self, Self::Cte { .. })
     }
+
+    /// Returns `true` if this is a derived table.
+    pub fn is_derived(&self) -> bool {
+        matches!(self, Self::Derived(_))
+    }
 }
 
 impl From<TableId> for TableRef {
