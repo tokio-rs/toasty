@@ -1,0 +1,109 @@
+error[E0599]: no method named `is_some` found for struct `ProfileFields<Account>` in the current scope
+  --> tests/ui/relation_presence_requires_option.rs:40:31
+   |
+25 | struct Profile {
+   |        ------- method `is_some` not found for this struct
+...
+40 |     Account::fields().eager().is_some();
+   |                               ^^^^^^^ method not found in `ProfileFields<Account>`
+   |
+   = note: the method was found for `ProfileFields<__Origin, Option<Profile>>`
+
+error[E0599]: no method named `is_none` found for struct `ProfileFields<Account>` in the current scope
+  --> tests/ui/relation_presence_requires_option.rs:41:31
+   |
+25 | struct Profile {
+   |        ------- method `is_none` not found for this struct
+...
+41 |     Account::fields().eager().is_none();
+   |                               ^^^^^^^ method not found in `ProfileFields<Account>`
+   |
+   = note: the method was found for `ProfileFields<__Origin, Option<Profile>>`
+
+error[E0599]: no method named `is_some` found for struct `ProfileFields<Account>` in the current scope
+  --> tests/ui/relation_presence_requires_option.rs:42:34
+   |
+25 | struct Profile {
+   |        ------- method `is_some` not found for this struct
+...
+42 |     Account::fields().deferred().is_some();
+   |                                  ^^^^^^^ method not found in `ProfileFields<Account>`
+   |
+   = note: the method was found for `ProfileFields<__Origin, Option<Profile>>`
+
+error[E0599]: no method named `is_none` found for struct `ProfileFields<Account>` in the current scope
+  --> tests/ui/relation_presence_requires_option.rs:43:34
+   |
+25 | struct Profile {
+   |        ------- method `is_none` not found for this struct
+...
+43 |     Account::fields().deferred().is_none();
+   |                                  ^^^^^^^ method not found in `ProfileFields<Account>`
+   |
+   = note: the method was found for `ProfileFields<__Origin, Option<Profile>>`
+
+error[E0599]: no method named `is_some` found for struct `UserFields<Profile>` in the current scope
+  --> tests/ui/relation_presence_requires_option.rs:44:31
+   |
+ 9 | struct User {
+   |        ---- method `is_some` not found for this struct
+...
+44 |     Profile::fields().eager().is_some();
+   |                               ^^^^^^^ method not found in `UserFields<Profile>`
+   |
+   = note: the method was found for `UserFields<__Origin, Option<User>>`
+
+error[E0599]: no method named `is_none` found for struct `UserFields<Profile>` in the current scope
+  --> tests/ui/relation_presence_requires_option.rs:45:31
+   |
+ 9 | struct User {
+   |        ---- method `is_none` not found for this struct
+...
+45 |     Profile::fields().eager().is_none();
+   |                               ^^^^^^^ method not found in `UserFields<Profile>`
+   |
+   = note: the method was found for `UserFields<__Origin, Option<User>>`
+
+error[E0599]: no method named `is_some` found for struct `UserFields<Profile>` in the current scope
+  --> tests/ui/relation_presence_requires_option.rs:46:34
+   |
+ 9 | struct User {
+   |        ---- method `is_some` not found for this struct
+...
+46 |     Profile::fields().deferred().is_some();
+   |                                  ^^^^^^^ method not found in `UserFields<Profile>`
+   |
+   = note: the method was found for `UserFields<__Origin, Option<User>>`
+
+error[E0599]: no method named `is_none` found for struct `UserFields<Profile>` in the current scope
+  --> tests/ui/relation_presence_requires_option.rs:47:34
+   |
+ 9 | struct User {
+   |        ---- method `is_none` not found for this struct
+...
+47 |     Profile::fields().deferred().is_none();
+   |                                  ^^^^^^^ method not found in `UserFields<Profile>`
+   |
+   = note: the method was found for `UserFields<__Origin, Option<User>>`
+
+error[E0599]: no method named `is_some` found for struct `AccountFields<Account>` in the current scope
+  --> tests/ui/relation_presence_requires_option.rs:48:23
+   |
+15 | struct Account {
+   |        ------- method `is_some` not found for this struct
+...
+48 |     Account::fields().is_some();
+   |                       ^^^^^^^ method not found in `AccountFields<Account>`
+   |
+   = note: the method was found for `AccountFields<__Origin, Option<Account>>`
+
+error[E0599]: no method named `is_none` found for struct `AccountFields<Account>` in the current scope
+  --> tests/ui/relation_presence_requires_option.rs:49:23
+   |
+15 | struct Account {
+   |        ------- method `is_none` not found for this struct
+...
+49 |     Account::fields().is_none();
+   |                       ^^^^^^^ method not found in `AccountFields<Account>`
+   |
+   = note: the method was found for `AccountFields<__Origin, Option<Account>>`

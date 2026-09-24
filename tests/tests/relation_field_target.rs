@@ -67,6 +67,23 @@ fn aliases_resolve_target_types() {
 }
 
 #[test]
+fn optional_relations_support_presence() {
+    fn presence<Origin>(fields: impl Fn() -> <User as Model>::OneField<Origin, Option<User>>) {
+        let _: Expr<bool> = fields().is_some();
+        let _: Expr<bool> = fields().is_none();
+    }
+
+    presence(|| Relations::fields().eager_optional());
+    presence(|| Relations::fields().deferred_optional());
+    presence(|| Relations::fields().eager_optional_alias());
+    presence(|| Relations::fields().deferred_optional_alias());
+    presence(|| Article::fields().attribution().optional());
+    presence(|| Article::fields().attribution().optional_alias());
+    presence(|| Article::fields().owner().person().optional());
+    presence(|| Article::fields().owner().person().optional_alias());
+}
+
+#[test]
 fn has_one_target_types() {
     #[derive(Debug, toasty::Model)]
     struct Account {
@@ -114,6 +131,16 @@ fn has_one_target_types() {
         Account::fields().deferred_optional();
     let _: <Profile as Model>::OneField<Account, Option<Profile>> =
         Account::fields().optional_via_required();
+
+    let fields = Account::fields();
+    let _: [Expr<bool>; 6] = [
+        fields.eager_optional().is_some(),
+        fields.eager_optional().is_none(),
+        fields.deferred_optional().is_some(),
+        fields.deferred_optional().is_none(),
+        fields.optional_via_required().is_some(),
+        fields.optional_via_required().is_none(),
+    ];
 }
 
 #[test]
@@ -168,6 +195,13 @@ fn has_one_via_target_types() {
     optional::<ViaRelations>(fields.optional_both());
     required::<ViaRelations>(fields.required_nested());
     optional::<ViaRelations>(fields.optional_nested());
+
+    let _: [Expr<bool>; 4] = [
+        fields.optional_from_required().is_some(),
+        fields.optional_from_required().is_none(),
+        fields.optional_deferred_intermediate().is_some(),
+        fields.optional_deferred_intermediate().is_none(),
+    ];
 }
 
 #[derive(Debug, toasty::Embed)]
