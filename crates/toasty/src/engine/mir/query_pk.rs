@@ -13,8 +13,8 @@ use crate::engine::mir;
 /// additional row filtering.
 #[derive(Debug)]
 pub(crate) struct QueryPk {
-    /// Optional node providing input arguments for the filter.
-    pub(crate) input: Option<mir::NodeId>,
+    /// Nodes providing input arguments for the key and row filters.
+    pub(crate) inputs: IndexSet<mir::NodeId>,
 
     /// The table to query.
     pub(crate) table: TableId,

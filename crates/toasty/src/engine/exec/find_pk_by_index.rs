@@ -16,7 +16,6 @@ impl Exec<'_> {
         let mut filter = action.filter.clone();
 
         if !action.inputs.is_empty() {
-            assert!(action.inputs.len() == 1);
             let input = self.collect_input(action.inputs.iter().copied()).await?;
             filter.substitute(&input);
         }
