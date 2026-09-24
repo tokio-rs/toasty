@@ -115,6 +115,10 @@ impl<'a> LiftInSubquery<'a> {
         }
     }
 
+    /// Filters null relation keys without changing which rows LIMIT/OFFSET selects.
+    ///
+    /// For example, if `LIMIT 1` selects a row with a null relation key, the result
+    /// must be empty even if later rows have non-null keys.
     fn filter_limited_candidates(
         &self,
         in_subquery: &mut stmt::ExprInSubquery,
@@ -122,12 +126,9 @@ impl<'a> LiftInSubquery<'a> {
         returning: stmt::Expr,
         mut guards: Vec<stmt::Expr>,
     ) {
-        // Select the original candidate identities before discarding null
-        // relation keys. Pushing the guard through LIMIT/OFFSET changes
-        // which records belong to the candidate set.
         let model = self.cx.schema().app.model(target).as_root_unwrap();
         let key = super::key_field_refs(0, model.primary_key.fields.iter().copied());
-        let mut candidates = (*in_subquery.query).clone();
+        let mut candidates = std::mem::replace(&mut *in_subquery.query, stmt::Query::unit());
         candidates.body.as_select_mut_unwrap().returning = stmt::Returning::Project(key.clone());
 
         guards.push(stmt::Expr::in_subquery(key, candidates));
