@@ -126,3 +126,77 @@ pub async fn membership_with_composite_key(t: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+#[driver_test(
+    requires(scan),
+    scenario(crate::scenarios::has_one_optional_belongs_to::id_uuid)
+)]
+pub async fn negated_direct_belongs_to_membership(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+    let user = toasty::create!(User {
+        name: "present",
+        profile: { bio: "associated" },
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Profile {
+        bio: "unassociated"
+    })
+    .exec(&mut db)
+    .await?;
+
+    let found = Profile::filter(
+        Profile::fields()
+            .user()
+            .in_query(User::filter_by_id(user.id))
+            .not(),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_struct!(found, [{ bio: "unassociated" }]);
+    Ok(())
+}
+
+#[driver_test(requires(and(scan, not(sql))))]
+pub async fn limited_membership_preserves_candidates(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        id: String,
+        #[has_one]
+        document: toasty::Deferred<Option<Document>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = group, local = position)]
+    struct Document {
+        group: String,
+        position: i64,
+        #[unique]
+        user_id: Option<String>,
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::Deferred<Option<User>>,
+    }
+
+    let mut db = t.setup_db(models!(User, Document)).await;
+    toasty::create!(User { id: "user" }).exec(&mut db).await?;
+    toasty::create!(Document::[
+        { group: "selected", position: 0 },
+        { group: "selected", position: 1, user_id: "user" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    for offset in [0, 1] {
+        let candidates = Document::filter_by_group("selected")
+            .order_by(Document::fields().position().asc())
+            .limit(1)
+            .offset(offset);
+        let filter = User::fields().document().in_query(candidates);
+        let found = User::filter(filter.clone()).exec(&mut db).await?;
+        assert_eq!(found.len(), offset as usize);
+        let excluded = User::filter(filter.not()).exec(&mut db).await?;
+        assert_eq!(excluded.len(), 1 - offset as usize);
+    }
+    Ok(())
+}

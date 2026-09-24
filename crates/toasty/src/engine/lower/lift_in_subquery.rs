@@ -85,6 +85,7 @@ impl<'a> LiftInSubquery<'a> {
         let target = select.source.model_id_unwrap();
         let returning = select.returning.as_project_unwrap().clone();
 
+        let mut non_null = vec![];
         for field in returning
             .as_record()
             .map_or(std::slice::from_ref(&returning), |record| &record.fields)
@@ -93,7 +94,30 @@ impl<'a> LiftInSubquery<'a> {
                 unreachable!();
             };
             if self.cx.schema().app.field(target.field(*index)).nullable {
-                select.add_filter(stmt::Expr::is_not_null(field.clone()));
+                non_null.push(stmt::Expr::is_not_null(field.clone()));
+            }
+        }
+
+        if !non_null.is_empty() && in_subquery.query.limit.is_some() {
+            // Select the original candidate identities before discarding null
+            // relation keys. Pushing the guard through LIMIT/OFFSET changes
+            // which records belong to the candidate set.
+            let model = self.cx.schema().app.model(target).as_root_unwrap();
+            let key = super::key_field_refs(0, model.primary_key.fields.iter().copied());
+            let mut candidates = (*in_subquery.query).clone();
+            candidates.body.as_select_mut_unwrap().returning =
+                stmt::Returning::Project(key.clone());
+            non_null.push(stmt::Expr::in_subquery(key, candidates));
+            let mut filtered = stmt::Query::new_select(target, stmt::Expr::and_from_vec(non_null));
+            filtered.body.as_select_mut_unwrap().returning = stmt::Returning::Project(returning);
+            *in_subquery.query = filtered;
+        } else {
+            for guard in non_null {
+                in_subquery
+                    .query
+                    .body
+                    .as_select_mut_unwrap()
+                    .add_filter(guard);
             }
         }
 
@@ -682,7 +706,29 @@ fn lift_belongs_to_in_subquery(
     // visitor deliberately skips (see `visit_expr_in_subquery`).
     let all_fks_matched = lift.fk_field_matches.iter().all(|m| *m);
 
-    if lift.fail || !all_fks_matched {
+    // An equality on every referenced key selects at most one record, so a
+    // positive limit without an offset is redundant (including `.first()`).
+    // Other limits must remain part of the candidate query.
+    let limit_preserves_match = match &query.limit {
+        None => true,
+        Some(stmt::Limit::Offset(stmt::LimitOffset { limit, offset })) => {
+            matches!(limit,
+                Expr::Value(stmt::Value::I64(n)) | Expr::Static(stmt::Value::I64(n)) if *n > 0)
+                && offset.as_ref().is_none_or(|offset| {
+                    matches!(
+                        offset,
+                        Expr::Value(stmt::Value::I64(0)) | Expr::Static(stmt::Value::I64(0))
+                    )
+                })
+                && lift
+                    .operands
+                    .iter()
+                    .all(|expr| matches!(expr, Expr::BinaryOp(op) if op.op.is_eq()))
+        }
+        _ => false,
+    };
+
+    if !limit_preserves_match || lift.fail || !all_fks_matched {
         lift_fk_in_subquery(
             belongs_to.target,
             super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.source)),
@@ -690,6 +736,16 @@ fn lift_belongs_to_in_subquery(
             query,
         )
     } else {
+        // A directly lifted comparison must also make an absent relation
+        // false, so its negation includes rows with null foreign keys.
+        for fk in &belongs_to.foreign_key.fields {
+            if cx.schema().app.field(fk.source).nullable {
+                lift.operands
+                    .push(stmt::Expr::is_not_null(stmt::Expr::ref_self_field(
+                        fk.source,
+                    )));
+            }
+        }
         Some(if lift.operands.len() == 1 {
             lift.operands.into_iter().next().unwrap()
         } else {
