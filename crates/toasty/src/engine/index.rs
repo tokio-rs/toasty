@@ -94,7 +94,10 @@ pub(crate) fn plan_index_path<'a>(
     // A complete literal primary key still permits a direct lookup when
     // another predicate constrains the same key, such as `id = x AND id IN
     // (subquery)`. Preserve those extra constraints as a result filter.
+    // Mutations keep using QueryPk, which binds subquery results before
+    // collecting keys; direct mutation operations cannot bind filter args.
     if key_values.is_none()
+        && stmt.is_query()
         && index_match.index.primary_key
         && let stmt::Expr::And(and) = &index_filter
     {
