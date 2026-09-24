@@ -18,6 +18,27 @@ use toasty_core::{
 use tokio::sync::oneshot;
 use tracing::Instrument;
 
+/// The connection worker task no longer exists. Returned as a
+/// [`Error::connection_lost`](toasty_core::Error::connection_lost) error
+/// instead of panicking: a worker torn down after a backend disconnect is a
+/// normal failure mode, and unwrapping here panics inside caller code that
+/// deliberately fails closed on panic (e.g. storage owners), turning one
+/// transient disconnect into a permanent outage.
+#[derive(Debug)]
+struct WorkerGone(&'static str);
+
+impl core::fmt::Display for WorkerGone {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "connection worker is gone: {}", self.0)
+    }
+}
+
+impl std::error::Error for WorkerGone {}
+
+fn worker_gone(failure: &'static str) -> crate::Error {
+    crate::Error::connection_lost(WorkerGone(failure))
+}
+
 /// A dedicated database connection retrieved from a pool.
 ///
 /// Holding a `Connection` guarantees that all operations are executed on the
@@ -60,9 +81,11 @@ impl Connection {
                 span: span.clone(),
                 tx,
             })
-            .unwrap();
+            .map_err(|_| worker_gone("exec statement channel closed"))?;
 
-        rx.instrument(span).await.unwrap()
+        rx.instrument(span)
+            .await
+            .map_err(|_| worker_gone("exec statement worker dropped without replying"))?
     }
 
     pub(crate) async fn exec_operation(&self, operation: Operation) -> crate::Result<ExecResponse> {
@@ -75,9 +98,10 @@ impl Connection {
                 span: tracing::Span::current(),
                 tx,
             })
-            .unwrap();
+            .map_err(|_| worker_gone("exec operation channel closed"))?;
 
-        rx.await.unwrap()
+        rx.await
+            .map_err(|_| worker_gone("exec operation worker dropped without replying"))?
     }
 
     pub(crate) async fn exec_raw_sql(&self, raw: RawSql) -> crate::Result<ExecResponse> {
@@ -92,9 +116,11 @@ impl Connection {
                 span: span.clone(),
                 tx,
             })
-            .unwrap();
+            .map_err(|_| worker_gone("exec raw sql channel closed"))?;
 
-        rx.instrument(span).await.unwrap()
+        rx.instrument(span)
+            .await
+            .map_err(|_| worker_gone("exec raw sql worker dropped without replying"))?
     }
 
     /// Begin a transaction on this connection.
@@ -126,8 +152,9 @@ impl Connection {
                 span: tracing::Span::current(),
                 tx,
             })
-            .unwrap();
-        rx.await.unwrap()
+            .map_err(|_| worker_gone("push schema channel closed"))?;
+        rx.await
+            .map_err(|_| worker_gone("push schema worker dropped without replying"))?
     }
 
     #[cfg(feature = "migration")]
@@ -139,8 +166,9 @@ impl Connection {
                 span: tracing::Span::current(),
                 tx,
             })
-            .unwrap();
-        rx.await.unwrap()
+            .map_err(|_| worker_gone("applied migrations channel closed"))?;
+        rx.await
+            .map_err(|_| worker_gone("applied migrations worker dropped without replying"))?
     }
 
     #[cfg(feature = "migration")]
@@ -160,8 +188,9 @@ impl Connection {
                 span: tracing::Span::current(),
                 tx,
             })
-            .unwrap();
-        rx.await.unwrap()
+            .map_err(|_| worker_gone("apply migration channel closed"))?;
+        rx.await
+            .map_err(|_| worker_gone("apply migration worker dropped without replying"))?
     }
 }
 
