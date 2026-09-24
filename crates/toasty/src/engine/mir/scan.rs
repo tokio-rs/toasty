@@ -10,8 +10,8 @@ use crate::engine::mir;
 /// before returning results.
 #[derive(Debug)]
 pub(crate) struct Scan {
-    /// Optional node providing input arguments for the filter expression.
-    pub(crate) input: Option<mir::NodeId>,
+    /// Nodes providing input arguments for the filter expression.
+    pub(crate) inputs: IndexSet<mir::NodeId>,
 
     /// The table to scan.
     pub(crate) table: TableId,

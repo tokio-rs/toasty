@@ -11,8 +11,8 @@ impl Exec<'_> {
     pub(super) async fn exec_scan(&mut self, action: &mir::Scan) -> Result<ExecResponse> {
         let mut row_filter = action.row_filter.clone();
 
-        if let Some(input) = action.input {
-            let input = self.collect_input([input]).await?;
+        if !action.inputs.is_empty() {
+            let input = self.collect_input(action.inputs.iter().copied()).await?;
             if !self.bind_row_filter(&mut row_filter, &input, action.table) {
                 return Ok(ExecResponse::from_rows(Rows::value_stream(
                     stmt::ValueStream::default(),
