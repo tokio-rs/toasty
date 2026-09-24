@@ -12,7 +12,10 @@ use toasty_core::stmt;
 ///   3. Group branches by their structural shape (predicate with literal values
 ///      replaced by `arg(i)`).
 ///   4. Unify each same-shape group into `ANY(MAP(Value::List([v1, v2, ...]), shape))`.
-pub(super) fn index_filter_to_any_map(expr: stmt::Expr) -> stmt::Expr {
+///
+/// Returns `None` when the branches cannot be represented by a shared
+/// predicate with literal inputs, including subquery membership predicates.
+pub(super) fn index_filter_to_any_map(expr: stmt::Expr) -> Option<stmt::Expr> {
     // `col IN [v1, v2, ...]` is equivalent to `v1 = col OR v2 = col OR ...`.
     // Expand it directly to the canonical fan-out form so the DNF step doesn't
     // need to handle InList as a leaf.
@@ -24,7 +27,10 @@ pub(super) fn index_filter_to_any_map(expr: stmt::Expr) -> stmt::Expr {
             op: stmt::BinaryOp::Eq,
             rhs: Box::new(stmt::Expr::arg(0)),
         });
-        return stmt::Expr::any(stmt::Expr::map(*in_list.list.clone(), shape));
+        return Some(stmt::Expr::any(stmt::Expr::map(
+            *in_list.list.clone(),
+            shape,
+        )));
     }
 
     let branches = flatten_to_dnf(expr);
@@ -147,16 +153,16 @@ fn distribute_into_any(and: stmt::ExprAnd, pos: usize, queue: &mut Vec<stmt::Exp
 
 /// Group DNF branches by shape; unify each group into `ANY(MAP(...))`.
 /// If there is only a single branch (no OR), returns it unchanged.
-fn unify_dnf_branches(branches: Vec<stmt::Expr>) -> stmt::Expr {
+fn unify_dnf_branches(branches: Vec<stmt::Expr>) -> Option<stmt::Expr> {
     if branches.len() == 1 {
-        return branches.into_iter().next().unwrap();
+        return branches.into_iter().next();
     }
 
     // Each group: (shape, per-branch scalar-or-record values).
     let mut groups: Vec<(stmt::Expr, Vec<stmt::Value>)> = vec![];
 
     for branch in branches {
-        let (shape, value) = extract_shape(branch);
+        let (shape, value) = extract_shape(branch)?;
         if let Some((_, values)) = groups.iter_mut().find(|(s, _)| *s == shape) {
             values.push(value);
         } else {
@@ -165,19 +171,15 @@ fn unify_dnf_branches(branches: Vec<stmt::Expr>) -> stmt::Expr {
     }
 
     if groups.len() > 1 {
-        todo!(
-            "OR index filter with multiple distinct branch shapes is not yet implemented; \
-             shapes: {:#?}",
-            groups.iter().map(|(s, _)| s).collect::<Vec<_>>()
-        );
+        return None;
     }
 
     let (shape, values) = groups.into_iter().next().unwrap();
 
-    stmt::Expr::any(stmt::Expr::map(
+    Some(stmt::Expr::any(stmt::Expr::map(
         stmt::Expr::Value(stmt::Value::List(values)),
         shape,
-    ))
+    )))
 }
 
 /// Extract the per-call predicate template (shape) and single value for one DNF branch.
@@ -185,11 +187,11 @@ fn unify_dnf_branches(branches: Vec<stmt::Expr>) -> stmt::Expr {
 /// - `col op literal` → shape `col op arg(0)`, value `literal`
 /// - `col1 op1 v1 AND col2 op2 v2 AND ...` → shape with `arg(i)` per column,
 ///   value `Value::Record([v1, v2, ...])` — composite key fan-out (TODO)
-fn extract_shape(branch: stmt::Expr) -> (stmt::Expr, stmt::Value) {
+fn extract_shape(branch: stmt::Expr) -> Option<(stmt::Expr, stmt::Value)> {
     match branch {
         stmt::Expr::BinaryOp(b) => {
             let stmt::Expr::Value(v) = *b.rhs else {
-                todo!("non-literal value in OR branch rhs: {:#?}", b.rhs);
+                return None;
             };
             let shape: stmt::Expr = stmt::ExprBinaryOp {
                 lhs: b.lhs,
@@ -197,7 +199,7 @@ fn extract_shape(branch: stmt::Expr) -> (stmt::Expr, stmt::Value) {
                 rhs: Box::new(stmt::Expr::arg(0)),
             }
             .into();
-            (shape, v)
+            Some((shape, v))
         }
         // Composite key: (col1 = t1 AND col2 >= s1) OR (col1 = t2 AND col2 >= s2)
         // → ANY(MAP([(t1,s1),(t2,s2)], col1=arg(0) AND col2>=arg(1)))
@@ -207,16 +209,10 @@ fn extract_shape(branch: stmt::Expr) -> (stmt::Expr, stmt::Value) {
 
             for (i, operand) in and.operands.into_iter().enumerate() {
                 let stmt::Expr::BinaryOp(b) = operand else {
-                    todo!(
-                        "non-BinaryOp operand in composite AND branch: {:#?}",
-                        operand
-                    );
+                    return None;
                 };
                 let stmt::Expr::Value(v) = *b.rhs else {
-                    todo!(
-                        "non-literal value in composite AND branch rhs: {:#?}",
-                        b.rhs
-                    );
+                    return None;
                 };
                 values.push(v);
                 shape_operands.push(stmt::Expr::from(stmt::ExprBinaryOp {
@@ -230,9 +226,9 @@ fn extract_shape(branch: stmt::Expr) -> (stmt::Expr, stmt::Value) {
                 operands: shape_operands,
             });
             let record = stmt::Value::Record(stmt::ValueRecord::from_vec(values));
-            (shape, record)
+            Some((shape, record))
         }
-        _ => todo!("unsupported branch type in OR index filter: {branch:#?}"),
+        _ => None,
     }
 }
 

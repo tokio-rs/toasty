@@ -427,7 +427,7 @@ fn any_map_with_arg_base_passes_through_for_dynamodb() {
         ),
     ));
 
-    let result = or_rewrite::index_filter_to_any_map(filter.clone());
+    let result = or_rewrite::index_filter_to_any_map(filter.clone()).unwrap();
     assert_eq!(
         result, filter,
         "batch-load ANY(MAP(arg, pred)) should pass through unchanged"
