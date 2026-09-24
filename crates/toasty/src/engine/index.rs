@@ -83,13 +83,38 @@ pub(crate) fn plan_index_path<'a>(
         apply_result_filter_on_results: false,
     };
 
-    let (index_filter, result_filter) =
+    let (index_filter, mut result_filter) =
         index_match.partition_filter(&mut partition_cx, &remaining_filter);
 
     // Extract literal key values before OR rewrite, while index_filter is still
     // in Expr::Or form. After rewrite it becomes ANY(MAP(...)) and the Or arm
     // in try_extract_key_values would no longer fire.
-    let key_values = try_extract_key_values(&cx, index_match.index, &index_filter);
+    let mut key_values = try_extract_key_values(&cx, index_match.index, &index_filter);
+
+    // A complete literal primary key still permits a direct lookup when
+    // another predicate constrains the same key, such as `id = x AND id IN
+    // (subquery)`. Preserve those extra constraints as a result filter.
+    // Mutations keep using QueryPk, which binds subquery results before
+    // collecting keys; direct mutation operations cannot bind filter args.
+    if key_values.is_none()
+        && stmt.is_query()
+        && index_match.index.primary_key
+        && let stmt::Expr::And(and) = &index_filter
+    {
+        let equalities = stmt::Expr::and_from_vec(
+            and.operands
+                .iter()
+                .filter(|expr| {
+                    matches!(expr, stmt::Expr::BinaryOp(op) if op.op.is_eq() && op.rhs.is_value())
+                })
+                .cloned()
+                .collect(),
+        );
+        if let Some(keys) = try_extract_key_values(&cx, index_match.index, &equalities) {
+            key_values = Some(keys);
+            result_filter = stmt::Expr::and(index_filter.clone(), result_filter);
+        }
+    }
 
     // For backends that do not support OR in key conditions (e.g. DynamoDB), rewrite
     // any OR in the index filter to canonical ANY(MAP(...)) fan-out form.
