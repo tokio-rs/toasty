@@ -194,9 +194,9 @@ pub async fn limited_membership_preserves_candidates(t: &mut Test) -> Result<()>
             .offset(offset);
         let filter = User::fields().document().in_query(candidates);
         let found = User::filter(filter.clone()).exec(&mut db).await?;
-        assert_eq!(found.len(), offset as usize);
+        assert_eq!(found.len(), offset);
         let excluded = User::filter(filter.not()).exec(&mut db).await?;
-        assert_eq!(excluded.len(), 1 - offset as usize);
+        assert_eq!(excluded.len(), 1 - offset);
     }
     Ok(())
 }
