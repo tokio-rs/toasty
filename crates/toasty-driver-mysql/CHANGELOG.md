@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-mysql-v0.10.0...toasty-driver-mysql-v0.11.0) - 2026-09-24
+
+### Added
+
+- Add explicit support for MariaDB ([#1227])
+
+### Fixed
+
+- [**breaking**] Stop inferring batch insert IDs ([#1194])
+
+[#1194]: https://github.com/tokio-rs/toasty/pull/1194
+[#1227]: https://github.com/tokio-rs/toasty/pull/1227
+
 ## [0.10.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-mysql-v0.9.0...toasty-driver-mysql-v0.10.0) - 2026-08-11
 
 ### Added

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-turso-v0.10.0...toasty-driver-turso-v0.11.0) - 2026-09-24
+
+### Added
+
+- *(turso)* [**breaking**] Connect to Turso Cloud over HTTP (serverless) ([#1211])
+
+### Fixed
+
+- *(turso)* [**breaking**] Stop forcing turso's default mimalloc allocator ([#1234])
+- *(mysql)* [**breaking**] Stop inferring batch insert IDs ([#1194])
+
+[#1194]: https://github.com/tokio-rs/toasty/pull/1194
+[#1211]: https://github.com/tokio-rs/toasty/pull/1211
+[#1234]: https://github.com/tokio-rs/toasty/pull/1234
+
 ## [0.10.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-turso-v0.9.0...toasty-driver-turso-v0.10.0) - 2026-08-11
 
 ### Added
