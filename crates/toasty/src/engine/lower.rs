@@ -1,4 +1,5 @@
 mod association;
+mod derived;
 mod expr_or;
 mod include;
 mod insert;
@@ -1306,13 +1307,16 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_stmt_select_mut(&mut self, stmt: &mut stmt::Select) {
+        let derived_source = self.lower_derived_select_source(stmt);
         let mut lower = self.scope_expr(&stmt.source);
 
         lower.visit_filter_mut(&mut stmt.filter);
         lower.visit_returning_mut(&mut stmt.returning);
         lower.apply_lowering_filter_constraint(&mut stmt.filter);
 
-        self.visit_source_mut(&mut stmt.source);
+        if !derived_source {
+            self.visit_source_mut(&mut stmt.source);
+        }
     }
 
     fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {
@@ -1411,6 +1415,8 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
             let table_id = self.schema().table_id_for(source_model.id);
             *stmt = stmt::Source::table(table_id);
+        } else if self.capability().sql() {
+            visit_mut::visit_source_mut(self, stmt);
         }
     }
 

@@ -157,12 +157,13 @@ pub async fn negated_direct_belongs_to_membership(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(requires(and(scan, not(sql))))]
+#[driver_test(id(ID), requires(scan))]
 pub async fn limited_membership_preserves_candidates(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
-        id: String,
+        #[auto]
+        id: ID,
         #[has_one]
         document: toasty::Deferred<Option<Document>>,
     }
@@ -173,30 +174,133 @@ pub async fn limited_membership_preserves_candidates(t: &mut Test) -> Result<()>
         group: String,
         position: i64,
         #[unique]
-        user_id: Option<String>,
+        user_id: Option<ID>,
         #[belongs_to(key = user_id, references = id)]
         user: toasty::Deferred<Option<User>>,
     }
 
     let mut db = t.setup_db(models!(User, Document)).await;
-    toasty::create!(User { id: "user" }).exec(&mut db).await?;
+    let user = User::create().exec(&mut db).await?;
     toasty::create!(Document::[
         { group: "selected", position: 0 },
-        { group: "selected", position: 1, user_id: "user" },
+        { group: "selected", position: 1, user_id: user.id },
     ])
     .exec(&mut db)
     .await?;
 
-    for offset in [0, 1] {
+    for offset in [0, 1, 2] {
         let candidates = Document::filter_by_group("selected")
             .order_by(Document::fields().position().asc())
             .limit(1)
             .offset(offset);
         let filter = User::fields().document().in_query(candidates);
+        t.log().clear();
         let found = User::filter(filter.clone()).exec(&mut db).await?;
-        assert_eq!(found.len(), offset);
+        let matches = usize::from(offset == 1);
+        assert_eq!(found.len(), matches);
+        assert_limited_membership_reads(t, matches);
+
+        t.log().clear();
         let excluded = User::filter(filter.not()).exec(&mut db).await?;
-        assert_eq!(excluded.len(), 1 - offset);
+        assert_eq!(excluded.len(), 1 - matches);
+        assert_limited_membership_reads(t, 1);
+    }
+
+    let candidates = Document::filter_by_group("selected")
+        .filter(Document::fields().user().in_query(User::all()))
+        .order_by(Document::fields().position().asc())
+        .limit(1);
+    t.log().clear();
+    let found = User::filter(User::fields().document().in_query(candidates))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(t.log().len(), if t.capability().sql() { 1 } else { 3 });
+
+    Ok(())
+}
+
+#[driver_test(requires(scan))]
+pub async fn limited_membership_with_composite_key(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = group, local = id)]
+    struct User {
+        group: String,
+        id: String,
+        #[has_many]
+        documents: toasty::Deferred<Vec<Document>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = group, local = position)]
+    #[index(user_group, user_id)]
+    struct Document {
+        group: String,
+        position: i64,
+        user_group: Option<String>,
+        user_id: Option<String>,
+        #[belongs_to(key = [user_group, user_id], references = [group, id])]
+        user: toasty::Deferred<Option<User>>,
+    }
+
+    let mut db = t.setup_db(models!(User, Document)).await;
+    toasty::create!(User {
+        group: "selected",
+        id: "user"
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Document::[
+        { group: "selected", position: 0 },
+        { group: "selected", position: 1, user_group: "selected" },
+        { group: "selected", position: 2, user_group: "selected", user_id: "user" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    for offset in 0..4 {
+        let candidates = Document::filter_by_group("selected")
+            .order_by(Document::fields().position().asc())
+            .limit(1)
+            .offset(offset);
+        let path: toasty::stmt::Path<User, toasty::stmt::List<Document>> =
+            User::fields().documents().into();
+        let path: toasty_core::stmt::Path = path.into();
+        let filter = toasty::stmt::Expr::from_untyped(toasty_core::stmt::Expr::in_subquery(
+            path.into_stmt(),
+            toasty::stmt::IntoStatement::into_statement(candidates)
+                .into_untyped()
+                .into_query_unwrap(),
+        ));
+        let matches = usize::from(offset == 2);
+
+        t.log().clear();
+        let found = User::filter(filter.clone()).exec(&mut db).await?;
+        assert_eq!(found.len(), matches);
+        assert_limited_membership_reads(t, matches);
+
+        t.log().clear();
+        let excluded = User::filter(filter.not()).exec(&mut db).await?;
+        assert_eq!(excluded.len(), 1 - matches);
+        assert_limited_membership_reads(t, 1);
     }
     Ok(())
+}
+
+fn assert_limited_membership_reads(t: &Test, outer_reads: usize) {
+    use toasty_core::driver::Operation;
+
+    if t.capability().sql() {
+        assert_eq!(t.log().len(), 1);
+        assert!(matches!(t.log().pop_op(), Operation::QuerySql(_)));
+    } else {
+        assert_eq!(t.log().len(), 1 + outer_reads);
+        assert!(matches!(t.log().pop_op(), Operation::QueryPk(_)));
+        if outer_reads != 0 {
+            assert!(matches!(
+                t.log().pop_op(),
+                Operation::GetByKey(_) | Operation::Scan(_)
+            ));
+        }
+    }
 }

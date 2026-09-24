@@ -90,29 +90,35 @@ impl<'a> LiftInSubquery<'a> {
         let select = in_subquery.query.body.as_select_mut_unwrap();
         let target = select.source.model_id_unwrap();
         let returning = select.returning.as_project_unwrap().clone();
-        let mut guards = vec![];
+        let fields = Self::scalar_or_record_fields(&returning);
+        let nullable = self.nullable_returning_fields(target, fields);
 
-        for field in returning
-            .as_record()
-            .map_or(std::slice::from_ref(&returning), |record| &record.fields)
-        {
-            let stmt::Expr::Reference(stmt::ExprReference::Field { index, .. }) = field else {
-                unreachable!();
-            };
-            if self.cx.schema().app.field(target.field(*index)).nullable {
-                guards.push(stmt::Expr::is_not_null(field.clone()));
-            }
-        }
-
-        if guards.is_empty() {
+        if nullable.is_empty() {
             return;
         }
 
         if in_subquery.query.limit.is_some() {
-            self.filter_limited_candidates(in_subquery, target, returning, guards);
+            Self::filter_limited_candidates(in_subquery, &returning, &nullable);
         } else {
+            let guards = nullable
+                .iter()
+                .map(|&index| stmt::Expr::is_not_null(fields[index].clone()))
+                .collect();
             Self::add_non_null_filters(in_subquery, guards);
         }
+    }
+
+    fn nullable_returning_fields(&self, target: ModelId, fields: &[stmt::Expr]) -> Vec<usize> {
+        let mut nullable = vec![];
+        for (position, field) in fields.iter().enumerate() {
+            let stmt::Expr::Reference(stmt::ExprReference::Field { index, .. }) = field else {
+                unreachable!();
+            };
+            if self.cx.schema().app.field(target.field(*index)).nullable {
+                nullable.push(position);
+            }
+        }
+        nullable
     }
 
     /// Filters null relation keys without changing which rows LIMIT/OFFSET selects.
@@ -120,22 +126,43 @@ impl<'a> LiftInSubquery<'a> {
     /// For example, if `LIMIT 1` selects a row with a null relation key, the result
     /// must be empty even if later rows have non-null keys.
     fn filter_limited_candidates(
-        &self,
         in_subquery: &mut stmt::ExprInSubquery,
-        target: ModelId,
-        returning: stmt::Expr,
-        mut guards: Vec<stmt::Expr>,
+        returning: &stmt::Expr,
+        nullable: &[usize],
     ) {
-        let model = self.cx.schema().app.model(target).as_root_unwrap();
-        let key = super::key_field_refs(0, model.primary_key.fields.iter().copied());
+        let fields = Self::scalar_or_record_fields(returning);
+        let columns: Vec<_> = (0..fields.len())
+            .map(|column| {
+                stmt::Expr::column(stmt::ExprColumn {
+                    nesting: 0,
+                    table: 0,
+                    column,
+                })
+            })
+            .collect();
+
+        let guards = nullable
+            .iter()
+            .map(|&index| stmt::Expr::is_not_null(columns[index].clone()))
+            .collect();
+
+        let projection = if returning.is_record() {
+            stmt::Expr::record_from_vec(columns)
+        } else {
+            columns.into_iter().next().unwrap()
+        };
         let mut candidates = std::mem::replace(&mut *in_subquery.query, stmt::Query::unit());
-        candidates.body.as_select_mut_unwrap().returning = stmt::Returning::Project(key.clone());
-
-        guards.push(stmt::Expr::in_subquery(key, candidates));
-
-        let mut filtered = stmt::Query::new_select(target, stmt::Expr::and_from_vec(guards));
-        filtered.body.as_select_mut_unwrap().returning = stmt::Returning::Project(returning);
-        *in_subquery.query = filtered;
+        let returning = candidates.returning_mut_unwrap().as_project_mut_unwrap();
+        if !returning.is_record() {
+            *returning = stmt::Expr::record([returning.take()]);
+        }
+        let source = stmt::TableRef::Derived(stmt::TableDerived {
+            subquery: Box::new(candidates),
+        });
+        *in_subquery.query =
+            stmt::Query::builder(stmt::Select::new(source, stmt::Expr::and_from_vec(guards)))
+                .returning_project(projection)
+                .build();
     }
 
     fn add_non_null_filters(in_subquery: &mut stmt::ExprInSubquery, guards: Vec<stmt::Expr>) {
