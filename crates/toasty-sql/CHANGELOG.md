@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.10.0...toasty-sql-v0.11.0) - 2026-09-24
+
+### Added
+
+- Support for MariaDB ([#1227])
+- Reference embedded relations with model values ([#1172])
+
+### Fixed
+
+- PostgreSQL enum type names are now properly quoted ([#1186])
+
+[#1172]: https://github.com/tokio-rs/toasty/pull/1172
+[#1186]: https://github.com/tokio-rs/toasty/pull/1186
+[#1227]: https://github.com/tokio-rs/toasty/pull/1227
+
 ## [0.10.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.9.0...toasty-sql-v0.10.0) - 2026-08-11
 
 ### Added

@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.10.0...toasty-core-v0.11.0) - 2026-09-24
+
+### Added
+
+- Preload relations inside embedded types ([#1228])
+- MariaDB support ([#1227])
+- Reference embedded relations with model values ([#1172])
+- PostgreSQL support for unique Vec constraints ([#1199])
+- Conditional execution in the exec program ([#1182])
+
+### Fixed
+
+- Infer derived table column types ([#1256])
+- Resolve enum fields by variant-local index ([#1218])
+- Support `Not` in eval verify and type inference ([#1214])
+- [**breaking**] Stop inferring batch insert IDs on MySQL ([#1194])
+- Quote PostgreSQL enum type names ([#1186])
+
+[#1172]: https://github.com/tokio-rs/toasty/pull/1172
+[#1182]: https://github.com/tokio-rs/toasty/pull/1182
+[#1186]: https://github.com/tokio-rs/toasty/pull/1186
+[#1194]: https://github.com/tokio-rs/toasty/pull/1194
+[#1199]: https://github.com/tokio-rs/toasty/pull/1199
+[#1214]: https://github.com/tokio-rs/toasty/pull/1214
+[#1218]: https://github.com/tokio-rs/toasty/pull/1218
+[#1227]: https://github.com/tokio-rs/toasty/pull/1227
+[#1228]: https://github.com/tokio-rs/toasty/pull/1228
+[#1256]: https://github.com/tokio-rs/toasty/pull/1256
+
 ## [0.10.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.9.0...toasty-core-v0.10.0) - 2026-08-11
 
 ### Added
