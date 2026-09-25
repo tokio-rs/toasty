@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["non_unique_vec_index_is_rejected","unique_vec_generated_operations","unique_vec_newtype","unique_vec_unsupported_backend","unique_vec_uses_ordered_complete_value"]};

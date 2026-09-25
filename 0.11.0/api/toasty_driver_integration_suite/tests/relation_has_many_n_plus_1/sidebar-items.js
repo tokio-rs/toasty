@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["hello_world","query_by_index_optimization"]};

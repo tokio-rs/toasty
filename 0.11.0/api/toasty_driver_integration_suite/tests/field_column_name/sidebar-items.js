@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["specify_custom_column_name_with_type"],"mod":["specify_custom_column_name"]};

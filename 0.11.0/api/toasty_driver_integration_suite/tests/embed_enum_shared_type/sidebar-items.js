@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["shared_enum_crud","shared_enum_filter"]};

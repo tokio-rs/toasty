@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["composite_pk","generic_by_primary_key","single_column_pk"]};

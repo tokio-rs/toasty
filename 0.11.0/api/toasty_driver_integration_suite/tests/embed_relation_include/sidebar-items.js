@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["create_eager_relation_without_key","create_eager_root_and_embedded_relations","eager_embed_key_patch","eager_embed_projection","eager_embedded_relations_batch_create","eager_nested_embedded_relations","eager_optional_struct_relation","include_deferred_embed_loads_eager_relation","include_nested_relation_path","include_polymorphic_owner"]};

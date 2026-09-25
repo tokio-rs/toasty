@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["select_belongs_to","select_belongs_to_in_list"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["arithmetic_chains_with_other_updates","arithmetic_update_cases","increment_narrow_integer_column","increment_unique_column"]};

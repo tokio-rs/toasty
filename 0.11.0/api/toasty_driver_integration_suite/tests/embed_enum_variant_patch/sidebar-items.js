@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["patch_beside_variant_boundary","reject_increment_through_variant","reject_patch_through_nested_variants","reject_set_through_variant"]};

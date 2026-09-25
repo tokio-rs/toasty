@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["option_enum_create_ops","option_enum_crud","option_enum_db_schema","option_enum_filter_eq","option_enum_filter_ops","option_enum_filter_presence","option_enum_update","option_enum_update_ops"]};

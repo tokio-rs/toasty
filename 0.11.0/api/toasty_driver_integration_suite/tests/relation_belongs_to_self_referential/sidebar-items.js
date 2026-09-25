@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["crud_person_self_referential"]};

@@ -1,0 +1,872 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A representation of a time zone."><title>TimeZone in toasty::stmt - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="toasty" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc struct"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">TimeZone</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../toasty/index.html">toasty</a><span class="version">0.11.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Time<wbr>Zone</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#the-system-time-zone" title="The system time zone">The system time zone</a></li><li><a href="#custom-time-zones" title="Custom time zones">Custom time zones</a></li><li><a href="#a-timezone-is-immutable" title="A `TimeZone` is immutable">A <code>TimeZone</code> is immutable</a></li><li><a href="#a-timezone-is-cheap-to-clone" title="A `TimeZone` is cheap to clone">A <code>TimeZone</code> is cheap to clone</a></li><li><a href="#time-zone-equality" title="Time zone equality">Time zone equality</a></li><li><a href="#dealing-with-ambiguity" title="Dealing with ambiguity">Dealing with ambiguity</a></li><li><a href="#serde-integration" title="Serde integration">Serde integration</a></li></ul><h3><a href="#implementations">Associated Constants</a></h3><ul class="block associatedconstant"><li><a href="#associatedconstant.UTC" title="UTC">UTC</a></li></ul><h3><a href="#implementations">Associated Functions</a></h3><ul class="block method"><li><a href="#method.system" title="system">system</a></li><li><a href="#method.try_system" title="try_system">try_system</a></li><li><a href="#method.get" title="get">get</a></li><li><a href="#method.fixed" title="fixed">fixed</a></li><li><a href="#method.posix" title="posix">posix</a></li><li><a href="#method.tzif" title="tzif">tzif</a></li><li><a href="#method.unknown" title="unknown">unknown</a></li></ul><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.following" title="following">following</a></li><li><a href="#method.iana_name" title="iana_name">iana_name</a></li><li><a href="#method.into_ambiguous_zoned" title="into_ambiguous_zoned">into_ambiguous_zoned</a></li><li><a href="#method.is_unknown" title="is_unknown">is_unknown</a></li><li><a href="#method.memory_usage" title="memory_usage">memory_usage</a></li><li><a href="#method.preceding" title="preceding">preceding</a></li><li><a href="#method.to_ambiguous_timestamp" title="to_ambiguous_timestamp">to_ambiguous_timestamp</a></li><li><a href="#method.to_ambiguous_zoned" title="to_ambiguous_zoned">to_ambiguous_zoned</a></li><li><a href="#method.to_datetime" title="to_datetime">to_datetime</a></li><li><a href="#method.to_fixed_offset" title="to_fixed_offset">to_fixed_offset</a></li><li><a href="#method.to_offset" title="to_offset">to_offset</a></li><li><a href="#method.to_offset_info" title="to_offset_info">to_offset_info</a></li><li><a href="#method.to_timestamp" title="to_timestamp">to_timestamp</a></li><li><a href="#method.to_zoned" title="to_zoned">to_zoned</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Assign%3CTimeZone%3E-for-TimeZone" title="Assign&#60;TimeZone&#62;">Assign&#60;TimeZone&#62;</a></li><li><a href="#impl-Clone-for-TimeZone" title="Clone">Clone</a></li><li><a href="#impl-Debug-for-TimeZone" title="Debug">Debug</a></li><li><a href="#impl-Eq-for-TimeZone" title="Eq">Eq</a></li><li><a href="#impl-Field-for-TimeZone" title="Field">Field</a></li><li><a href="#impl-IntoExpr%3CTimeZone%3E-for-TimeZone" title="IntoExpr&#60;TimeZone&#62;">IntoExpr&#60;TimeZone&#62;</a></li><li><a href="#impl-Load-for-TimeZone" title="Load">Load</a></li><li><a href="#impl-PartialEq-for-TimeZone" title="PartialEq">PartialEq</a></li><li><a href="#impl-Scalar-for-TimeZone" title="Scalar">Scalar</a></li><li><a href="#impl-StructuralPartialEq-for-TimeZone" title="StructuralPartialEq">StructuralPartialEq</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-TimeZone" title="Freeze">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-TimeZone" title="RefUnwindSafe">RefUnwindSafe</a></li><li><a href="#impl-Send-for-TimeZone" title="Send">Send</a></li><li><a href="#impl-Sync-for-TimeZone" title="Sync">Sync</a></li><li><a href="#impl-Unpin-for-TimeZone" title="Unpin">Unpin</a></li><li><a href="#impl-UnsafeUnpin-for-TimeZone" title="UnsafeUnpin">UnsafeUnpin</a></li><li><a href="#impl-UnwindSafe-for-TimeZone" title="UnwindSafe">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T" title="Any">Any</a></li><li><a href="#impl-Assign%3CArc%3CT%3E%3E-for-T" title="Assign&#60;Arc&#60;T&#62;&#62;">Assign&#60;Arc&#60;T&#62;&#62;</a></li><li><a href="#impl-Assign%3CBox%3CT%3E%3E-for-T" title="Assign&#60;Box&#60;T&#62;&#62;">Assign&#60;Box&#60;T&#62;&#62;</a></li><li><a href="#impl-Assign%3COption%3CT%3E%3E-for-T" title="Assign&#60;Option&#60;T&#62;&#62;">Assign&#60;Option&#60;T&#62;&#62;</a></li><li><a href="#impl-Assign%3CRc%3CT%3E%3E-for-T" title="Assign&#60;Rc&#60;T&#62;&#62;">Assign&#60;Rc&#60;T&#62;&#62;</a></li><li><a href="#impl-Borrow%3CT%3E-for-T" title="Borrow&#60;T&#62;">Borrow&#60;T&#62;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T" title="BorrowMut&#60;T&#62;">BorrowMut&#60;T&#62;</a></li><li><a href="#impl-CloneToUninit-for-T" title="CloneToUninit">CloneToUninit</a></li><li><a href="#impl-Equivalent%3CK%3E-for-Q" title="Equivalent&#60;K&#62;">Equivalent&#60;K&#62;</a></li><li><a href="#impl-From%3CT%3E-for-T" title="From&#60;T&#62;">From&#60;T&#62;</a></li><li><a href="#impl-Instrument-for-T" title="Instrument">Instrument</a></li><li><a href="#impl-Into%3CU%3E-for-T" title="Into&#60;U&#62;">Into&#60;U&#62;</a></li><li><a href="#impl-IntoExpr%3CArc%3CT%3E%3E-for-T" title="IntoExpr&#60;Arc&#60;T&#62;&#62;">IntoExpr&#60;Arc&#60;T&#62;&#62;</a></li><li><a href="#impl-IntoExpr%3CBox%3CT%3E%3E-for-T" title="IntoExpr&#60;Box&#60;T&#62;&#62;">IntoExpr&#60;Box&#60;T&#62;&#62;</a></li><li><a href="#impl-IntoExpr%3COption%3CT%3E%3E-for-T" title="IntoExpr&#60;Option&#60;T&#62;&#62;">IntoExpr&#60;Option&#60;T&#62;&#62;</a></li><li><a href="#impl-IntoExpr%3CRc%3CT%3E%3E-for-T" title="IntoExpr&#60;Rc&#60;T&#62;&#62;">IntoExpr&#60;Rc&#60;T&#62;&#62;</a></li><li><a href="#impl-ToOwned-for-T" title="ToOwned">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T" title="TryFrom&#60;U&#62;">TryFrom&#60;U&#62;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T" title="TryInto&#60;U&#62;">TryInto&#60;U&#62;</a></li><li><a href="#impl-WithSubscriber-for-T" title="WithSubscriber">WithSubscriber</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In toasty::<wbr>stmt</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">toasty</a>::<wbr><a href="index.html">stmt</a></div><h1>Struct <span class="struct">Time<wbr>Zone</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"></span></div><pre class="rust item-decl"><code>pub struct TimeZone { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A representation of a <a href="https://en.wikipedia.org/wiki/Time_zone">time zone</a>.</p>
+<p>A time zone is a set of rules for determining the civil time, via an offset
+from UTC, in a particular geographic region. In many cases, the offset
+in a particular time zone can vary over the course of a year through
+transitions into and out of <a href="https://en.wikipedia.org/wiki/Daylight_saving_time">daylight saving time</a>.</p>
+<p>A <code>TimeZone</code> can be one of three possible representations:</p>
+<ul>
+<li>An identifier from the <a href="https://en.wikipedia.org/wiki/Tz_database">IANA Time Zone Database</a> and the rules associated
+with that identifier.</li>
+<li>A fixed offset where there are never any time zone transitions.</li>
+<li>A <a href="https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap08.html">POSIX TZ</a> string that specifies a standard offset and an optional
+daylight saving time offset along with a rule for when DST is in effect.
+The rule applies for every year. Since POSIX TZ strings cannot capture the
+full complexity of time zone rules, they generally should not be used.</li>
+</ul>
+<p>The most practical and useful representation is an IANA time zone. Namely,
+it enjoys broad support and its database is regularly updated to reflect
+real changes in time zone rules throughout the world. On Unix systems,
+the time zone database is typically found at <code>/usr/share/zoneinfo</code>. For
+more information on how Jiff interacts with The Time Zone Database, see
+<a href="crate::tz::TimeZoneDatabase"><code>TimeZoneDatabase</code></a>.</p>
+<p>In typical usage, users of Jiff shouldn’t need to reference a <code>TimeZone</code>
+directly. Instead, there are convenience APIs on datetime types that accept
+IANA time zone identifiers and do automatic database lookups for you. For
+example, to convert a timestamp to a zone aware datetime:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::Timestamp;
+
+<span class="kw">let </span>ts = Timestamp::from_second(<span class="number">1_456_789_123</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = ts.in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(zdt.to_string(), <span class="string">"2016-02-29T18:38:43-05:00[America/New_York]"</span>);
+</code></pre></div>
+<p>Or to convert a civil datetime to a zoned datetime corresponding to a
+precise instant in time:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::civil::date;
+
+<span class="kw">let </span>dt = date(<span class="number">2024</span>, <span class="number">7</span>, <span class="number">15</span>).at(<span class="number">21</span>, <span class="number">27</span>, <span class="number">0</span>, <span class="number">0</span>);
+<span class="kw">let </span>zdt = dt.in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(zdt.to_string(), <span class="string">"2024-07-15T21:27:00-04:00[America/New_York]"</span>);
+</code></pre></div>
+<p>Or even converted a zoned datetime from one time zone to another:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::civil::date;
+
+<span class="kw">let </span>dt = date(<span class="number">2024</span>, <span class="number">7</span>, <span class="number">15</span>).at(<span class="number">21</span>, <span class="number">27</span>, <span class="number">0</span>, <span class="number">0</span>);
+<span class="kw">let </span>zdt1 = dt.in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt2 = zdt1.in_tz(<span class="string">"Israel"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(zdt2.to_string(), <span class="string">"2024-07-16T04:27:00+03:00[Israel]"</span>);
+</code></pre></div><h2 id="the-system-time-zone"><a class="doc-anchor" href="#the-system-time-zone">§</a>The system time zone</h2>
+<p>The system time zone can be retrieved via <a href="struct.TimeZone.html#method.system" title="associated function toasty::stmt::TimeZone::system"><code>TimeZone::system</code></a>. If it
+couldn’t be detected or if the <code>tz-system</code> crate feature is not enabled,
+then <a href="struct.TimeZone.html#method.unknown" title="associated function toasty::stmt::TimeZone::unknown"><code>TimeZone::unknown</code></a> is returned. <code>TimeZone::system</code> is what’s used
+internally for retrieving the current zoned datetime via <a href="struct.Zoned.html#method.now" title="associated function toasty::stmt::Zoned::now"><code>Zoned::now</code></a>.</p>
+<p>While there is no platform independent way to detect your system’s
+“default” time zone, Jiff employs best-effort heuristics to determine it.
+(For example, by examining <code>/etc/localtime</code> on Unix systems or the <code>TZ</code>
+environment variable.) When the heuristics fail, Jiff will emit a <code>WARN</code>
+level log. It can be viewed by installing a <code>log</code> compatible logger, such
+as <a href="https://docs.rs/env_logger"><code>env_logger</code></a>.</p>
+<h2 id="custom-time-zones"><a class="doc-anchor" href="#custom-time-zones">§</a>Custom time zones</h2>
+<p>At present, Jiff doesn’t provide any APIs for manually constructing a
+custom time zone. However, <a href="struct.TimeZone.html#method.tzif" title="associated function toasty::stmt::TimeZone::tzif"><code>TimeZone::tzif</code></a> is provided for reading
+any valid TZif formatted data, as specified by <a href="https://datatracker.ietf.org/doc/html/rfc8536">RFC 8536</a>. This provides
+an interoperable way of utilizing custom time zone rules.</p>
+<h2 id="a-timezone-is-immutable"><a class="doc-anchor" href="#a-timezone-is-immutable">§</a>A <code>TimeZone</code> is immutable</h2>
+<p>Once a <code>TimeZone</code> is created, it is immutable. That is, its underlying
+time zone transition rules will never change. This is true for system time
+zones or even if the IANA Time Zone Database it was loaded from changes on
+disk. The only way such changes can be observed is by re-requesting the
+<code>TimeZone</code> from a <code>TimeZoneDatabase</code>. (Or, in the case of the system time
+zone, by calling <code>TimeZone::system</code>.)</p>
+<h2 id="a-timezone-is-cheap-to-clone"><a class="doc-anchor" href="#a-timezone-is-cheap-to-clone">§</a>A <code>TimeZone</code> is cheap to clone</h2>
+<p>A <code>TimeZone</code> can be cheaply cloned. It uses automatic reference counting
+internally. When <code>alloc</code> is disabled, cloning a <code>TimeZone</code> is still cheap
+because POSIX time zones and TZif time zones are unsupported. Therefore,
+cloning a time zone does a deep copy (since automatic reference counting is
+not available), but the data being copied is small.</p>
+<h2 id="time-zone-equality"><a class="doc-anchor" href="#time-zone-equality">§</a>Time zone equality</h2>
+<p><code>TimeZone</code> provides an imperfect notion of equality. That is, when two time
+zones are equal, then it is guaranteed for them to have the same rules.
+However, two time zones may compare unequal and yet still have the same
+rules.</p>
+<p>The equality semantics are as follows:</p>
+<ul>
+<li>Two fixed offset time zones are equal when their offsets are equal.</li>
+<li>Two POSIX time zones are equal when their original rule strings are
+byte-for-byte identical.</li>
+<li>Two IANA time zones are equal when their identifiers are equal <em>and</em>
+checksums of their rules are equal.</li>
+<li>In all other cases, time zones are unequal.</li>
+</ul>
+<p>Time zone equality is, for example, used in APIs like <a href="struct.Zoned.html#method.since" title="method toasty::stmt::Zoned::since"><code>Zoned::since</code></a>
+when asking for spans with calendar units. Namely, since days can be of
+different lengths in different time zones, <code>Zoned::since</code> will return an
+error when the two zoned datetimes are in different time zones and when
+the caller requests units greater than hours.</p>
+<h2 id="dealing-with-ambiguity"><a class="doc-anchor" href="#dealing-with-ambiguity">§</a>Dealing with ambiguity</h2>
+<p>The principal job of a <code>TimeZone</code> is to provide two different
+transformations:</p>
+<ul>
+<li>A conversion from a <a href="struct.Timestamp.html" title="struct toasty::stmt::Timestamp"><code>Timestamp</code></a> to a civil time (also known as local,
+naive or plain time). This conversion is always unambiguous. That is,
+there is always precisely one representation of civil time for any
+particular instant in time for a particular time zone.</li>
+<li>A conversion from a <a href="struct.DateTime.html" title="struct toasty::stmt::DateTime"><code>civil::DateTime</code></a> to an
+instant in time. This conversion is sometimes ambiguous in that a civil
+time might have either never appear on the clocks in a particular
+time zone (a gap), or in that the civil time may have been repeated on the
+clocks in a particular time zone (a fold). Typically, a transition to
+daylight saving time is a gap, while a transition out of daylight saving
+time is a fold.</li>
+</ul>
+<p>The timestamp-to-civil time conversion is done via
+<a href="struct.TimeZone.html#method.to_datetime" title="method toasty::stmt::TimeZone::to_datetime"><code>TimeZone::to_datetime</code></a>, or its lower level counterpart,
+<a href="struct.TimeZone.html#method.to_offset" title="method toasty::stmt::TimeZone::to_offset"><code>TimeZone::to_offset</code></a>. The civil time-to-timestamp conversion is done
+via one of the following routines:</p>
+<ul>
+<li><a href="struct.TimeZone.html#method.to_zoned" title="method toasty::stmt::TimeZone::to_zoned"><code>TimeZone::to_zoned</code></a> conveniently returns a <a href="struct.Zoned.html" title="struct toasty::stmt::Zoned"><code>Zoned</code></a> and automatically
+uses the
+<a href="crate::tz::Disambiguation::Compatible"><code>Disambiguation::Compatible</code></a>
+strategy if the given civil datetime is ambiguous in the time zone.</li>
+<li><a href="struct.TimeZone.html#method.to_ambiguous_zoned" title="method toasty::stmt::TimeZone::to_ambiguous_zoned"><code>TimeZone::to_ambiguous_zoned</code></a> returns a potentially ambiguous
+zoned datetime, [<code>AmbiguousZoned</code>], and provides fine-grained control over
+how to resolve ambiguity, if it occurs.</li>
+<li><a href="struct.TimeZone.html#method.to_timestamp" title="method toasty::stmt::TimeZone::to_timestamp"><code>TimeZone::to_timestamp</code></a> is like <code>TimeZone::to_zoned</code>, but returns
+a <a href="struct.Timestamp.html" title="struct toasty::stmt::Timestamp"><code>Timestamp</code></a> instead.</li>
+<li><a href="struct.TimeZone.html#method.to_ambiguous_timestamp" title="method toasty::stmt::TimeZone::to_ambiguous_timestamp"><code>TimeZone::to_ambiguous_timestamp</code></a> is like
+<code>TimeZone::to_ambiguous_zoned</code>, but returns an [<code>AmbiguousTimestamp</code>]
+instead.</li>
+</ul>
+<p>Here is an example where we explore the different disambiguation strategies
+for a fold in time, where in this case, the 1 o’clock hour is repeated:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, tz::TimeZone};
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>dt = date(<span class="number">2024</span>, <span class="number">11</span>, <span class="number">3</span>).at(<span class="number">1</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>);
+<span class="comment">// It's ambiguous, so asking for an unambiguous instant presents an error!
+</span><span class="macro">assert!</span>(tz.to_ambiguous_zoned(dt).unambiguous().is_err());
+<span class="comment">// Gives you the earlier time in a fold, i.e., before DST ends:
+</span><span class="macro">assert_eq!</span>(
+    tz.to_ambiguous_zoned(dt).earlier()<span class="question-mark">?</span>.to_string(),
+    <span class="string">"2024-11-03T01:30:00-04:00[America/New_York]"</span>,
+);
+<span class="comment">// Gives you the later time in a fold, i.e., after DST ends.
+// Notice the offset change from the previous example!
+</span><span class="macro">assert_eq!</span>(
+    tz.to_ambiguous_zoned(dt).later()<span class="question-mark">?</span>.to_string(),
+    <span class="string">"2024-11-03T01:30:00-05:00[America/New_York]"</span>,
+);
+<span class="comment">// "Just give me something reasonable"
+</span><span class="macro">assert_eq!</span>(
+    tz.to_ambiguous_zoned(dt).compatible()<span class="question-mark">?</span>.to_string(),
+    <span class="string">"2024-11-03T01:30:00-04:00[America/New_York]"</span>,
+);
+</code></pre></div><h2 id="serde-integration"><a class="doc-anchor" href="#serde-integration">§</a>Serde integration</h2>
+<p>At present, a <code>TimeZone</code> does not implement Serde’s <code>Serialize</code> or
+<code>Deserialize</code> traits directly. Nor does it implement <code>std::fmt::Display</code>
+or <code>std::str::FromStr</code>. The reason for this is that it’s not totally
+clear if there is one single obvious behavior. Moreover, some <code>TimeZone</code>
+values do not have an obvious succinct serialized representation. (For
+example, when <code>/etc/localtime</code> on a Unix system is your system’s time zone,
+and it isn’t a symlink to a TZif file in <code>/usr/share/zoneinfo</code>. In which
+case, an IANA time zone identifier cannot easily be deduced by Jiff.)</p>
+<p>Instead, Jiff offers helpers for use with Serde’s <a href="https://serde.rs/field-attrs.html#with"><code>with</code> attribute</a> via
+the <a href="crate::fmt::serde"><code>fmt::serde</code></a> module:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::tz::TimeZone;
+
+<span class="attr">#[derive(Debug, serde::Deserialize, serde::Serialize)]
+</span><span class="kw">struct </span>Record {
+    <span class="attr">#[serde(with = <span class="string">"jiff::fmt::serde::tz::optional"</span>)]
+    </span>tz: <span class="prelude-ty">Option</span>&lt;TimeZone&gt;,
+}
+
+<span class="kw">let </span>json = <span class="string">r#"{"tz":"America/Nuuk"}"#</span>;
+<span class="kw">let </span>got: Record = serde_json::from_str(<span class="kw-2">&amp;</span>json)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(got.tz, <span class="prelude-val">Some</span>(TimeZone::get(<span class="string">"America/Nuuk"</span>)<span class="question-mark">?</span>));
+<span class="macro">assert_eq!</span>(serde_json::to_string(<span class="kw-2">&amp;</span>got)<span class="question-mark">?</span>, json);
+</code></pre></div>
+<p>Alternatively, you may use the
+<a href="crate::fmt::temporal::DateTimeParser::parse_time_zone"><code>fmt::temporal::DateTimeParser::parse_time_zone</code></a>
+or
+<a href="crate::fmt::temporal::DateTimePrinter::print_time_zone"><code>fmt::temporal::DateTimePrinter::print_time_zone</code></a>
+routines to parse or print <code>TimeZone</code> values without using Serde.</p>
+</div></details><h2 id="implementations" class="section-header">Implementations<a href="#implementations" class="anchor">§</a></h2><div id="implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-TimeZone" class="impl"><a href="#impl-TimeZone" class="anchor">§</a><h3 class="code-header">impl <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedconstant.UTC" class="associatedconstant"><h4 class="code-header">pub const <a href="#associatedconstant.UTC" class="constant">UTC</a>: <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h4></section></summary><div class="docblock"><p>The UTC time zone.</p>
+<p>The offset of this time is <code>0</code> and never has any transitions.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.system" class="method"><h4 class="code-header">pub fn <a href="#method.system" class="fn">system</a>() -&gt; <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h4></section></summary><div class="docblock"><p>Returns the system configured time zone, if available.</p>
+<p>Detection of a system’s default time zone is generally heuristic
+based and platform specific.</p>
+<p>If callers need to know whether discovery of the system time zone
+failed, then use <a href="struct.TimeZone.html#method.try_system" title="associated function toasty::stmt::TimeZone::try_system"><code>TimeZone::try_system</code></a>.</p>
+<h5 id="fallback-behavior"><a class="doc-anchor" href="#fallback-behavior">§</a>Fallback behavior</h5>
+<p>If the system’s default time zone could not be determined, or if
+the <code>tz-system</code> crate feature is not enabled, then this returns
+<a href="struct.TimeZone.html#method.unknown" title="associated function toasty::stmt::TimeZone::unknown"><code>TimeZone::unknown</code></a>. A <code>WARN</code> level log will also be emitted with
+a message explaining why time zone detection failed. The fallback to
+an unknown time zone is a practical trade-off, is what most other
+systems tend to do and is also recommended by <a href="https://www.freedesktop.org/software/systemd/man/latest/localtime.html">relevant standards such
+as freedesktop.org</a>.</p>
+<p>An unknown time zone <em>behaves</em> like <a href="struct.TimeZone.html#associatedconstant.UTC" title="associated constant toasty::stmt::TimeZone::UTC"><code>TimeZone::UTC</code></a>, but will
+print as <code>Etc/Unknown</code> when converting a <code>Zoned</code> to a string.</p>
+<p>If you would like to fall back to UTC instead of
+the special “unknown” time zone, then you can do
+<code>TimeZone::try_system().unwrap_or(TimeZone::UTC)</code>.</p>
+<h5 id="platform-behavior"><a class="doc-anchor" href="#platform-behavior">§</a>Platform behavior</h5>
+<p>This section is a “best effort” explanation of how the time zone is
+detected on supported platforms. The behavior is subject to change.</p>
+<p>On all platforms, the <code>TZ</code> environment variable overrides any other
+heuristic, and provides a way for end users to set the time zone for
+specific use cases. In general, Jiff respects the <a href="https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap08.html">POSIX TZ</a> rules.
+Here are some examples:</p>
+<ul>
+<li><code>TZ=America/New_York</code> for setting a time zone via an IANA Time Zone
+Database Identifier.</li>
+<li><code>TZ=/usr/share/zoneinfo/America/New_York</code> for setting a time zone
+by providing a file path to a TZif file directly.</li>
+<li><code>TZ=EST5EDT,M3.2.0,M11.1.0</code> for setting a time zone via a daylight
+saving time transition rule.</li>
+</ul>
+<p>When <code>TZ</code> is set to an invalid value, Jiff uses the fallback behavior
+described above.</p>
+<p>Otherwise, when <code>TZ</code> isn’t set, then:</p>
+<p>On Unix non-Android systems, this inspects <code>/etc/localtime</code>. If it’s
+a symbolic link to an entry in <code>/usr/share/zoneinfo</code>, then the suffix
+is considered an IANA Time Zone Database identifier. Otherwise,
+<code>/etc/localtime</code> is read as a TZif file directly.</p>
+<p>On Android systems, this inspects the <code>persist.sys.timezone</code> property.</p>
+<p>On Windows, the system time zone is determined via
+<a href="https://learn.microsoft.com/en-us/windows/win32/api/timezoneapi/nf-timezoneapi-getdynamictimezoneinformation"><code>GetDynamicTimeZoneInformation</code></a>. The result is then mapped to an
+IANA Time Zone Database identifier via Unicode’s
+<a href="https://github.com/unicode-org/cldr/raw/main/common/supplemental/windowsZones.xml">CLDR XML data</a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.try_system" class="method"><h4 class="code-header">pub fn <a href="#method.try_system" class="fn">try_system</a>() -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a>, Error&gt;</h4></section></summary><div class="docblock"><p>Returns the system configured time zone, if available.</p>
+<p>If the system’s default time zone could not be determined, or if the
+<code>tz-system</code> crate feature is not enabled, then this returns an error.</p>
+<p>Detection of a system’s default time zone is generally heuristic
+based and platform specific.</p>
+<p>Note that callers should generally prefer using <a href="struct.TimeZone.html#method.system" title="associated function toasty::stmt::TimeZone::system"><code>TimeZone::system</code></a>.
+If a system time zone could not be found, then it falls
+back to <a href="struct.TimeZone.html#associatedconstant.UTC" title="associated constant toasty::stmt::TimeZone::UTC"><code>TimeZone::UTC</code></a> automatically. This is often
+what is recommended by <a href="https://www.freedesktop.org/software/systemd/man/latest/localtime.html">relevant standards such as
+freedesktop.org</a>. Conversely, this routine
+is useful if detection of a system’s default time zone is critical.</p>
+<h5 id="platform-behavior-1"><a class="doc-anchor" href="#platform-behavior-1">§</a>Platform behavior</h5>
+<p>This section is a “best effort” explanation of how the time zone is
+detected on supported platforms. The behavior is subject to change.</p>
+<p>On all platforms, the <code>TZ</code> environment variable overrides any other
+heuristic, and provides a way for end users to set the time zone for
+specific use cases. In general, Jiff respects the <a href="https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap08.html">POSIX TZ</a> rules.
+Here are some examples:</p>
+<ul>
+<li><code>TZ=America/New_York</code> for setting a time zone via an IANA Time Zone
+Database Identifier.</li>
+<li><code>TZ=/usr/share/zoneinfo/America/New_York</code> for setting a time zone
+by providing a file path to a TZif file directly.</li>
+<li><code>TZ=EST5EDT,M3.2.0,M11.1.0</code> for setting a time zone via a daylight
+saving time transition rule.</li>
+</ul>
+<p>When <code>TZ</code> is set to an invalid value, then this routine returns an
+error.</p>
+<p>Otherwise, when <code>TZ</code> isn’t set, then:</p>
+<p>On Unix systems, this inspects <code>/etc/localtime</code>. If it’s a symbolic
+link to an entry in <code>/usr/share/zoneinfo</code>, then the suffix is
+considered an IANA Time Zone Database identifier. Otherwise,
+<code>/etc/localtime</code> is read as a TZif file directly.</p>
+<p>On Windows, the system time zone is determined via
+<a href="https://learn.microsoft.com/en-us/windows/win32/api/timezoneapi/nf-timezoneapi-getdynamictimezoneinformation"><code>GetDynamicTimeZoneInformation</code></a>. The result is then mapped to an
+IANA Time Zone Database identifier via Unicode’s
+<a href="https://github.com/unicode-org/cldr/raw/main/common/supplemental/windowsZones.xml">CLDR XML data</a>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.get" class="method"><h4 class="code-header">pub fn <a href="#method.get" class="fn">get</a>(time_zone_name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a>, Error&gt;</h4></section></summary><div class="docblock"><p>A convenience function for performing a time zone database lookup for
+the given time zone identifier. It uses the default global time zone
+database via <a href="crate::tz::db()"><code>tz::db()</code></a>.</p>
+<p>It is guaranteed that if the given time zone name is case insensitively
+equivalent to <code>UTC</code>, then the time zone returned will be equivalent to
+<code>TimeZone::UTC</code>. Similarly for <code>Etc/Unknown</code> and <code>TimeZone::unknown()</code>.</p>
+<h5 id="errors"><a class="doc-anchor" href="#errors">§</a>Errors</h5>
+<p>This returns an error if the given time zone identifier could not be
+found in the default <a href="crate::tz::TimeZoneDatabase"><code>TimeZoneDatabase</code></a>.</p>
+<h5 id="example"><a class="doc-anchor" href="#example">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{tz::TimeZone, Timestamp};
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"Japan"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(
+    tz.to_datetime(Timestamp::UNIX_EPOCH).to_string(),
+    <span class="string">"1970-01-01T09:00:00"</span>,
+);
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.fixed" class="method"><h4 class="code-header">pub const fn <a href="#method.fixed" class="fn">fixed</a>(offset: Offset) -&gt; <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h4></section></summary><div class="docblock"><p>Returns a time zone with a fixed offset.</p>
+<p>A fixed offset will never have any transitions and won’t follow any
+particular time zone rules. In general, one should avoid using fixed
+offset time zones unless you have a specific need for them. Otherwise,
+IANA time zones via <a href="struct.TimeZone.html#method.get" title="associated function toasty::stmt::TimeZone::get"><code>TimeZone::get</code></a> should be preferred, as they
+more accurately model the actual time zone transitions rules used in
+practice.</p>
+<h5 id="example-1"><a class="doc-anchor" href="#example-1">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{tz::{<span class="self">self</span>, TimeZone}, Timestamp};
+
+<span class="kw">let </span>tz = TimeZone::fixed(tz::offset(<span class="number">10</span>));
+<span class="macro">assert_eq!</span>(
+    tz.to_datetime(Timestamp::UNIX_EPOCH).to_string(),
+    <span class="string">"1970-01-01T10:00:00"</span>,
+);
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.posix" class="method"><h4 class="code-header">pub fn <a href="#method.posix" class="fn">posix</a>(posix_tz_string: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.str.html">str</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a>, Error&gt;</h4></section></summary><div class="docblock"><p>Creates a time zone from a <a href="https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap08.html">POSIX TZ</a> rule string.</p>
+<p>A POSIX time zone provides a way to tersely define a single daylight
+saving time transition rule (or none at all) that applies for all
+years.</p>
+<p>Users should avoid using this kind of time zone unless there is a
+specific need for it. Namely, POSIX time zones cannot capture the full
+complexity of time zone transition rules in the real world. (See the
+example below.)</p>
+<h5 id="errors-1"><a class="doc-anchor" href="#errors-1">§</a>Errors</h5>
+<p>This returns an error if the given POSIX time zone string is invalid.</p>
+<h5 id="example-2"><a class="doc-anchor" href="#example-2">§</a>Example</h5>
+<p>This example demonstrates how a POSIX time zone may be historically
+inaccurate:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, tz::TimeZone};
+
+<span class="comment">// The tzdb entry for America/New_York.
+</span><span class="kw">let </span>iana = TimeZone::get(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="comment">// The POSIX TZ string for New York DST that went into effect in 2007.
+</span><span class="kw">let </span>posix = TimeZone::posix(<span class="string">"EST5EDT,M3.2.0,M11.1.0"</span>)<span class="question-mark">?</span>;
+
+<span class="comment">// New York entered DST on April 2, 2006 at 2am:
+</span><span class="kw">let </span>dt = date(<span class="number">2006</span>, <span class="number">4</span>, <span class="number">2</span>).at(<span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>);
+<span class="comment">// The IANA tzdb entry correctly reports it as ambiguous:
+</span><span class="macro">assert!</span>(iana.to_ambiguous_timestamp(dt).is_ambiguous());
+<span class="comment">// But the POSIX time zone does not:
+</span><span class="macro">assert!</span>(!posix.to_ambiguous_timestamp(dt).is_ambiguous());
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.tzif" class="method"><h4 class="code-header">pub fn <a href="#method.tzif" class="fn">tzif</a>(name: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.str.html">str</a>, data: &amp;[<a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.u8.html">u8</a>]) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a>, Error&gt;</h4></section></summary><div class="docblock"><p>Creates a time zone from TZif binary data, whose format is specified
+in <a href="https://datatracker.ietf.org/doc/html/rfc8536">RFC 8536</a>. All versions of TZif (up through version 4) are
+supported.</p>
+<p>This constructor is typically not used, and instead, one should rely
+on time zone lookups via time zone identifiers with routines like
+<a href="struct.TimeZone.html#method.get" title="associated function toasty::stmt::TimeZone::get"><code>TimeZone::get</code></a>. However, this constructor does provide one way
+of using custom time zones with Jiff.</p>
+<p>The name given should be a IANA time zone database identifier.</p>
+<h5 id="errors-2"><a class="doc-anchor" href="#errors-2">§</a>Errors</h5>
+<p>This returns an error if the given data was not recognized as valid
+TZif.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.unknown" class="method"><h4 class="code-header">pub const fn <a href="#method.unknown" class="fn">unknown</a>() -&gt; <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h4></section></summary><div class="docblock"><p>Returns a <code>TimeZone</code> that is specifically marked as “unknown.”</p>
+<p>This corresponds to the Unicode CLDR identifier <code>Etc/Unknown</code>, which
+is guaranteed to never be a valid IANA time zone identifier (as of
+the <code>2025a</code> release of tzdb).</p>
+<p>This type of <code>TimeZone</code> is used in circumstances where one wants to
+signal that discovering a time zone failed for some reason, but that
+execution can reasonably continue. For example, <a href="struct.TimeZone.html#method.system" title="associated function toasty::stmt::TimeZone::system"><code>TimeZone::system</code></a>
+returns this type of time zone when the system time zone could not be
+discovered.</p>
+<h5 id="example-3"><a class="doc-anchor" href="#example-3">§</a>Example</h5>
+<p>Jiff permits an “unknown” time zone to losslessly be transmitted
+through serialization:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, tz::TimeZone, Zoned};
+
+<span class="kw">let </span>tz = TimeZone::unknown();
+<span class="kw">let </span>zdt = date(<span class="number">2025</span>, <span class="number">2</span>, <span class="number">1</span>).at(<span class="number">17</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).to_zoned(tz)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(zdt.to_string(), <span class="string">"2025-02-01T17:00:00Z[Etc/Unknown]"</span>);
+<span class="kw">let </span>got: Zoned = <span class="string">"2025-02-01T17:00:00Z[Etc/Unknown]"</span>.parse()<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(got, zdt);
+</code></pre></div>
+<p>Note that not all systems support this. Some systems will reject
+<code>Etc/Unknown</code> because it is not a valid IANA time zone identifier and
+does not have an entry in the IANA time zone database. However, Jiff
+takes this approach because it surfaces an error condition in detecting
+the end user’s time zone. Callers not wanting an “unknown” time zone
+can use <code>TimeZone::try_system().unwrap_or(TimeZone::UTC)</code> instead of
+<code>TimeZone::system</code>. (Where the latter falls back to the “unknown” time
+zone when a system configured time zone could not be found.)</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.iana_name" class="method"><h4 class="code-header">pub fn <a href="#method.iana_name" class="fn">iana_name</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.str.html">str</a>&gt;</h4></section></summary><div class="docblock"><p>When this time zone was loaded from an IANA time zone database entry,
+then this returns the canonicalized name for that time zone.</p>
+<h5 id="example-4"><a class="doc-anchor" href="#example-4">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::tz::TimeZone;
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"america/NEW_YORK"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(tz.iana_name(), <span class="prelude-val">Some</span>(<span class="string">"America/New_York"</span>));
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.is_unknown" class="method"><h4 class="code-header">pub fn <a href="#method.is_unknown" class="fn">is_unknown</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns true if and only if this time zone is unknown.</p>
+<p>This has the special internal identifier of <code>Etc/Unknown</code>, and this
+is what will be used when converting a <code>Zoned</code> to a string.</p>
+<p>Note that while <code>Etc/Unknown</code> looks like an IANA time zone identifier,
+it is specifically and explicitly not one. It is reserved and is
+guaranteed to never be an IANA time zone identifier.</p>
+<p>An unknown time zone can be created via <a href="struct.TimeZone.html#method.unknown" title="associated function toasty::stmt::TimeZone::unknown"><code>TimeZone::unknown</code></a>. It is
+also returned by <a href="struct.TimeZone.html#method.system" title="associated function toasty::stmt::TimeZone::system"><code>TimeZone::system</code></a> when a system configured time
+zone could not be found.</p>
+<h5 id="example-5"><a class="doc-anchor" href="#example-5">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::tz::TimeZone;
+
+<span class="kw">let </span>tz = TimeZone::unknown();
+<span class="macro">assert_eq!</span>(tz.iana_name(), <span class="prelude-val">None</span>);
+<span class="macro">assert!</span>(tz.is_unknown());</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.to_datetime" class="method"><h4 class="code-header">pub fn <a href="#method.to_datetime" class="fn">to_datetime</a>(&amp;self, timestamp: <a class="struct" href="struct.Timestamp.html" title="struct toasty::stmt::Timestamp">Timestamp</a>) -&gt; <a class="struct" href="struct.DateTime.html" title="struct toasty::stmt::DateTime">DateTime</a></h4></section></summary><div class="docblock"><p>Returns the civil datetime corresponding to the given timestamp in this
+time zone.</p>
+<p>This operation is always unambiguous. That is, for any instant in time
+supported by Jiff (that is, a <code>Timestamp</code>), there is always precisely
+one civil datetime corresponding to that instant.</p>
+<p>Note that this is considered a lower level routine. Consider working
+with zoned datetimes instead, and use <a href="struct.Zoned.html#method.datetime" title="method toasty::stmt::Zoned::datetime"><code>Zoned::datetime</code></a> to get its
+civil time if necessary.</p>
+<h5 id="example-6"><a class="doc-anchor" href="#example-6">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{tz::TimeZone, Timestamp};
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"Europe/Rome"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(
+    tz.to_datetime(Timestamp::UNIX_EPOCH).to_string(),
+    <span class="string">"1970-01-01T01:00:00"</span>,
+);
+</code></pre></div>
+<p>As mentioned above, consider using <code>Zoned</code> instead:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::Timestamp;
+
+<span class="kw">let </span>zdt = Timestamp::UNIX_EPOCH.in_tz(<span class="string">"Europe/Rome"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(zdt.datetime().to_string(), <span class="string">"1970-01-01T01:00:00"</span>);
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.to_offset" class="method"><h4 class="code-header">pub fn <a href="#method.to_offset" class="fn">to_offset</a>(&amp;self, timestamp: <a class="struct" href="struct.Timestamp.html" title="struct toasty::stmt::Timestamp">Timestamp</a>) -&gt; Offset</h4></section></summary><div class="docblock"><p>Returns the offset corresponding to the given timestamp in this time
+zone.</p>
+<p>This operation is always unambiguous. That is, for any instant in time
+supported by Jiff (that is, a <code>Timestamp</code>), there is always precisely
+one offset corresponding to that instant.</p>
+<p>Given an offset, one can use APIs like [<code>Offset::to_datetime</code>] to
+create a civil datetime from a timestamp.</p>
+<p>This also returns whether this timestamp is considered to be in
+“daylight saving time,” as well as the abbreviation for the time zone
+at this time.</p>
+<h5 id="example-7"><a class="doc-anchor" href="#example-7">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{tz::{<span class="self">self</span>, TimeZone}, Timestamp};
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+
+<span class="comment">// A timestamp in DST in New York.
+</span><span class="kw">let </span>ts = Timestamp::from_second(<span class="number">1_720_493_204</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>offset = tz.to_offset(ts);
+<span class="macro">assert_eq!</span>(offset, tz::offset(-<span class="number">4</span>));
+<span class="macro">assert_eq!</span>(offset.to_datetime(ts).to_string(), <span class="string">"2024-07-08T22:46:44"</span>);
+
+<span class="comment">// A timestamp *not* in DST in New York.
+</span><span class="kw">let </span>ts = Timestamp::from_second(<span class="number">1_704_941_204</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>offset = tz.to_offset(ts);
+<span class="macro">assert_eq!</span>(offset, tz::offset(-<span class="number">5</span>));
+<span class="macro">assert_eq!</span>(offset.to_datetime(ts).to_string(), <span class="string">"2024-01-10T21:46:44"</span>);
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.to_offset_info" class="method"><h4 class="code-header">pub fn <a href="#method.to_offset_info" class="fn">to_offset_info</a>&lt;'t&gt;(
+    &amp;'t self,
+    timestamp: <a class="struct" href="struct.Timestamp.html" title="struct toasty::stmt::Timestamp">Timestamp</a>,
+) -&gt; TimeZoneOffsetInfo&lt;'t&gt;</h4></section></summary><div class="docblock"><p>Returns the offset information corresponding to the given timestamp in
+this time zone. This includes the offset along with daylight saving
+time status and a time zone abbreviation.</p>
+<p>This is like <a href="struct.TimeZone.html#method.to_offset" title="method toasty::stmt::TimeZone::to_offset"><code>TimeZone::to_offset</code></a>, but returns the aforementioned
+extra data in addition to the offset. This data may, in some cases, be
+more expensive to compute.</p>
+<h5 id="example-8"><a class="doc-anchor" href="#example-8">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{tz::{<span class="self">self</span>, Dst, TimeZone}, Timestamp};
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+
+<span class="comment">// A timestamp in DST in New York.
+</span><span class="kw">let </span>ts = Timestamp::from_second(<span class="number">1_720_493_204</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>info = tz.to_offset_info(ts);
+<span class="macro">assert_eq!</span>(info.offset(), tz::offset(-<span class="number">4</span>));
+<span class="macro">assert_eq!</span>(info.dst(), Dst::Yes);
+<span class="macro">assert_eq!</span>(info.abbreviation(), <span class="string">"EDT"</span>);
+<span class="macro">assert_eq!</span>(
+    info.offset().to_datetime(ts).to_string(),
+    <span class="string">"2024-07-08T22:46:44"</span>,
+);
+
+<span class="comment">// A timestamp *not* in DST in New York.
+</span><span class="kw">let </span>ts = Timestamp::from_second(<span class="number">1_704_941_204</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>info = tz.to_offset_info(ts);
+<span class="macro">assert_eq!</span>(info.offset(), tz::offset(-<span class="number">5</span>));
+<span class="macro">assert_eq!</span>(info.dst(), Dst::No);
+<span class="macro">assert_eq!</span>(info.abbreviation(), <span class="string">"EST"</span>);
+<span class="macro">assert_eq!</span>(
+    info.offset().to_datetime(ts).to_string(),
+    <span class="string">"2024-01-10T21:46:44"</span>,
+);
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.to_fixed_offset" class="method"><h4 class="code-header">pub fn <a href="#method.to_fixed_offset" class="fn">to_fixed_offset</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Offset, Error&gt;</h4></section></summary><div class="docblock"><p>If this time zone is a fixed offset, then this returns the offset.
+If this time zone is not a fixed offset, then an error is returned.</p>
+<p>If you just need an offset for a given timestamp, then you can use
+<a href="struct.TimeZone.html#method.to_offset" title="method toasty::stmt::TimeZone::to_offset"><code>TimeZone::to_offset</code></a>. Or, if you need an offset for a civil
+datetime, then you can use <a href="struct.TimeZone.html#method.to_ambiguous_timestamp" title="method toasty::stmt::TimeZone::to_ambiguous_timestamp"><code>TimeZone::to_ambiguous_timestamp</code></a> or
+<a href="struct.TimeZone.html#method.to_ambiguous_zoned" title="method toasty::stmt::TimeZone::to_ambiguous_zoned"><code>TimeZone::to_ambiguous_zoned</code></a>, although the result may be ambiguous.</p>
+<p>Generally, this routine is useful when you need to know whether the
+time zone is fixed, and you want to get the offset without having to
+specify a timestamp. This is sometimes required for interoperating with
+other datetime systems that need to distinguish between time zones that
+are fixed and time zones that are based on rules such as those found in
+the IANA time zone database.</p>
+<h5 id="example-9"><a class="doc-anchor" href="#example-9">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::tz::{Offset, TimeZone};
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="comment">// A named time zone is not a fixed offset
+// and so cannot be converted to an offset
+// without a timestamp or civil datetime.
+</span><span class="macro">assert_eq!</span>(
+    tz.to_fixed_offset().unwrap_err().to_string(),
+    <span class="string">"cannot convert non-fixed IANA time zone \
+     to offset without a timestamp or civil datetime"</span>,
+);
+
+<span class="kw">let </span>tz = TimeZone::UTC;
+<span class="comment">// UTC is a fixed offset and so can be converted
+// without a timestamp.
+</span><span class="macro">assert_eq!</span>(tz.to_fixed_offset()<span class="question-mark">?</span>, Offset::UTC);
+
+<span class="comment">// And of course, creating a time zone from a
+// fixed offset results in a fixed offset time
+// zone too:
+</span><span class="kw">let </span>tz = TimeZone::fixed(jiff::tz::offset(-<span class="number">10</span>));
+<span class="macro">assert_eq!</span>(tz.to_fixed_offset()<span class="question-mark">?</span>, jiff::tz::offset(-<span class="number">10</span>));
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.to_zoned" class="method"><h4 class="code-header">pub fn <a href="#method.to_zoned" class="fn">to_zoned</a>(&amp;self, dt: <a class="struct" href="struct.DateTime.html" title="struct toasty::stmt::DateTime">DateTime</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.Zoned.html" title="struct toasty::stmt::Zoned">Zoned</a>, Error&gt;</h4></section></summary><div class="docblock"><p>Converts a civil datetime to a <a href="struct.Zoned.html" title="struct toasty::stmt::Zoned"><code>Zoned</code></a> in this time zone.</p>
+<p>The given civil datetime may be ambiguous in this time zone. A civil
+datetime is ambiguous when either of the following occurs:</p>
+<ul>
+<li>When the civil datetime falls into a “gap.” That is, when there is a
+jump forward in time where a span of time does not appear on the clocks
+in this time zone. This <em>typically</em> manifests as a 1 hour jump forward
+into daylight saving time.</li>
+<li>When the civil datetime falls into a “fold.” That is, when there is
+a jump backward in time where a span of time is <em>repeated</em> on the
+clocks in this time zone. This <em>typically</em> manifests as a 1 hour jump
+backward out of daylight saving time.</li>
+</ul>
+<p>This routine automatically resolves both of the above ambiguities via
+the
+<a href="crate::tz::Disambiguation::Compatible"><code>Disambiguation::Compatible</code></a>
+strategy. That in, the case of a gap, the time after the gap is used.
+In the case of a fold, the first repetition of the clock time is used.</p>
+<h5 id="example-10"><a class="doc-anchor" href="#example-10">§</a>Example</h5>
+<p>This example shows how disambiguation works:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, tz::TimeZone};
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+
+<span class="comment">// This demonstrates disambiguation behavior for a gap.
+</span><span class="kw">let </span>zdt = tz.to_zoned(date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">10</span>).at(<span class="number">2</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>))<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(zdt.to_string(), <span class="string">"2024-03-10T03:30:00-04:00[America/New_York]"</span>);
+<span class="comment">// This demonstrates disambiguation behavior for a fold.
+// Notice the offset: the -04 corresponds to the time while
+// still in DST. The second repetition of the 1 o'clock hour
+// occurs outside of DST, in "standard" time, with the offset -5.
+</span><span class="kw">let </span>zdt = tz.to_zoned(date(<span class="number">2024</span>, <span class="number">11</span>, <span class="number">3</span>).at(<span class="number">1</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>))<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(zdt.to_string(), <span class="string">"2024-11-03T01:30:00-04:00[America/New_York]"</span>);
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.to_ambiguous_zoned" class="method"><h4 class="code-header">pub fn <a href="#method.to_ambiguous_zoned" class="fn">to_ambiguous_zoned</a>(&amp;self, dt: <a class="struct" href="struct.DateTime.html" title="struct toasty::stmt::DateTime">DateTime</a>) -&gt; AmbiguousZoned</h4></section></summary><div class="docblock"><p>Converts a civil datetime to a possibly ambiguous zoned datetime in
+this time zone.</p>
+<p>The given civil datetime may be ambiguous in this time zone. A civil
+datetime is ambiguous when either of the following occurs:</p>
+<ul>
+<li>When the civil datetime falls into a “gap.” That is, when there is a
+jump forward in time where a span of time does not appear on the clocks
+in this time zone. This <em>typically</em> manifests as a 1 hour jump forward
+into daylight saving time.</li>
+<li>When the civil datetime falls into a “fold.” That is, when there is
+a jump backward in time where a span of time is <em>repeated</em> on the
+clocks in this time zone. This <em>typically</em> manifests as a 1 hour jump
+backward out of daylight saving time.</li>
+</ul>
+<p>Unlike <a href="struct.TimeZone.html#method.to_zoned" title="method toasty::stmt::TimeZone::to_zoned"><code>TimeZone::to_zoned</code></a>, this method does not do any automatic
+disambiguation. Instead, callers are expected to use the methods on
+[<code>AmbiguousZoned</code>] to resolve any ambiguity, if it occurs.</p>
+<h5 id="example-11"><a class="doc-anchor" href="#example-11">§</a>Example</h5>
+<p>This example shows how to return an error when the civil datetime given
+is ambiguous:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, tz::TimeZone};
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+
+<span class="comment">// This is not ambiguous:
+</span><span class="kw">let </span>dt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">10</span>).at(<span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>);
+<span class="macro">assert_eq!</span>(
+    tz.to_ambiguous_zoned(dt).unambiguous()<span class="question-mark">?</span>.to_string(),
+    <span class="string">"2024-03-10T01:00:00-05:00[America/New_York]"</span>,
+);
+<span class="comment">// But this is a gap, and thus ambiguous! So an error is returned.
+</span><span class="kw">let </span>dt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">10</span>).at(<span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>);
+<span class="macro">assert!</span>(tz.to_ambiguous_zoned(dt).unambiguous().is_err());
+<span class="comment">// And so is this, because it's a fold.
+</span><span class="kw">let </span>dt = date(<span class="number">2024</span>, <span class="number">11</span>, <span class="number">3</span>).at(<span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>);
+<span class="macro">assert!</span>(tz.to_ambiguous_zoned(dt).unambiguous().is_err());
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.into_ambiguous_zoned" class="method"><h4 class="code-header">pub fn <a href="#method.into_ambiguous_zoned" class="fn">into_ambiguous_zoned</a>(self, dt: <a class="struct" href="struct.DateTime.html" title="struct toasty::stmt::DateTime">DateTime</a>) -&gt; AmbiguousZoned</h4></section></summary><div class="docblock"><p>Converts a civil datetime to a possibly ambiguous zoned datetime in
+this time zone, and does so by assuming ownership of this <code>TimeZone</code>.</p>
+<p>This is identical to <a href="struct.TimeZone.html#method.to_ambiguous_zoned" title="method toasty::stmt::TimeZone::to_ambiguous_zoned"><code>TimeZone::to_ambiguous_zoned</code></a>, but it avoids
+a <code>TimeZone::clone()</code> call. (Which are cheap, but not completely free.)</p>
+<h5 id="example-12"><a class="doc-anchor" href="#example-12">§</a>Example</h5>
+<p>This example shows how to create a <code>Zoned</code> value from a <code>TimeZone</code>
+and a <code>DateTime</code> without cloning the <code>TimeZone</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, tz::TimeZone};
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>dt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">10</span>).at(<span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>);
+<span class="macro">assert_eq!</span>(
+    tz.into_ambiguous_zoned(dt).unambiguous()<span class="question-mark">?</span>.to_string(),
+    <span class="string">"2024-03-10T01:00:00-05:00[America/New_York]"</span>,
+);
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.to_timestamp" class="method"><h4 class="code-header">pub fn <a href="#method.to_timestamp" class="fn">to_timestamp</a>(&amp;self, dt: <a class="struct" href="struct.DateTime.html" title="struct toasty::stmt::DateTime">DateTime</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.Timestamp.html" title="struct toasty::stmt::Timestamp">Timestamp</a>, Error&gt;</h4></section></summary><div class="docblock"><p>Converts a civil datetime to a <a href="struct.Timestamp.html" title="struct toasty::stmt::Timestamp"><code>Timestamp</code></a> in this time zone.</p>
+<p>The given civil datetime may be ambiguous in this time zone. A civil
+datetime is ambiguous when either of the following occurs:</p>
+<ul>
+<li>When the civil datetime falls into a “gap.” That is, when there is a
+jump forward in time where a span of time does not appear on the clocks
+in this time zone. This <em>typically</em> manifests as a 1 hour jump forward
+into daylight saving time.</li>
+<li>When the civil datetime falls into a “fold.” That is, when there is
+a jump backward in time where a span of time is <em>repeated</em> on the
+clocks in this time zone. This <em>typically</em> manifests as a 1 hour jump
+backward out of daylight saving time.</li>
+</ul>
+<p>This routine automatically resolves both of the above ambiguities via
+the
+<a href="crate::tz::Disambiguation::Compatible"><code>Disambiguation::Compatible</code></a>
+strategy. That in, the case of a gap, the time after the gap is used.
+In the case of a fold, the first repetition of the clock time is used.</p>
+<p>This routine is identical to <a href="struct.TimeZone.html#method.to_zoned" title="method toasty::stmt::TimeZone::to_zoned"><code>TimeZone::to_zoned</code></a>, except it returns
+a <code>Timestamp</code> instead of a zoned datetime. The benefit of this
+method is that it never requires cloning or consuming ownership of a
+<code>TimeZone</code>, and it doesn’t require construction of <code>Zoned</code> which has
+a small but non-zero cost. (This is partially because a <code>Zoned</code> value
+contains a <code>TimeZone</code>, but of course, a <code>Timestamp</code> does not.)</p>
+<h5 id="example-13"><a class="doc-anchor" href="#example-13">§</a>Example</h5>
+<p>This example shows how disambiguation works:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, tz::TimeZone};
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+
+<span class="comment">// This demonstrates disambiguation behavior for a gap.
+</span><span class="kw">let </span>ts = tz.to_timestamp(date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">10</span>).at(<span class="number">2</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>))<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(ts.to_string(), <span class="string">"2024-03-10T07:30:00Z"</span>);
+<span class="comment">// This demonstrates disambiguation behavior for a fold.
+// Notice the offset: the -04 corresponds to the time while
+// still in DST. The second repetition of the 1 o'clock hour
+// occurs outside of DST, in "standard" time, with the offset -5.
+</span><span class="kw">let </span>ts = tz.to_timestamp(date(<span class="number">2024</span>, <span class="number">11</span>, <span class="number">3</span>).at(<span class="number">1</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>))<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(ts.to_string(), <span class="string">"2024-11-03T05:30:00Z"</span>);
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.to_ambiguous_timestamp" class="method"><h4 class="code-header">pub fn <a href="#method.to_ambiguous_timestamp" class="fn">to_ambiguous_timestamp</a>(&amp;self, dt: <a class="struct" href="struct.DateTime.html" title="struct toasty::stmt::DateTime">DateTime</a>) -&gt; AmbiguousTimestamp</h4></section></summary><div class="docblock"><p>Converts a civil datetime to a possibly ambiguous timestamp in
+this time zone.</p>
+<p>The given civil datetime may be ambiguous in this time zone. A civil
+datetime is ambiguous when either of the following occurs:</p>
+<ul>
+<li>When the civil datetime falls into a “gap.” That is, when there is a
+jump forward in time where a span of time does not appear on the clocks
+in this time zone. This <em>typically</em> manifests as a 1 hour jump forward
+into daylight saving time.</li>
+<li>When the civil datetime falls into a “fold.” That is, when there is
+a jump backward in time where a span of time is <em>repeated</em> on the
+clocks in this time zone. This <em>typically</em> manifests as a 1 hour jump
+backward out of daylight saving time.</li>
+</ul>
+<p>Unlike <a href="struct.TimeZone.html#method.to_timestamp" title="method toasty::stmt::TimeZone::to_timestamp"><code>TimeZone::to_timestamp</code></a>, this method does not do any
+automatic disambiguation. Instead, callers are expected to use the
+methods on [<code>AmbiguousTimestamp</code>] to resolve any ambiguity, if it
+occurs.</p>
+<p>This routine is identical to <a href="struct.TimeZone.html#method.to_ambiguous_zoned" title="method toasty::stmt::TimeZone::to_ambiguous_zoned"><code>TimeZone::to_ambiguous_zoned</code></a>, except
+it returns an <code>AmbiguousTimestamp</code> instead of a <code>AmbiguousZoned</code>. The
+benefit of this method is that it never requires cloning or consuming
+ownership of a <code>TimeZone</code>, and it doesn’t require construction of
+<code>Zoned</code> which has a small but non-zero cost. (This is partially because
+a <code>Zoned</code> value contains a <code>TimeZone</code>, but of course, a <code>Timestamp</code>
+does not.)</p>
+<h5 id="example-14"><a class="doc-anchor" href="#example-14">§</a>Example</h5>
+<p>This example shows how to return an error when the civil datetime given
+is ambiguous:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, tz::TimeZone};
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+
+<span class="comment">// This is not ambiguous:
+</span><span class="kw">let </span>dt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">10</span>).at(<span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>);
+<span class="macro">assert_eq!</span>(
+    tz.to_ambiguous_timestamp(dt).unambiguous()<span class="question-mark">?</span>.to_string(),
+    <span class="string">"2024-03-10T06:00:00Z"</span>,
+);
+<span class="comment">// But this is a gap, and thus ambiguous! So an error is returned.
+</span><span class="kw">let </span>dt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">10</span>).at(<span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>);
+<span class="macro">assert!</span>(tz.to_ambiguous_timestamp(dt).unambiguous().is_err());
+<span class="comment">// And so is this, because it's a fold.
+</span><span class="kw">let </span>dt = date(<span class="number">2024</span>, <span class="number">11</span>, <span class="number">3</span>).at(<span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>);
+<span class="macro">assert!</span>(tz.to_ambiguous_timestamp(dt).unambiguous().is_err());
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.preceding" class="method"><h4 class="code-header">pub fn <a href="#method.preceding" class="fn">preceding</a>&lt;'t&gt;(
+    &amp;'t self,
+    timestamp: <a class="struct" href="struct.Timestamp.html" title="struct toasty::stmt::Timestamp">Timestamp</a>,
+) -&gt; TimeZonePrecedingTransitions&lt;'t&gt;</h4></section></summary><div class="docblock"><p>Returns an iterator of time zone transitions preceding the given
+timestamp. The iterator returned yields [<code>TimeZoneTransition</code>]
+elements.</p>
+<p>The order of the iterator returned moves backward through time. If
+there is a previous transition, then the timestamp of that transition
+is guaranteed to be strictly less than the timestamp given.</p>
+<p>This is a low level API that you generally shouldn’t need. It’s
+useful in cases where you need to know something about the specific
+instants at which time zone transitions occur. For example, an embedded
+device might need to be explicitly programmed with daylight saving
+time transitions. APIs like this enable callers to explore those
+transitions.</p>
+<p>A time zone transition refers to a specific point in time when the
+offset from UTC for a particular geographical region changes. This
+is usually a result of daylight saving time, but it can also occur
+when a geographic region changes its permanent offset from UTC.</p>
+<p>The iterator returned is not guaranteed to yield any elements. For
+example, this occurs with a fixed offset time zone. Logically, it
+would also be possible for the iterator to be infinite, except that
+eventually the timestamp would overflow Jiff’s minimum timestamp
+value, at which point, iteration stops.</p>
+<h5 id="example-time-since-the-previous-transition"><a class="doc-anchor" href="#example-time-since-the-previous-transition">§</a>Example: time since the previous transition</h5>
+<p>This example shows how much time has passed since the previous time
+zone transition:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{Unit, Zoned};
+
+<span class="kw">let </span>now: Zoned = <span class="string">"2024-12-31 18:25-05[US/Eastern]"</span>.parse()<span class="question-mark">?</span>;
+<span class="kw">let </span>trans = now.time_zone().preceding(now.timestamp()).next().unwrap();
+<span class="kw">let </span>prev_at = trans.timestamp().to_zoned(now.time_zone().clone());
+<span class="kw">let </span>span = now.since((Unit::Year, <span class="kw-2">&amp;</span>prev_at))<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{span:#}"</span>), <span class="string">"1mo 27d 17h 25m"</span>);
+</code></pre></div><h5 id="example-show-the-5-previous-time-zone-transitions"><a class="doc-anchor" href="#example-show-the-5-previous-time-zone-transitions">§</a>Example: show the 5 previous time zone transitions</h5>
+<p>This shows how to find the 5 preceding time zone transitions (from a
+particular datetime) for a particular time zone:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{tz::offset, Zoned};
+
+<span class="kw">let </span>now: Zoned = <span class="string">"2024-12-31 18:25-05[US/Eastern]"</span>.parse()<span class="question-mark">?</span>;
+<span class="kw">let </span>transitions = now
+    .time_zone()
+    .preceding(now.timestamp())
+    .take(<span class="number">5</span>)
+    .map(|t| (
+        t.timestamp().to_zoned(now.time_zone().clone()),
+        t.offset(),
+        t.abbreviation().to_string(),
+    ))
+    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<span class="macro">assert_eq!</span>(transitions, <span class="macro">vec!</span>[
+    (<span class="string">"2024-11-03 01:00-05[US/Eastern]"</span>.parse()<span class="question-mark">?</span>, offset(-<span class="number">5</span>), <span class="string">"EST"</span>.to_string()),
+    (<span class="string">"2024-03-10 03:00-04[US/Eastern]"</span>.parse()<span class="question-mark">?</span>, offset(-<span class="number">4</span>), <span class="string">"EDT"</span>.to_string()),
+    (<span class="string">"2023-11-05 01:00-05[US/Eastern]"</span>.parse()<span class="question-mark">?</span>, offset(-<span class="number">5</span>), <span class="string">"EST"</span>.to_string()),
+    (<span class="string">"2023-03-12 03:00-04[US/Eastern]"</span>.parse()<span class="question-mark">?</span>, offset(-<span class="number">4</span>), <span class="string">"EDT"</span>.to_string()),
+    (<span class="string">"2022-11-06 01:00-05[US/Eastern]"</span>.parse()<span class="question-mark">?</span>, offset(-<span class="number">5</span>), <span class="string">"EST"</span>.to_string()),
+]);
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.following" class="method"><h4 class="code-header">pub fn <a href="#method.following" class="fn">following</a>&lt;'t&gt;(
+    &amp;'t self,
+    timestamp: <a class="struct" href="struct.Timestamp.html" title="struct toasty::stmt::Timestamp">Timestamp</a>,
+) -&gt; TimeZoneFollowingTransitions&lt;'t&gt;</h4></section></summary><div class="docblock"><p>Returns an iterator of time zone transitions following the given
+timestamp. The iterator returned yields [<code>TimeZoneTransition</code>]
+elements.</p>
+<p>The order of the iterator returned moves forward through time. If
+there is a following transition, then the timestamp of that transition
+is guaranteed to be strictly greater than the timestamp given.</p>
+<p>This is a low level API that you generally shouldn’t need. It’s
+useful in cases where you need to know something about the specific
+instants at which time zone transitions occur. For example, an embedded
+device might need to be explicitly programmed with daylight saving
+time transitions. APIs like this enable callers to explore those
+transitions.</p>
+<p>A time zone transition refers to a specific point in time when the
+offset from UTC for a particular geographical region changes. This
+is usually a result of daylight saving time, but it can also occur
+when a geographic region changes its permanent offset from UTC.</p>
+<p>The iterator returned is not guaranteed to yield any elements. For
+example, this occurs with a fixed offset time zone. Logically, it
+would also be possible for the iterator to be infinite, except that
+eventually the timestamp would overflow Jiff’s maximum timestamp
+value, at which point, iteration stops.</p>
+<h5 id="example-time-until-the-next-transition"><a class="doc-anchor" href="#example-time-until-the-next-transition">§</a>Example: time until the next transition</h5>
+<p>This example shows how much time is left until the next time zone
+transition:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{Unit, Zoned};
+
+<span class="kw">let </span>now: Zoned = <span class="string">"2024-12-31 18:25-05[US/Eastern]"</span>.parse()<span class="question-mark">?</span>;
+<span class="kw">let </span>trans = now.time_zone().following(now.timestamp()).next().unwrap();
+<span class="kw">let </span>next_at = trans.timestamp().to_zoned(now.time_zone().clone());
+<span class="kw">let </span>span = now.until((Unit::Year, <span class="kw-2">&amp;</span>next_at))<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{span:#}"</span>), <span class="string">"2mo 8d 7h 35m"</span>);
+</code></pre></div><h5 id="example-show-the-5-next-time-zone-transitions"><a class="doc-anchor" href="#example-show-the-5-next-time-zone-transitions">§</a>Example: show the 5 next time zone transitions</h5>
+<p>This shows how to find the 5 following time zone transitions (from a
+particular datetime) for a particular time zone:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{tz::offset, Zoned};
+
+<span class="kw">let </span>now: Zoned = <span class="string">"2024-12-31 18:25-05[US/Eastern]"</span>.parse()<span class="question-mark">?</span>;
+<span class="kw">let </span>transitions = now
+    .time_zone()
+    .following(now.timestamp())
+    .take(<span class="number">5</span>)
+    .map(|t| (
+        t.timestamp().to_zoned(now.time_zone().clone()),
+        t.offset(),
+        t.abbreviation().to_string(),
+    ))
+    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<span class="macro">assert_eq!</span>(transitions, <span class="macro">vec!</span>[
+    (<span class="string">"2025-03-09 03:00-04[US/Eastern]"</span>.parse()<span class="question-mark">?</span>, offset(-<span class="number">4</span>), <span class="string">"EDT"</span>.to_string()),
+    (<span class="string">"2025-11-02 01:00-05[US/Eastern]"</span>.parse()<span class="question-mark">?</span>, offset(-<span class="number">5</span>), <span class="string">"EST"</span>.to_string()),
+    (<span class="string">"2026-03-08 03:00-04[US/Eastern]"</span>.parse()<span class="question-mark">?</span>, offset(-<span class="number">4</span>), <span class="string">"EDT"</span>.to_string()),
+    (<span class="string">"2026-11-01 01:00-05[US/Eastern]"</span>.parse()<span class="question-mark">?</span>, offset(-<span class="number">5</span>), <span class="string">"EST"</span>.to_string()),
+    (<span class="string">"2027-03-14 03:00-04[US/Eastern]"</span>.parse()<span class="question-mark">?</span>, offset(-<span class="number">4</span>), <span class="string">"EDT"</span>.to_string()),
+]);
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.memory_usage" class="method"><h4 class="code-header">pub fn <a href="#method.memory_usage" class="fn">memory_usage</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the heap memory usage, in bytes, of this timezone.</p>
+<p>This does <strong>not</strong> include the stack size used up by this timezone.
+To compute that, use <code>std::mem::size_of::&lt;TimeZone&gt;()</code>.</p>
+</div></details></div></details></div><h2 id="trait-implementations" class="section-header">Trait Implementations<a href="#trait-implementations" class="anchor">§</a></h2><div id="trait-implementations-list"><details class="toggle implementors-toggle" open><summary><section id="impl-Assign%3CTimeZone%3E-for-TimeZone" class="impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#122">Source</a><a href="#impl-Assign%3CTimeZone%3E-for-TimeZone" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.Assign.html" title="trait toasty::stmt::Assign">Assign</a>&lt;<a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a>&gt; for <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into_assignment" class="method trait-impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#122">Source</a><a href="#method.into_assignment" class="anchor">§</a><h4 class="code-header">fn <a href="trait.Assign.html#tymethod.into_assignment" class="fn">into_assignment</a>(self) -&gt; <a class="struct" href="struct.Assignment.html" title="struct toasty::stmt::Assignment">Assignment</a>&lt;<a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a>&gt;</h4></section></summary><div class='docblock'>Convert into an <a href="struct.Assignment.html" title="struct toasty::stmt::Assignment"><code>Assignment&lt;T&gt;</code></a> value.</div></details><details class="toggle method-toggle" open><summary><section id="method.assign" class="method trait-impl"><a class="src rightside" href="../../src/toasty/stmt/assignment.rs.html#22-27">Source</a><a href="#method.assign" class="anchor">§</a><h4 class="code-header">fn <a href="trait.Assign.html#method.assign" class="fn">assign</a>(self, assignments: &amp;mut Assignments, projection: <a class="struct" href="struct.Projection.html" title="struct toasty::stmt::Projection">Projection</a>)<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class='docblock'>Record one or more assignments into the given [<code>Assignments</code>] map at
+the specified projection.</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Clone-for-TimeZone" class="impl"><a href="#impl-Clone-for-TimeZone" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> for <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone" class="method trait-impl"><a href="#method.clone" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/clone/trait.Clone.html#tymethod.clone" class="fn">clone</a>(&amp;self) -&gt; <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h4></section></summary><div class='docblock'>Returns a duplicate of the value. <a href="https://doc.rust-lang.org/1.98.1/core/clone/trait.Clone.html#tymethod.clone">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_from" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0, const unstable">1.0.0 (const: <a href="https://github.com/rust-lang/rust/issues/142757" title="Tracking issue for const_clone">unstable</a>)</span> · <a class="src" href="https://doc.rust-lang.org/1.98.1/src/core/clone.rs.html#245-247">Source</a></span><a href="#method.clone_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/clone/trait.Clone.html#method.clone_from" class="fn">clone_from</a>(&amp;mut self, source: &amp;Self)</h4></section></summary><div class='docblock'>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/1.98.1/core/clone/trait.Clone.html#method.clone_from">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Debug-for-TimeZone" class="impl"><a href="#impl-Debug-for-TimeZone" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> for <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.98.1/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.98.1/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.98.1/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><section id="impl-Eq-for-TimeZone" class="impl"><a href="#impl-Eq-for-TimeZone" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/cmp/trait.Eq.html" title="trait core::cmp::Eq">Eq</a> for <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h3></section><details class="toggle implementors-toggle" open><summary><section id="impl-Field-for-TimeZone" class="impl"><a class="src rightside" href="../../src/toasty/schema/jiff.rs.html#128-152">Source</a><a href="#impl-Field-for-TimeZone" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="../schema/trait.Field.html" title="trait toasty::schema::Field">Field</a> for <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.ExprTarget" class="associatedtype trait-impl"><a class="src rightside" href="../../src/toasty/schema/jiff.rs.html#129">Source</a><a href="#associatedtype.ExprTarget" class="anchor">§</a><h4 class="code-header">type <a href="../schema/trait.Field.html#associatedtype.ExprTarget" class="associatedtype">ExprTarget</a> = <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h4></section></summary><div class='docblock'>The expression-level type of this field. <a href="../schema/trait.Field.html#associatedtype.ExprTarget">Read more</a></div></details><details class="toggle" open><summary><section id="associatedtype.Path" class="associatedtype trait-impl"><a class="src rightside" href="../../src/toasty/schema/jiff.rs.html#130">Source</a><a href="#associatedtype.Path" class="anchor">§</a><h4 class="code-header">type <a href="../schema/trait.Field.html#associatedtype.Path" class="associatedtype">Path</a>&lt;Origin&gt; = <a class="struct" href="struct.Path.html" title="struct toasty::stmt::Path">Path</a>&lt;Origin, <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a>&gt;</h4></section></summary><div class='docblock'>The type returned when accessing this field from a Fields struct.
+For primitives, this is Path&lt;Origin, Self&gt;.
+For embedded types, this is {Type}Fields<Origin>.</div></details><details class="toggle" open><summary><section id="associatedtype.ListPath" class="associatedtype trait-impl"><a class="src rightside" href="../../src/toasty/schema/jiff.rs.html#131">Source</a><a href="#associatedtype.ListPath" class="anchor">§</a><h4 class="code-header">type <a href="../schema/trait.Field.html#associatedtype.ListPath" class="associatedtype">ListPath</a>&lt;Origin&gt; = <a class="struct" href="struct.Path.html" title="struct toasty::stmt::Path">Path</a>&lt;Origin, <a class="struct" href="struct.List.html" title="struct toasty::stmt::List">List</a>&lt;&lt;<a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a> as <a class="trait" href="../schema/trait.Field.html" title="trait toasty::schema::Field">Field</a>&gt;::<a class="associatedtype" href="../schema/trait.Field.html#associatedtype.ExprTarget" title="type toasty::schema::Field::ExprTarget">ExprTarget</a>&gt;&gt;</h4></section></summary><div class='docblock'>The type returned when accessing this field from a list Fields struct.
+For primitives, this is Path&lt;Origin, List<a href="Self::ExprTarget">Self::ExprTarget</a>&gt;.
+For embedded types, this is {Type}ListFields<Origin>.</div></details><details class="toggle" open><summary><section id="associatedtype.Update" class="associatedtype trait-impl"><a class="src rightside" href="../../src/toasty/schema/jiff.rs.html#132">Source</a><a href="#associatedtype.Update" class="anchor">§</a><h4 class="code-header">type <a href="../schema/trait.Field.html#associatedtype.Update" class="associatedtype">Update</a>&lt;'a&gt; = <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.unit.html">()</a></h4></section></summary><div class='docblock'>The type of the update builder for this field.
+For embedded types, this is {Type}Update&lt;’a&gt;.
+For primitives, this will be {Type}Update&lt;’a&gt; once implemented.</div></details><details class="toggle" open><summary><section id="associatedtype.Inner" class="associatedtype trait-impl"><a class="src rightside" href="../../src/toasty/schema/jiff.rs.html#133">Source</a><a href="#associatedtype.Inner" class="anchor">§</a><h4 class="code-header">type <a href="../schema/trait.Field.html#associatedtype.Inner" class="associatedtype">Inner</a> = <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h4></section></summary><div class='docblock'>The unwrapped type used for foreign key filter expressions.
+Primitives map to themselves. Wrappers like <code>Option&lt;T&gt;</code>, <code>Box&lt;T&gt;</code>,
+<code>Arc&lt;T&gt;</code>, and <code>Rc&lt;T&gt;</code> map to <code>T::Inner</code>.</div></details><details class="toggle method-toggle" open><summary><section id="method.new_path" class="method trait-impl"><a class="src rightside" href="../../src/toasty/schema/jiff.rs.html#135-137">Source</a><a href="#method.new_path" class="anchor">§</a><h4 class="code-header">fn <a href="../schema/trait.Field.html#tymethod.new_path" class="fn">new_path</a>&lt;Origin&gt;(path: <a class="struct" href="struct.Path.html" title="struct toasty::stmt::Path">Path</a>&lt;Origin, Self&gt;) -&gt; Self::<a class="associatedtype" href="../schema/trait.Field.html#associatedtype.Path" title="type toasty::schema::Field::Path">Path</a>&lt;Origin&gt;</h4></section></summary><div class='docblock'>Build a field path from a raw path of the field’s
+<a href="../schema/trait.Field.html#associatedtype.ExprTarget" title="associated type toasty::schema::Field::ExprTarget"><code>Self::ExprTarget</code></a>. <a href="../schema/trait.Field.html#tymethod.new_path">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.new_list_path" class="method trait-impl"><a class="src rightside" href="../../src/toasty/schema/jiff.rs.html#139-141">Source</a><a href="#method.new_list_path" class="anchor">§</a><h4 class="code-header">fn <a href="../schema/trait.Field.html#tymethod.new_list_path" class="fn">new_list_path</a>&lt;Origin&gt;(
+    path: <a class="struct" href="struct.Path.html" title="struct toasty::stmt::Path">Path</a>&lt;Origin, <a class="struct" href="struct.List.html" title="struct toasty::stmt::List">List</a>&lt;Self::<a class="associatedtype" href="../schema/trait.Field.html#associatedtype.ExprTarget" title="type toasty::schema::Field::ExprTarget">ExprTarget</a>&gt;&gt;,
+) -&gt; Self::<a class="associatedtype" href="../schema/trait.Field.html#associatedtype.ListPath" title="type toasty::schema::Field::ListPath">ListPath</a>&lt;Origin&gt;</h4></section></summary><div class='docblock'>Build a list field path from a raw path.
+For primitives, returns the path as-is.
+For embedded types, wraps the path in a ListFields struct.</div></details><details class="toggle method-toggle" open><summary><section id="method.new_update" class="method trait-impl"><a class="src rightside" href="../../src/toasty/schema/jiff.rs.html#143-147">Source</a><a href="#method.new_update" class="anchor">§</a><h4 class="code-header">fn <a href="../schema/trait.Field.html#tymethod.new_update" class="fn">new_update</a>&lt;'a&gt;(
+    _assignments: &amp;'a mut Assignments,
+    _projection: <a class="struct" href="struct.Projection.html" title="struct toasty::stmt::Projection">Projection</a>,
+) -&gt; Self::<a class="associatedtype" href="../schema/trait.Field.html#associatedtype.Update" title="type toasty::schema::Field::Update">Update</a>&lt;'a&gt;</h4></section></summary><div class='docblock'>Build an update builder from assignments and a projection.
+For primitives, this returns <code>()</code> (no builder).
+For embedded types, this is overridden to construct the {Type}Update builder.</div></details><details class="toggle method-toggle" open><summary><section id="method.key_constraint" class="method trait-impl"><a class="src rightside" href="../../src/toasty/schema/jiff.rs.html#149-151">Source</a><a href="#method.key_constraint" class="anchor">§</a><h4 class="code-header">fn <a href="../schema/trait.Field.html#tymethod.key_constraint" class="fn">key_constraint</a>&lt;Origin&gt;(
+    &amp;self,
+    target: <a class="struct" href="struct.Path.html" title="struct toasty::stmt::Path">Path</a>&lt;Origin, Self::<a class="associatedtype" href="../schema/trait.Field.html#associatedtype.Inner" title="type toasty::schema::Field::Inner">Inner</a>&gt;,
+) -&gt; <a class="struct" href="struct.Expr.html" title="struct toasty::stmt::Expr">Expr</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.bool.html">bool</a>&gt;</h4></section></summary><div class='docblock'>Build a boolean filter expression comparing this field value against
+a target path. Used by generated belongs-to accessors to build FK
+lookups. <a href="../schema/trait.Field.html#tymethod.key_constraint">Read more</a></div></details><details class="toggle" open><summary><section id="associatedconstant.NULLABLE" class="associatedconstant trait-impl"><a class="src rightside" href="../../src/toasty/schema/field.rs.html#69">Source</a><a href="#associatedconstant.NULLABLE" class="anchor">§</a><h4 class="code-header">const <a href="../schema/trait.Field.html#associatedconstant.NULLABLE" class="constant">NULLABLE</a>: <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.bool.html">bool</a> = false</h4></section></summary><div class='docblock'>Whether or not the type is nullable</div></details><details class="toggle" open><summary><section id="associatedconstant.DEFERRED" class="associatedconstant trait-impl"><a class="src rightside" href="../../src/toasty/schema/field.rs.html#72">Source</a><a href="#associatedconstant.DEFERRED" class="anchor">§</a><h4 class="code-header">const <a href="../schema/trait.Field.html#associatedconstant.DEFERRED" class="constant">DEFERRED</a>: <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.bool.html">bool</a> = false</h4></section></summary><div class='docblock'>Whether this field is omitted from default loads.</div></details><details class="toggle method-toggle" open><summary><section id="method.field_ty" class="method trait-impl"><a class="src rightside" href="../../src/toasty/schema/field.rs.html#103-111">Source</a><a href="#method.field_ty" class="anchor">§</a><h4 class="code-header">fn <a href="../schema/trait.Field.html#method.field_ty" class="fn">field_ty</a>(storage_ty: <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="enum" href="../schema/db/enum.Type.html" title="enum toasty::schema::db::Type">Type</a>&gt;) -&gt; <a class="enum" href="../schema/app/enum.FieldTy.html" title="enum toasty::schema::app::FieldTy">FieldTy</a></h4></section></summary><div class='docblock'>Returns the app-level field type for this primitive.
+Default implementation returns a Primitive field type.
+Embedded types override this to return Embedded field type.</div></details><details class="toggle method-toggle" open><summary><section id="method.register" class="method trait-impl"><a class="src rightside" href="../../src/toasty/schema/field.rs.html#128">Source</a><a href="#method.register" class="anchor">§</a><h4 class="code-header">fn <a href="../schema/trait.Field.html#method.register" class="fn">register</a>(_model_set: &amp;mut <a class="struct" href="../struct.ModelSet.html" title="struct toasty::ModelSet">ModelSet</a>)</h4></section></summary><div class='docblock'>Register any models referenced by this field type into the given
+<a href="../struct.ModelSet.html" title="struct toasty::ModelSet"><code>ModelSet</code></a>. <a href="../schema/trait.Field.html#method.register">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-IntoExpr%3CTimeZone%3E-for-TimeZone" class="impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#109-119">Source</a><a href="#impl-IntoExpr%3CTimeZone%3E-for-TimeZone" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="trait.IntoExpr.html" title="trait toasty::stmt::IntoExpr">IntoExpr</a>&lt;<a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a>&gt; for <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h3><span class="item-info"><div class="stab portability">Available on <strong>crate feature <code>jiff</code></strong> only.</div></span><div class="docblock"><p>A time zone binds as its text form (see <code>schema::jiff</code>). Unlike the other
+conversions here this one can fail, and <code>into_expr</code> has no error channel —
+carrying the zone to a fallible cast instead would mean a <code>Value::TimeZone</code>
+variant and the core plumbing behind it.</p>
+</div></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into_expr" class="method trait-impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#110-112">Source</a><a href="#method.into_expr" class="anchor">§</a><h4 class="code-header">fn <a href="trait.IntoExpr.html#tymethod.into_expr" class="fn">into_expr</a>(self) -&gt; <a class="struct" href="struct.Expr.html" title="struct toasty::stmt::Expr">Expr</a>&lt;<a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a>&gt;</h4></section></summary><div class='docblock'>Consume <code>self</code> and produce an <a href="struct.Expr.html" title="struct toasty::stmt::Expr"><code>Expr&lt;T&gt;</code></a>. <a href="trait.IntoExpr.html#tymethod.into_expr">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.by_ref" class="method trait-impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#114-118">Source</a><a href="#method.by_ref" class="anchor">§</a><h4 class="code-header">fn <a href="trait.IntoExpr.html#tymethod.by_ref" class="fn">by_ref</a>(&amp;self) -&gt; <a class="struct" href="struct.Expr.html" title="struct toasty::stmt::Expr">Expr</a>&lt;<a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a>&gt;</h4></section></summary><div class='docblock'>Produce an <a href="struct.Expr.html" title="struct toasty::stmt::Expr"><code>Expr&lt;T&gt;</code></a> from a reference without consuming <code>self</code>. <a href="trait.IntoExpr.html#tymethod.by_ref">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Load-for-TimeZone" class="impl"><a class="src rightside" href="../../src/toasty/schema/jiff.rs.html#105-126">Source</a><a href="#impl-Load-for-TimeZone" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="../schema/trait.Load.html" title="trait toasty::schema::Load">Load</a> for <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Output" class="associatedtype trait-impl"><a class="src rightside" href="../../src/toasty/schema/jiff.rs.html#106">Source</a><a href="#associatedtype.Output" class="anchor">§</a><h4 class="code-header">type <a href="../schema/trait.Load.html#associatedtype.Output" class="associatedtype">Output</a> = <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h4></section></summary><div class='docblock'>The concrete type produced by <a href="../schema/trait.Load.html#tymethod.load" title="associated function toasty::schema::Load::load"><code>load</code></a>. <a href="../schema/trait.Load.html#associatedtype.Output">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.ty" class="method trait-impl"><a class="src rightside" href="../../src/toasty/schema/jiff.rs.html#108-110">Source</a><a href="#method.ty" class="anchor">§</a><h4 class="code-header">fn <a href="../schema/trait.Load.html#tymethod.ty" class="fn">ty</a>() -&gt; <a class="enum" href="enum.Type.html" title="enum toasty::stmt::Type">Type</a></h4></section></summary><div class='docblock'>Returns the <a href="enum.Type.html" title="enum toasty::stmt::Type"><code>stmt::Type</code></a> that describes values of this type.</div></details><details class="toggle method-toggle" open><summary><section id="method.load" class="method trait-impl"><a class="src rightside" href="../../src/toasty/schema/jiff.rs.html#112-120">Source</a><a href="#method.load" class="anchor">§</a><h4 class="code-header">fn <a href="../schema/trait.Load.html#tymethod.load" class="fn">load</a>(value: <a class="enum" href="enum.Value.html" title="enum toasty::stmt::Value">Value</a>) -&gt; <a class="type" href="../type.Result.html" title="type toasty::Result">Result</a>&lt;Self&gt;</h4></section></summary><div class='docblock'>Deserialize a database <a href="enum.Value.html" title="enum toasty::stmt::Value"><code>Value</code></a> into <code>Self::Output</code>. <a href="../schema/trait.Load.html#tymethod.load">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.reload" class="method trait-impl"><a class="src rightside" href="../../src/toasty/schema/jiff.rs.html#122-125">Source</a><a href="#method.reload" class="anchor">§</a><h4 class="code-header">fn <a href="../schema/trait.Load.html#method.reload" class="fn">reload</a>(target: &amp;mut Self, value: <a class="enum" href="enum.Value.html" title="enum toasty::stmt::Value">Value</a>) -&gt; <a class="type" href="../type.Result.html" title="type toasty::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.unit.html">()</a>&gt;</h4></section></summary><div class='docblock'>Reload the value in-place from a value returned by the database. <a href="../schema/trait.Load.html#method.reload">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.ty_relation" class="method trait-impl"><a class="src rightside" href="../../src/toasty/schema/load.rs.html#26-28">Source</a><a href="#method.ty_relation" class="anchor">§</a><h4 class="code-header">fn <a href="../schema/trait.Load.html#method.ty_relation" class="fn">ty_relation</a>() -&gt; <a class="enum" href="enum.Type.html" title="enum toasty::stmt::Type">Type</a></h4></section></summary><div class='docblock'>Returns the <a href="enum.Type.html" title="enum toasty::stmt::Type"><code>stmt::Type</code></a> used when this type appears as a relation
+target. The default delegates to <a href="../schema/trait.Load.html#tymethod.ty" title="associated function toasty::schema::Load::ty"><code>ty()</code></a>.</div></details><details class="toggle method-toggle" open><summary><section id="method.load_relation" class="method trait-impl"><a class="src rightside" href="../../src/toasty/schema/load.rs.html#39-41">Source</a><a href="#method.load_relation" class="anchor">§</a><h4 class="code-header">fn <a href="../schema/trait.Load.html#method.load_relation" class="fn">load_relation</a>(value: <a class="enum" href="enum.Value.html" title="enum toasty::stmt::Value">Value</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Self::<a class="associatedtype" href="../schema/trait.Load.html#associatedtype.Output" title="type toasty::schema::Load::Output">Output</a>, <a class="struct" href="../struct.Error.html" title="struct toasty::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Deserialize a value that was loaded as a relation target. <a href="../schema/trait.Load.html#method.load_relation">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-PartialEq-for-TimeZone" class="impl"><a href="#impl-PartialEq-for-TimeZone" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/cmp/trait.PartialEq.html" title="trait core::cmp::PartialEq">PartialEq</a> for <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.eq" class="method trait-impl"><a href="#method.eq" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/cmp/trait.PartialEq.html#tymethod.eq" class="fn">eq</a>(&amp;self, other: &amp;<a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.bool.html">bool</a></h4></section></summary><div class='docblock'>Tests for <code>self</code> and <code>other</code> values to be equal, and is used by <code>==</code>.</div></details><details class="toggle method-toggle" open><summary><section id="method.ne" class="method trait-impl"><span class="rightside"><span class="since" title="Stable since Rust version 1.0.0, const unstable">1.0.0 (const: <a href="https://github.com/rust-lang/rust/issues/143800" title="Tracking issue for const_cmp">unstable</a>)</span> · <a class="src" href="https://doc.rust-lang.org/1.98.1/src/core/cmp.rs.html#263">Source</a></span><a href="#method.ne" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/cmp/trait.PartialEq.html#method.ne" class="fn">ne</a>(&amp;self, other: <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.reference.html">&amp;Rhs</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.bool.html">bool</a></h4></section></summary><div class='docblock'>Tests for <code>!=</code>. The default implementation is almost always sufficient,
+and should not be overridden without very good reason.</div></details></div></details><section id="impl-Scalar-for-TimeZone" class="impl"><a class="src rightside" href="../../src/toasty/schema/field.rs.html#392-399">Source</a><a href="#impl-Scalar-for-TimeZone" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="../schema/trait.Scalar.html" title="trait toasty::schema::Scalar">Scalar</a> for <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h3></section><section id="impl-StructuralPartialEq-for-TimeZone" class="impl"><a href="#impl-StructuralPartialEq-for-TimeZone" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/marker/trait.StructuralPartialEq.html" title="trait core::marker::StructuralPartialEq">StructuralPartialEq</a> for <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h3></section></div><h2 id="synthetic-implementations" class="section-header">Auto Trait Implementations<a href="#synthetic-implementations" class="anchor">§</a></h2><div id="synthetic-implementations-list"><section id="impl-Freeze-for-TimeZone" class="impl"><a href="#impl-Freeze-for-TimeZone" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/marker/trait.Freeze.html" title="trait core::marker::Freeze">Freeze</a> for <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h3></section><section id="impl-RefUnwindSafe-for-TimeZone" class="impl"><a href="#impl-RefUnwindSafe-for-TimeZone" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/panic/unwind_safe/trait.RefUnwindSafe.html" title="trait core::panic::unwind_safe::RefUnwindSafe">RefUnwindSafe</a> for <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h3></section><section id="impl-Send-for-TimeZone" class="impl"><a href="#impl-Send-for-TimeZone" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> for <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h3></section><section id="impl-Sync-for-TimeZone" class="impl"><a href="#impl-Sync-for-TimeZone" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a> for <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h3></section><section id="impl-Unpin-for-TimeZone" class="impl"><a href="#impl-Unpin-for-TimeZone" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/marker/trait.Unpin.html" title="trait core::marker::Unpin">Unpin</a> for <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h3></section><section id="impl-UnsafeUnpin-for-TimeZone" class="impl"><a href="#impl-UnsafeUnpin-for-TimeZone" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/marker/trait.UnsafeUnpin.html" title="trait core::marker::UnsafeUnpin">UnsafeUnpin</a> for <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h3></section><section id="impl-UnwindSafe-for-TimeZone" class="impl"><a href="#impl-UnwindSafe-for-TimeZone" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/panic/unwind_safe/trait.UnwindSafe.html" title="trait core::panic::unwind_safe::UnwindSafe">UnwindSafe</a> for <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a></h3></section></div><h2 id="blanket-implementations" class="section-header">Blanket Implementations<a href="#blanket-implementations" class="anchor">§</a></h2><div id="blanket-implementations-list"><details class="toggle implementors-toggle"><summary><section id="impl-Any-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/core/any.rs.html#141">Source</a><a href="#impl-Any-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/any/trait.Any.html" title="trait core::any::Any">Any</a> for T<div class="where">where
+    T: 'static + ?<a class="trait" href="https://doc.rust-lang.org/1.98.1/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.type_id" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/core/any.rs.html#142">Source</a><a href="#method.type_id" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/any/trait.Any.html#tymethod.type_id" class="fn">type_id</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.98.1/core/any/struct.TypeId.html" title="struct core::any::TypeId">TypeId</a></h4></section></summary><div class='docblock'>Gets the <code>TypeId</code> of <code>self</code>. <a href="https://doc.rust-lang.org/1.98.1/core/any/trait.Any.html#tymethod.type_id">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Assign%3CArc%3CT%3E%3E-for-T" class="impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#382">Source</a><a href="#impl-Assign%3CArc%3CT%3E%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.Assign.html" title="trait toasty::stmt::Assign">Assign</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;T&gt;&gt; for T<div class="where">where
+    T: <a class="trait" href="trait.IntoExpr.html" title="trait toasty::stmt::IntoExpr">IntoExpr</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into_assignment-1" class="method trait-impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#382">Source</a><a href="#method.into_assignment-1" class="anchor">§</a><h4 class="code-header">fn <a href="trait.Assign.html#tymethod.into_assignment" class="fn">into_assignment</a>(self) -&gt; <a class="struct" href="struct.Assignment.html" title="struct toasty::stmt::Assignment">Assignment</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;T&gt;&gt;</h4></section></summary><div class='docblock'>Convert into an <a href="struct.Assignment.html" title="struct toasty::stmt::Assignment"><code>Assignment&lt;T&gt;</code></a> value.</div></details><details class="toggle method-toggle" open><summary><section id="method.assign-1" class="method trait-impl"><a class="src rightside" href="../../src/toasty/stmt/assignment.rs.html#22-27">Source</a><a href="#method.assign-1" class="anchor">§</a><h4 class="code-header">fn <a href="trait.Assign.html#method.assign" class="fn">assign</a>(self, assignments: &amp;mut Assignments, projection: <a class="struct" href="struct.Projection.html" title="struct toasty::stmt::Projection">Projection</a>)<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class='docblock'>Record one or more assignments into the given [<code>Assignments</code>] map at
+the specified projection.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Assign%3CBox%3CT%3E%3E-for-T" class="impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#383">Source</a><a href="#impl-Assign%3CBox%3CT%3E%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.Assign.html" title="trait toasty::stmt::Assign">Assign</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;T&gt;&gt; for T<div class="where">where
+    T: <a class="trait" href="trait.IntoExpr.html" title="trait toasty::stmt::IntoExpr">IntoExpr</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into_assignment-2" class="method trait-impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#383">Source</a><a href="#method.into_assignment-2" class="anchor">§</a><h4 class="code-header">fn <a href="trait.Assign.html#tymethod.into_assignment" class="fn">into_assignment</a>(self) -&gt; <a class="struct" href="struct.Assignment.html" title="struct toasty::stmt::Assignment">Assignment</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;T&gt;&gt;</h4></section></summary><div class='docblock'>Convert into an <a href="struct.Assignment.html" title="struct toasty::stmt::Assignment"><code>Assignment&lt;T&gt;</code></a> value.</div></details><details class="toggle method-toggle" open><summary><section id="method.assign-2" class="method trait-impl"><a class="src rightside" href="../../src/toasty/stmt/assignment.rs.html#22-27">Source</a><a href="#method.assign-2" class="anchor">§</a><h4 class="code-header">fn <a href="trait.Assign.html#method.assign" class="fn">assign</a>(self, assignments: &amp;mut Assignments, projection: <a class="struct" href="struct.Projection.html" title="struct toasty::stmt::Projection">Projection</a>)<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class='docblock'>Record one or more assignments into the given [<code>Assignments</code>] map at
+the specified projection.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Assign%3COption%3CT%3E%3E-for-T" class="impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#203">Source</a><a href="#impl-Assign%3COption%3CT%3E%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.Assign.html" title="trait toasty::stmt::Assign">Assign</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.98.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;T&gt;&gt; for T<div class="where">where
+    T: <a class="trait" href="trait.IntoExpr.html" title="trait toasty::stmt::IntoExpr">IntoExpr</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into_assignment-3" class="method trait-impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#203">Source</a><a href="#method.into_assignment-3" class="anchor">§</a><h4 class="code-header">fn <a href="trait.Assign.html#tymethod.into_assignment" class="fn">into_assignment</a>(self) -&gt; <a class="struct" href="struct.Assignment.html" title="struct toasty::stmt::Assignment">Assignment</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.98.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;T&gt;&gt;</h4></section></summary><div class='docblock'>Convert into an <a href="struct.Assignment.html" title="struct toasty::stmt::Assignment"><code>Assignment&lt;T&gt;</code></a> value.</div></details><details class="toggle method-toggle" open><summary><section id="method.assign-3" class="method trait-impl"><a class="src rightside" href="../../src/toasty/stmt/assignment.rs.html#22-27">Source</a><a href="#method.assign-3" class="anchor">§</a><h4 class="code-header">fn <a href="trait.Assign.html#method.assign" class="fn">assign</a>(self, assignments: &amp;mut Assignments, projection: <a class="struct" href="struct.Projection.html" title="struct toasty::stmt::Projection">Projection</a>)<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class='docblock'>Record one or more assignments into the given [<code>Assignments</code>] map at
+the specified projection.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Assign%3CRc%3CT%3E%3E-for-T" class="impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#384">Source</a><a href="#impl-Assign%3CRc%3CT%3E%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.Assign.html" title="trait toasty::stmt::Assign">Assign</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/rc/struct.Rc.html" title="struct alloc::rc::Rc">Rc</a>&lt;T&gt;&gt; for T<div class="where">where
+    T: <a class="trait" href="trait.IntoExpr.html" title="trait toasty::stmt::IntoExpr">IntoExpr</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into_assignment-4" class="method trait-impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#384">Source</a><a href="#method.into_assignment-4" class="anchor">§</a><h4 class="code-header">fn <a href="trait.Assign.html#tymethod.into_assignment" class="fn">into_assignment</a>(self) -&gt; <a class="struct" href="struct.Assignment.html" title="struct toasty::stmt::Assignment">Assignment</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/rc/struct.Rc.html" title="struct alloc::rc::Rc">Rc</a>&lt;T&gt;&gt;</h4></section></summary><div class='docblock'>Convert into an <a href="struct.Assignment.html" title="struct toasty::stmt::Assignment"><code>Assignment&lt;T&gt;</code></a> value.</div></details><details class="toggle method-toggle" open><summary><section id="method.assign-4" class="method trait-impl"><a class="src rightside" href="../../src/toasty/stmt/assignment.rs.html#22-27">Source</a><a href="#method.assign-4" class="anchor">§</a><h4 class="code-header">fn <a href="trait.Assign.html#method.assign" class="fn">assign</a>(self, assignments: &amp;mut Assignments, projection: <a class="struct" href="struct.Projection.html" title="struct toasty::stmt::Projection">Projection</a>)<div class="where">where
+    Self: <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class='docblock'>Record one or more assignments into the given [<code>Assignments</code>] map at
+the specified projection.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Borrow%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/core/borrow.rs.html#212">Source</a><a href="#impl-Borrow%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.98.1/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/core/borrow.rs.html#214">Source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/borrow/trait.Borrow.html#tymethod.borrow" class="fn">borrow</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.reference.html">&amp;T</a></h4></section></summary><div class='docblock'>Immutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.98.1/core/borrow/trait.Borrow.html#tymethod.borrow">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-BorrowMut%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/core/borrow.rs.html#221">Source</a><a href="#impl-BorrowMut%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/borrow/trait.BorrowMut.html" title="trait core::borrow::BorrowMut">BorrowMut</a>&lt;T&gt; for T<div class="where">where
+    T: ?<a class="trait" href="https://doc.rust-lang.org/1.98.1/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.borrow_mut" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/core/borrow.rs.html#222">Source</a><a href="#method.borrow_mut" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut" class="fn">borrow_mut</a>(&amp;mut self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.reference.html">&amp;mut T</a></h4></section></summary><div class='docblock'>Mutably borrows from an owned value. <a href="https://doc.rust-lang.org/1.98.1/core/borrow/trait.BorrowMut.html#tymethod.borrow_mut">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-CloneToUninit-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/core/clone.rs.html#648">Source</a><a href="#impl-CloneToUninit-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/clone/trait.CloneToUninit.html" title="trait core::clone::CloneToUninit">CloneToUninit</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.clone_to_uninit" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/core/clone.rs.html#650">Source</a><a href="#method.clone_to_uninit" class="anchor">§</a><h4 class="code-header">unsafe fn <a href="https://doc.rust-lang.org/1.98.1/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit" class="fn">clone_to_uninit</a>(&amp;self, dest: <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.pointer.html">*mut </a><a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.u8.html">u8</a>)</h4></section></summary><span class="item-info"><div class="stab unstable"><span class="emoji">🔬</span><span>This is a nightly-only experimental API. (<code>clone_to_uninit</code>)</span></div></span><div class='docblock'>Performs copy-assignment from <code>self</code> to <code>dest</code>. <a href="https://doc.rust-lang.org/1.98.1/core/clone/trait.CloneToUninit.html#tymethod.clone_to_uninit">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Equivalent%3CK%3E-for-Q" class="impl"><a href="#impl-Equivalent%3CK%3E-for-Q" class="anchor">§</a><h3 class="code-header">impl&lt;Q, K&gt; Equivalent&lt;K&gt; for Q<div class="where">where
+    Q: <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/cmp/trait.Eq.html" title="trait core::cmp::Eq">Eq</a> + ?<a class="trait" href="https://doc.rust-lang.org/1.98.1/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,
+    K: <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/borrow/trait.Borrow.html" title="trait core::borrow::Borrow">Borrow</a>&lt;Q&gt; + ?<a class="trait" href="https://doc.rust-lang.org/1.98.1/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.equivalent" class="method trait-impl"><a href="#method.equivalent" class="anchor">§</a><h4 class="code-header">fn <a class="fn">equivalent</a>(&amp;self, key: <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.reference.html">&amp;K</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.bool.html">bool</a></h4></section></summary><div class='docblock'>Compare self to <code>key</code> and return <code>true</code> if they are equal.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-From%3CT%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/core/convert/mod.rs.html#787">Source</a><a href="#impl-From%3CT%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/core/convert/mod.rs.html#790">Source</a><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(t: T) -&gt; T</h4></section></summary><div class="docblock"><p>Returns the argument unchanged.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Instrument-for-T" class="impl"><a href="#impl-Instrument-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; Instrument for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.instrument" class="method trait-impl"><a href="#method.instrument" class="anchor">§</a><h4 class="code-header">fn <a class="fn">instrument</a>(self, span: Span) -&gt; Instrumented&lt;Self&gt;</h4></section></summary><div class='docblock'>Instruments this type with the provided [<code>Span</code>], returning an
+<code>Instrumented</code> wrapper. <a>Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.in_current_span" class="method trait-impl"><a href="#method.in_current_span" class="anchor">§</a><h4 class="code-header">fn <a class="fn">in_current_span</a>(self) -&gt; Instrumented&lt;Self&gt;</h4></section></summary><div class='docblock'>Instruments this type with the <a href="super::Span::current()">current</a> <a href="crate::Span"><code>Span</code></a>, returning an
+<code>Instrumented</code> wrapper. <a>Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-Into%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/core/convert/mod.rs.html#769-771">Source</a><a href="#impl-Into%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/core/convert/mod.rs.html#779">Source</a><a href="#method.into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/convert/trait.Into.html#tymethod.into" class="fn">into</a>(self) -&gt; U</h4></section></summary><div class="docblock"><p>Calls <code>U::from(self)</code>.</p>
+<p>That is, this conversion is whatever the implementation of
+<code><a href="https://doc.rust-lang.org/1.98.1/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;T&gt; for U</code> chooses to do.</p>
+</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-IntoExpr%3CArc%3CT%3E%3E-for-T" class="impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#381">Source</a><a href="#impl-IntoExpr%3CArc%3CT%3E%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.IntoExpr.html" title="trait toasty::stmt::IntoExpr">IntoExpr</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;T&gt;&gt; for T<div class="where">where
+    T: <a class="trait" href="trait.IntoExpr.html" title="trait toasty::stmt::IntoExpr">IntoExpr</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into_expr-1" class="method trait-impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#381">Source</a><a href="#method.into_expr-1" class="anchor">§</a><h4 class="code-header">fn <a href="trait.IntoExpr.html#tymethod.into_expr" class="fn">into_expr</a>(self) -&gt; <a class="struct" href="struct.Expr.html" title="struct toasty::stmt::Expr">Expr</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;T&gt;&gt;</h4></section></summary><div class='docblock'>Consume <code>self</code> and produce an <a href="struct.Expr.html" title="struct toasty::stmt::Expr"><code>Expr&lt;T&gt;</code></a>. <a href="trait.IntoExpr.html#tymethod.into_expr">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.by_ref-1" class="method trait-impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#381">Source</a><a href="#method.by_ref-1" class="anchor">§</a><h4 class="code-header">fn <a href="trait.IntoExpr.html#tymethod.by_ref" class="fn">by_ref</a>(&amp;self) -&gt; <a class="struct" href="struct.Expr.html" title="struct toasty::stmt::Expr">Expr</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/sync/struct.Arc.html" title="struct alloc::sync::Arc">Arc</a>&lt;T&gt;&gt;</h4></section></summary><div class='docblock'>Produce an <a href="struct.Expr.html" title="struct toasty::stmt::Expr"><code>Expr&lt;T&gt;</code></a> from a reference without consuming <code>self</code>. <a href="trait.IntoExpr.html#tymethod.by_ref">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-IntoExpr%3CBox%3CT%3E%3E-for-T" class="impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#381">Source</a><a href="#impl-IntoExpr%3CBox%3CT%3E%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.IntoExpr.html" title="trait toasty::stmt::IntoExpr">IntoExpr</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;T&gt;&gt; for T<div class="where">where
+    T: <a class="trait" href="trait.IntoExpr.html" title="trait toasty::stmt::IntoExpr">IntoExpr</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into_expr-2" class="method trait-impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#381">Source</a><a href="#method.into_expr-2" class="anchor">§</a><h4 class="code-header">fn <a href="trait.IntoExpr.html#tymethod.into_expr" class="fn">into_expr</a>(self) -&gt; <a class="struct" href="struct.Expr.html" title="struct toasty::stmt::Expr">Expr</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;T&gt;&gt;</h4></section></summary><div class='docblock'>Consume <code>self</code> and produce an <a href="struct.Expr.html" title="struct toasty::stmt::Expr"><code>Expr&lt;T&gt;</code></a>. <a href="trait.IntoExpr.html#tymethod.into_expr">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.by_ref-2" class="method trait-impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#381">Source</a><a href="#method.by_ref-2" class="anchor">§</a><h4 class="code-header">fn <a href="trait.IntoExpr.html#tymethod.by_ref" class="fn">by_ref</a>(&amp;self) -&gt; <a class="struct" href="struct.Expr.html" title="struct toasty::stmt::Expr">Expr</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;T&gt;&gt;</h4></section></summary><div class='docblock'>Produce an <a href="struct.Expr.html" title="struct toasty::stmt::Expr"><code>Expr&lt;T&gt;</code></a> from a reference without consuming <code>self</code>. <a href="trait.IntoExpr.html#tymethod.by_ref">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-IntoExpr%3COption%3CT%3E%3E-for-T" class="impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#194-202">Source</a><a href="#impl-IntoExpr%3COption%3CT%3E%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.IntoExpr.html" title="trait toasty::stmt::IntoExpr">IntoExpr</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.98.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;T&gt;&gt; for T<div class="where">where
+    T: <a class="trait" href="trait.IntoExpr.html" title="trait toasty::stmt::IntoExpr">IntoExpr</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into_expr-3" class="method trait-impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#195-197">Source</a><a href="#method.into_expr-3" class="anchor">§</a><h4 class="code-header">fn <a href="trait.IntoExpr.html#tymethod.into_expr" class="fn">into_expr</a>(self) -&gt; <a class="struct" href="struct.Expr.html" title="struct toasty::stmt::Expr">Expr</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.98.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;T&gt;&gt;</h4></section></summary><div class='docblock'>Consume <code>self</code> and produce an <a href="struct.Expr.html" title="struct toasty::stmt::Expr"><code>Expr&lt;T&gt;</code></a>. <a href="trait.IntoExpr.html#tymethod.into_expr">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.by_ref-3" class="method trait-impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#199-201">Source</a><a href="#method.by_ref-3" class="anchor">§</a><h4 class="code-header">fn <a href="trait.IntoExpr.html#tymethod.by_ref" class="fn">by_ref</a>(&amp;self) -&gt; <a class="struct" href="struct.Expr.html" title="struct toasty::stmt::Expr">Expr</a>&lt;<a class="enum" href="https://doc.rust-lang.org/1.98.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;T&gt;&gt;</h4></section></summary><div class='docblock'>Produce an <a href="struct.Expr.html" title="struct toasty::stmt::Expr"><code>Expr&lt;T&gt;</code></a> from a reference without consuming <code>self</code>. <a href="trait.IntoExpr.html#tymethod.by_ref">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-IntoExpr%3CRc%3CT%3E%3E-for-T" class="impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#381">Source</a><a href="#impl-IntoExpr%3CRc%3CT%3E%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="trait.IntoExpr.html" title="trait toasty::stmt::IntoExpr">IntoExpr</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/rc/struct.Rc.html" title="struct alloc::rc::Rc">Rc</a>&lt;T&gt;&gt; for T<div class="where">where
+    T: <a class="trait" href="trait.IntoExpr.html" title="trait toasty::stmt::IntoExpr">IntoExpr</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.into_expr-4" class="method trait-impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#381">Source</a><a href="#method.into_expr-4" class="anchor">§</a><h4 class="code-header">fn <a href="trait.IntoExpr.html#tymethod.into_expr" class="fn">into_expr</a>(self) -&gt; <a class="struct" href="struct.Expr.html" title="struct toasty::stmt::Expr">Expr</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/rc/struct.Rc.html" title="struct alloc::rc::Rc">Rc</a>&lt;T&gt;&gt;</h4></section></summary><div class='docblock'>Consume <code>self</code> and produce an <a href="struct.Expr.html" title="struct toasty::stmt::Expr"><code>Expr&lt;T&gt;</code></a>. <a href="trait.IntoExpr.html#tymethod.into_expr">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.by_ref-4" class="method trait-impl"><a class="src rightside" href="../../src/toasty/stmt/into_expr.rs.html#381">Source</a><a href="#method.by_ref-4" class="anchor">§</a><h4 class="code-header">fn <a href="trait.IntoExpr.html#tymethod.by_ref" class="fn">by_ref</a>(&amp;self) -&gt; <a class="struct" href="struct.Expr.html" title="struct toasty::stmt::Expr">Expr</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/rc/struct.Rc.html" title="struct alloc::rc::Rc">Rc</a>&lt;T&gt;&gt;</h4></section></summary><div class='docblock'>Produce an <a href="struct.Expr.html" title="struct toasty::stmt::Expr"><code>Expr&lt;T&gt;</code></a> from a reference without consuming <code>self</code>. <a href="trait.IntoExpr.html#tymethod.by_ref">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-ToOwned-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/alloc/borrow.rs.html#72-74">Source</a><a href="#impl-ToOwned-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; <a class="trait" href="https://doc.rust-lang.org/1.98.1/alloc/borrow/trait.ToOwned.html" title="trait alloc::borrow::ToOwned">ToOwned</a> for T<div class="where">where
+    T: <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a>,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Owned" class="associatedtype trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/alloc/borrow.rs.html#76">Source</a><a href="#associatedtype.Owned" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.98.1/alloc/borrow/trait.ToOwned.html#associatedtype.Owned" class="associatedtype">Owned</a> = T</h4></section></summary><div class='docblock'>The resulting type after obtaining ownership.</div></details><details class="toggle method-toggle" open><summary><section id="method.to_owned" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/alloc/borrow.rs.html#77">Source</a><a href="#method.to_owned" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/alloc/borrow/trait.ToOwned.html#tymethod.to_owned" class="fn">to_owned</a>(&amp;self) -&gt; T</h4></section></summary><div class='docblock'>Creates owned data from borrowed data, usually by cloning. <a href="https://doc.rust-lang.org/1.98.1/alloc/borrow/trait.ToOwned.html#tymethod.to_owned">Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.clone_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/alloc/borrow.rs.html#81">Source</a><a href="#method.clone_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/alloc/borrow/trait.ToOwned.html#method.clone_into" class="fn">clone_into</a>(&amp;self, target: <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.reference.html">&amp;mut T</a>)</h4></section></summary><div class='docblock'>Uses borrowed data to replace owned data, usually by cloning. <a href="https://doc.rust-lang.org/1.98.1/alloc/borrow/trait.ToOwned.html#method.clone_into">Read more</a></div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryFrom%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/core/convert/mod.rs.html#829-831">Source</a><a href="#impl-TryFrom%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error" class="associatedtype trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/core/convert/mod.rs.html#833">Source</a><a href="#associatedtype.Error" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.98.1/core/convert/trait.TryFrom.html#associatedtype.Error" class="associatedtype">Error</a> = <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/convert/enum.Infallible.html" title="enum core::convert::Infallible">Infallible</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_from" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/core/convert/mod.rs.html#836">Source</a><a href="#method.try_from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/convert/trait.TryFrom.html#tymethod.try_from" class="fn">try_from</a>(value: U) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, &lt;T as <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;U&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-TryInto%3CU%3E-for-T" class="impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/core/convert/mod.rs.html#813-815">Source</a><a href="#impl-TryInto%3CU%3E-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T, U&gt; <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.TryInto.html" title="trait core::convert::TryInto">TryInto</a>&lt;U&gt; for T<div class="where">where
+    U: <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;,</div></h3></section></summary><div class="impl-items"><details class="toggle" open><summary><section id="associatedtype.Error-1" class="associatedtype trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/core/convert/mod.rs.html#817">Source</a><a href="#associatedtype.Error-1" class="anchor">§</a><h4 class="code-header">type <a href="https://doc.rust-lang.org/1.98.1/core/convert/trait.TryInto.html#associatedtype.Error" class="associatedtype">Error</a> = &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a></h4></section></summary><div class='docblock'>The type returned in the event of a conversion error.</div></details><details class="toggle method-toggle" open><summary><section id="method.try_into" class="method trait-impl"><a class="src rightside" href="https://doc.rust-lang.org/1.98.1/src/core/convert/mod.rs.html#820">Source</a><a href="#method.try_into" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/convert/trait.TryInto.html#tymethod.try_into" class="fn">try_into</a>(self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;U, &lt;U as <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.TryFrom.html" title="trait core::convert::TryFrom">TryFrom</a>&lt;T&gt;&gt;::<a class="associatedtype" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.TryFrom.html#associatedtype.Error" title="type core::convert::TryFrom::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Performs the conversion.</div></details></div></details><details class="toggle implementors-toggle"><summary><section id="impl-WithSubscriber-for-T" class="impl"><a href="#impl-WithSubscriber-for-T" class="anchor">§</a><h3 class="code-header">impl&lt;T&gt; WithSubscriber for T</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.with_subscriber" class="method trait-impl"><a href="#method.with_subscriber" class="anchor">§</a><h4 class="code-header">fn <a class="fn">with_subscriber</a>&lt;S&gt;(self, subscriber: S) -&gt; WithDispatch&lt;Self&gt;<div class="where">where
+    S: <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;Dispatch&gt;,</div></h4></section></summary><div class='docblock'>Attaches the provided <a href="super::Subscriber"><code>Subscriber</code></a> to this type, returning a
+[<code>WithDispatch</code>] wrapper. <a>Read more</a></div></details><details class="toggle method-toggle" open><summary><section id="method.with_current_subscriber" class="method trait-impl"><a href="#method.with_current_subscriber" class="anchor">§</a><h4 class="code-header">fn <a class="fn">with_current_subscriber</a>(self) -&gt; WithDispatch&lt;Self&gt;</h4></section></summary><div class='docblock'>Attaches the current <a href="dispatcher#setting-the-default-subscriber">default</a> <a href="super::Subscriber"><code>Subscriber</code></a> to this type, returning a
+[<code>WithDispatch</code>] wrapper. <a>Read more</a></div></details></div></details></div></section></div></main></body></html>

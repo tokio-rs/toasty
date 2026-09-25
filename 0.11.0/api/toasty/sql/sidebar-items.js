@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["query","statement"],"struct":["Query","Statement"]};
