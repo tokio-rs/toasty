@@ -678,6 +678,7 @@ impl ToSql for &stmt::TableRef {
                 fmt!(f, "cte_" depth "_" index);
             }
             stmt::TableRef::Arg(..) => panic!("unexpected TableRef argument; table_ref={self:#?}"),
+            stmt::TableRef::Input(..) => panic!("engine input cannot be serialized to SQL"),
         }
     }
 }

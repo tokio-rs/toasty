@@ -89,6 +89,8 @@
 
 use std::mem;
 
+mod derived;
+
 #[cfg(test)]
 mod tests;
 
@@ -1550,6 +1552,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     // ===== NoSQL execution =====
 
     fn plan_data_loading_nosql(&mut self, stmt: stmt::Statement) -> Result<mir::NodeId> {
+        if let Some(source) = self.stmt_info.derived_source {
+            return self.plan_derived_source(stmt, source);
+        }
+
         if stmt.is_insert() {
             debug_assert!(self.load_data.select_items.is_empty());
         }

@@ -1,4 +1,5 @@
 mod association;
+mod derived;
 mod expr_or;
 mod include;
 mod insert;
@@ -104,8 +105,7 @@ impl LoweringState<'_> {
         // BelongsTo→FK) fires inside the lowering walk itself via
         // `LowerStatement::visit_expr_binary_op_mut`.
         association::RewriteVia::new(expr_cx).rewrite(&mut stmt);
-        lift_in_subquery::LiftInSubquery::new(expr_cx, self.engine.capability.sql())
-            .rewrite(&mut stmt);
+        lift_in_subquery::LiftInSubquery::new(expr_cx).rewrite(&mut stmt);
         lift_update_query::LiftUpdateQuery::new().rewrite(&mut stmt);
 
         // Combine compatible IN subqueries after relation lifting and before
@@ -1307,13 +1307,16 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_stmt_select_mut(&mut self, stmt: &mut stmt::Select) {
+        let derived_source = self.lower_derived_select_source(stmt);
         let mut lower = self.scope_expr(&stmt.source);
 
         lower.visit_filter_mut(&mut stmt.filter);
         lower.visit_returning_mut(&mut stmt.returning);
         lower.apply_lowering_filter_constraint(&mut stmt.filter);
 
-        self.visit_source_mut(&mut stmt.source);
+        if !derived_source {
+            self.visit_source_mut(&mut stmt.source);
+        }
     }
 
     fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {
@@ -1412,6 +1415,8 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
             let table_id = self.schema().table_id_for(source_model.id);
             *stmt = stmt::Source::table(table_id);
+        } else if self.capability().sql() {
+            visit_mut::visit_source_mut(self, stmt);
         }
     }
 
@@ -1925,11 +1930,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             // (model→PK, BelongsTo→FK) fires inside the lowering walk via
             // `LowerStatement::visit_expr_binary_op_mut`.
             association::RewriteVia::new(child.expr_cx).rewrite(&mut stmt);
-            lift_in_subquery::LiftInSubquery::new(
-                child.expr_cx,
-                child.state.engine.capability.sql(),
-            )
-            .rewrite(&mut stmt);
+            lift_in_subquery::LiftInSubquery::new(child.expr_cx).rewrite(&mut stmt);
             // Combine compatible IN subqueries before the lowering walk
             // extracts them into separate NoSQL statements.
             Simplify::with_context(child.expr_cx, child.state.engine.capability)
