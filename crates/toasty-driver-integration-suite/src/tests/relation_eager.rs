@@ -143,6 +143,47 @@ pub async fn eager_belongs_to_loads_without_include(t: &mut Test) -> Result<()> 
 }
 
 #[driver_test]
+pub async fn eager_belongs_to_create_by_fk_returning_loads_relation(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Post {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+
+        #[index]
+        user_id: uuid::Uuid,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
+    }
+
+    let mut db = t.setup_db(models!(User, Post)).await;
+
+    let user = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+
+    // Set the FK scalar instead of the relation. The eager `user` load still
+    // has to back-reference the inserted `user_id` column.
+    let post = toasty::create!(Post { user_id: user.id })
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(post.user.id, user.id);
+    assert_eq!(post.user.name, "Alice");
+
+    Ok(())
+}
+
+#[driver_test]
 pub async fn eager_has_many_create_returning_loads_relations(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
