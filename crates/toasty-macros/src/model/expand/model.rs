@@ -436,57 +436,45 @@ impl Expand<'_> {
 
     pub(super) fn expand_model_into_expr_body(&self, by_ref: bool) -> TokenStream {
         let toasty = &self.toasty;
-
-        let pk_fields: Vec<_> = self
+        let field_count = self.model.fields.len();
+        let fields = self
             .model
-            .primary_key_fields()
-            .expect("into_expr called on model without primary key")
-            .collect();
-
-        if pk_fields.len() == 1 {
-            let expr = pk_fields.iter().map(|field| {
-                let field_ident = &field.name.ident;
-                let ty = match &field.ty {
-                    FieldTy::Primitive(ty) => ty,
-                    _ => todo!(),
+            .fields
+            .iter()
+            .enumerate()
+            .filter_map(|(index, field)| {
+                let FieldTy::Primitive(ty) = &field.ty else {
+                    return None;
                 };
-
-                let into_expr = if by_ref {
-                    quote!((&self.#field_ident))
-                } else {
-                    quote!(self.#field_ident)
-                };
-
-                quote! {
-                    let expr: #toasty::stmt::Expr<#ty> = #toasty::IntoExpr::into_expr(#into_expr);
-                    expr.cast()
+                if field.attrs.document.is_some() {
+                    return None;
                 }
+                let name = &field.name.ident;
+                let value = if by_ref {
+                    quote! {
+                        <#ty as #toasty::IntoExpr<FieldExprTarget<#ty>>>::by_ref(&self.#name)
+                    }
+                } else {
+                    quote! {
+                        <#ty as #toasty::IntoExpr<FieldExprTarget<#ty>>>::into_expr(self.#name)
+                    }
+                };
+                Some(quote! {
+                    if <#ty as #toasty::Field>::CAN_BE_RELATION_KEY {
+                        record[#index] = #toasty::core::stmt::Expr::from(#value);
+                    }
+                })
             });
 
-            quote!( #( #expr )* )
-        } else {
-            let expr = pk_fields
-                .iter()
-                .map(|field| {
-                    let field_ident = &field.name.ident;
-                    let amp = if by_ref { quote!(&) } else { quote!() };
-                    quote!( #amp self.#field_ident)
-                })
-                .collect::<Vec<_>>();
-
-            let ty = pk_fields
-                .iter()
-                .map(|field| match &field.ty {
-                    FieldTy::Primitive(ty) => ty,
-                    _ => todo!(),
-                })
-                .collect::<Vec<_>>();
-
-            quote! {
-                let expr: #toasty::stmt::Expr<( #( #ty ),* )> =
-                    #toasty::IntoExpr::into_expr(( #( #expr ),* ));
-                expr.cast()
-            }
+        // The schema selects primary-key and referenced fields during
+        // simplification. Incoming relations are not known to this derive.
+        quote! {
+            let mut record = ::std::vec![#toasty::core::stmt::Expr::null(); #field_count];
+            #( #fields )*
+            #toasty::stmt::Expr::from_untyped(#toasty::core::stmt::Expr::cast(
+                #toasty::core::stmt::Expr::record_from_vec(record),
+                #toasty::core::stmt::Type::Model(<Self as #toasty::Model>::id()),
+            ))
         }
     }
 
