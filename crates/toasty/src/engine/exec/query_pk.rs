@@ -12,7 +12,7 @@ impl Exec<'_> {
         let mut pk_filter = action.pk_filter.clone();
         let mut row_filter = action.row_filter.clone();
 
-        let input = self.collect_input(action.input).await?;
+        let input = self.collect_input(action.inputs.iter().copied()).await?;
         if !input.is_empty() {
             pk_filter.substitute(&input);
         }

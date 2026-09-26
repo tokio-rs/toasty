@@ -1,7 +1,126 @@
 use super::*;
-use crate::engine::{Engine, HirStatement, test_util::test_schema};
-use toasty_core::driver::Capability;
+use crate as toasty;
+use crate::{
+    engine::{Engine, HirStatement, test_util::test_schema},
+    schema::Model,
+};
+use std::{cell::Cell, sync::Arc};
 use toasty_core::stmt::{Expr, ExprArg, ExprLet, Type, Value};
+use toasty_core::{
+    driver::Capability,
+    schema::{Builder, app},
+};
+
+#[allow(dead_code)]
+#[derive(toasty::Model)]
+#[key(partition = group, local = id)]
+struct Item {
+    group: String,
+    id: String,
+    document: String,
+    name: String,
+}
+
+#[test]
+fn mutation_query_pk_binds_key_and_row_filters_to_their_dependencies() -> Result<()> {
+    let app = app::Schema::from_macro([Item::schema()])?;
+    let schema = Builder::new().build(app, &Capability::DYNAMODB)?;
+    let table = schema.db.tables[0].id;
+    let engine = Engine::new(Arc::new(schema), &Capability::DYNAMODB);
+    let mut hir = hir::HirStatement::new();
+    let root = hir.new_statement_info(IndexMap::new());
+    let mut mir = mir::Store::new();
+
+    // Data-loading inputs visit filters first, then assignments.
+    let values = [
+        stmt::Value::from("selected"),
+        stmt::Value::List(vec!["present".into()]),
+        stmt::Value::from("assigned"),
+    ];
+    let inputs: IndexSet<_> = values
+        .into_iter()
+        .map(|value| {
+            mir.insert(mir::Const {
+                ty: value.infer_ty(),
+                value,
+            })
+        })
+        .collect();
+
+    // Lowering visits assignments first, so HIR argument positions differ.
+    for input in [2, 0, 1] {
+        let dependency = hir.new_statement_info(IndexMap::new());
+        hir[dependency].output.set(Some(inputs[input]));
+        hir[root].args.push(hir::Arg::Sub {
+            stmt_id: dependency,
+            returning: false,
+            input: Cell::new(Some(input)),
+            batch_load_index: Cell::new(None),
+        });
+    }
+
+    let column = |index| stmt::Expr::from(stmt::ExprReference::column(0, index));
+    let mut update = stmt::Update {
+        target: stmt::UpdateTarget::Table(table),
+        assignments: stmt::Assignments::default(),
+        filter: stmt::Expr::and(
+            stmt::Expr::eq(column(0), stmt::Expr::arg(1)),
+            stmt::Expr::in_list(column(2), stmt::Expr::arg(2)),
+        )
+        .into(),
+        condition: stmt::Condition::default(),
+        returning: None,
+    };
+    // Assignments already use data-loading positions at this boundary.
+    update.assignments.set(3, stmt::Expr::arg(2));
+    let update = stmt::Statement::from(update);
+    let mut index_plan = engine.plan_index_path(&update)?.unwrap();
+    assert!(index_plan.key_values.is_none());
+
+    let mut planner = HirPlanner {
+        engine: &engine,
+        hir: &hir,
+        mir,
+    };
+    let node = PlanStatement {
+        planner: &mut planner,
+        stmt_id: root,
+        stmt_info: &hir[root],
+        load_data: LoadData {
+            inputs,
+            select_items: SelectItems::new(),
+            batch_load_args: IndexSet::new(),
+        },
+        remaining_deps: Vec::new(),
+    }
+    .plan_primary_key_execution(update, &mut index_plan, &stmt::Type::Unit);
+
+    let mir::Operation::UpdateByKey(update) = &planner.mir[node].op else {
+        panic!("expected an update by primary key");
+    };
+    let mir::Operation::QueryPk(query) = &planner.mir[update.input].op else {
+        panic!("expected a partition query to collect the keys");
+    };
+    let input: Vec<_> = query
+        .inputs
+        .iter()
+        .map(|node| match &planner.mir[*node].op {
+            mir::Operation::Const(value) => value.value.clone(),
+            _ => panic!("expected a prepared dependency"),
+        })
+        .collect();
+    let mut pk_filter = query.pk_filter.clone();
+    let mut row_filter = query.row_filter.clone().unwrap();
+    pk_filter.substitute(&input);
+    row_filter.substitute(&input);
+
+    assert_eq!(pk_filter, stmt::Expr::eq(column(0), "selected"));
+    assert_eq!(
+        row_filter,
+        stmt::Expr::in_list(column(2), stmt::Value::List(vec!["present".into()]))
+    );
+    Ok(())
+}
 
 fn rewrite(expr: Expr) -> Option<Expr> {
     let engine = Engine::new(test_schema().into(), &Capability::SQLITE);
@@ -126,4 +245,98 @@ fn local_arguments_do_not_count_as_parent_references() {
         )
         .is_none()
     );
+}
+
+#[test]
+fn query_arg_dependencies_preserve_map_and_let_scopes() {
+    let engine = Engine::new(test_schema().into(), &Capability::SQLITE);
+    let mut hir = HirStatement::new();
+    let root = hir.new_statement_info(IndexMap::new());
+    let parent = hir.new_statement_info(IndexMap::new());
+    let column = stmt::ExprReference::column(0, 7);
+    hir[parent].back_refs.insert(
+        root,
+        hir::BackRef {
+            exprs: [column].into(),
+            ..Default::default()
+        },
+    );
+
+    // HIR arg 0 is unused. The subquery at arg 1 becomes input 0, and
+    // the parent reference at arg 2 becomes a projection of input 1.
+    for input in [None, Some(0)] {
+        hir[root].args.push(hir::Arg::Sub {
+            stmt_id: parent,
+            returning: false,
+            input: Cell::new(input),
+            batch_load_index: Cell::new(None),
+        });
+    }
+    hir[root].args.push(hir::Arg::Ref {
+        stmt_id: parent,
+        target_expr_ref: column,
+        nesting: 1,
+        data_load_input: Cell::new(Some(1)),
+        returning_input: Cell::new(None),
+        batch_load_index: Cell::new(Some(0)),
+    });
+    let mut mir = mir::Store::new();
+    let values = [
+        Value::from(42i64),
+        Value::List(vec![Value::record_from_vec(vec![42i64.into()])]),
+    ];
+    let inputs = values
+        .iter()
+        .map(|value| {
+            mir.insert(mir::Const {
+                ty: value.infer_ty(),
+                value: value.clone(),
+            })
+        })
+        .collect();
+    let mut planner = HirPlanner {
+        engine: &engine,
+        hir: &hir,
+        mir,
+    };
+    let predicate = ExprLet {
+        bindings: vec![Expr::arg(1)],
+        body: Box::new(Expr::any(Expr::map(
+            Expr::list([9i64, 42]),
+            Expr::and_from_vec(vec![
+                Expr::eq(Expr::arg(0), scoped_arg(0, 1)),
+                Expr::eq(Expr::arg(0), scoped_arg(1, 2)),
+                Expr::eq(Expr::arg(0), scoped_arg(2, 2)),
+            ]),
+        ))),
+    };
+    let mut query = stmt::Query::new_select(toasty_core::schema::app::ModelId(0), predicate);
+    PlanStatement {
+        planner: &mut planner,
+        stmt_id: root,
+        stmt_info: &hir[root],
+        load_data: LoadData {
+            inputs,
+            select_items: SelectItems::new(),
+            batch_load_args: IndexSet::new(),
+        },
+        remaining_deps: vec![],
+    }
+    .rewrite_stmt_query_arg_dependencies(&mut query);
+
+    let predicate = query
+        .body
+        .as_select_mut_unwrap()
+        .filter
+        .expr
+        .take()
+        .unwrap();
+    let func = eval::Func::from_stmt(predicate, values.iter().map(Value::infer_ty).collect());
+    for (value, expected) in [(42i64, true), (9, false), (8, false)] {
+        assert_eq!(
+            func.eval_bool(&engine.schema, [value.into(), values[1].clone()])
+                .unwrap(),
+            expected,
+        );
+    }
 }

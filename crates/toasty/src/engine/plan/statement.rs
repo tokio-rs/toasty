@@ -54,25 +54,25 @@
 //!
 //! ## After `rewrite_stmt_*_arg_dependencies`
 //!
-//! These methods rewrite `Arg` nodes in **assignments and insert values
-//! only** (not the filter). They read the cells populated above:
+//! These methods rewrite `Arg` nodes in assignments, insert values, and
+//! query filters. They read the cells populated above:
 //!
 //! - `Arg::Sub { input }` → `Expr::arg(input.get())` — now indexes into
 //!   `load_data.inputs`
 //! - `Arg::Ref { data_load_input, batch_load_index }` →
 //!   `Expr::arg_project(data_load_input, [batch_load_index, column])`
 //!
-//! After this, assignment expressions have MIR-level arg positions. Filter
-//! expressions still have HIR-level positions.
+//! After this, query filters use `load_data.inputs` positions. Mutation
+//! filters still use HIR-level positions.
 //!
-//! ## During MIR node construction (`rewrite_expr_for_mir`)
+//! ## During MIR node construction (`rewrite_exprs_for_mir`)
 //!
 //! When building MIR nodes that carry their own expressions (a `Filter`
 //! predicate or key expression), the expression may reference a subset of
-//! the statement's `load_data.inputs`. `rewrite_expr_for_mir` does two things:
+//! the statement's `load_data.inputs`. `rewrite_exprs_for_mir` does two things:
 //!
-//! 1. Resolves each `Arg(hir_pos)` through `stmt_info.args[hir_pos]` to
-//!    find the `load_data.inputs` index and MIR node ID
+//! 1. Resolves each argument to a `load_data.inputs` index, either directly
+//!    for query filters or through `stmt_info.args` for mutation filters
 //! 2. Assigns a new compact position, starting at the caller-provided offset,
 //!    and rewrites the `Arg` node in place
 //!
@@ -127,6 +127,12 @@ struct LoadData {
 }
 
 type Returning = Option<stmt::Returning>;
+
+#[derive(Clone, Copy)]
+enum ArgPositions {
+    Statement,
+    LoadData,
+}
 
 #[derive(Debug)]
 struct ReturningInfo {
@@ -841,8 +847,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     }
 
     fn rewrite_arg_dependencies(&mut self, expr: &mut stmt::Expr) {
-        visit_mut::for_each_expr_mut(expr, |expr| {
-            if let stmt::Expr::Arg(expr_arg) = expr {
+        visit_mut::walk_expr_scoped_mut(expr, 0, |expr, scope_depth| {
+            if let stmt::Expr::Arg(expr_arg) = expr
+                && expr_arg.nesting == scope_depth
+            {
                 match &self.stmt_info.args[expr_arg.position] {
                     hir::Arg::Ref {
                         stmt_id: target_id,
@@ -858,7 +866,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
 
                         *expr = stmt::Expr::arg_project(
-                            data_load_input.get().unwrap(),
+                            stmt::ExprArg {
+                                position: data_load_input.get().unwrap(),
+                                nesting: scope_depth,
+                            },
                             [batch_load_index.get().unwrap(), column],
                         );
                     }
@@ -868,10 +879,16 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             "{:#?} | is this needed?",
                             self.load_data
                         );
-                        *expr = stmt::Expr::arg(input.get().unwrap());
+                        *expr = stmt::Expr::arg(stmt::ExprArg {
+                            position: input.get().unwrap(),
+                            nesting: scope_depth,
+                        });
                     }
                 }
+                // The replacement already uses data-loading positions.
+                return false;
             }
+            true
         });
     }
 
@@ -1607,14 +1624,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         stmt: stmt::Statement,
         ty: stmt::Type,
     ) -> Result<mir::NodeId> {
-        let input = if self.load_data.inputs.is_empty() {
-            None
-        } else if self.load_data.inputs.len() == 1 {
-            Some(self.load_data.inputs[0])
-        } else {
-            todo!("scan with multiple inputs")
-        };
-
         let cx = stmt::ExprContext::new(&*self.planner.engine.schema);
         let cx = cx.scope(&stmt);
         let stmt::ExprTarget::Table(table) = cx.target() else {
@@ -1646,7 +1655,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let limit = extract_pagination(&stmt);
 
         Ok(self.insert_mir_with_deps(mir::Scan {
-            input,
+            inputs: self.load_data.inputs.clone(),
             table: table_id,
             columns: self.load_data.select_items.extract_expr_references(),
             row_filter,
@@ -1662,7 +1671,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         ty: &stmt::Type,
     ) -> mir::NodeId {
         if let Some(mut key_expr) = index_plan.key_values.take() {
-            let (args, input_nodes) = self.rewrite_expr_for_mir(&mut key_expr, 0);
+            let positions = if stmt.is_query() {
+                ArgPositions::LoadData
+            } else {
+                ArgPositions::Statement
+            };
+            let (args, input_nodes) = self.rewrite_exprs_for_mir([&mut key_expr], 0, positions);
             let key_ty =
                 stmt::Type::list(self.planner.engine.index_key_record_ty(index_plan.index));
             let keys = eval::Func::from_stmt_typed(key_expr, args, key_ty);
@@ -1671,14 +1685,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
             self.build_key_operation(&stmt, index_plan, get_by_key_input, ty)
         } else {
-            let input = if self.load_data.inputs.is_empty() {
-                None
-            } else if self.load_data.inputs.len() == 1 {
-                Some(self.load_data.inputs[0])
-            } else {
-                todo!()
-            };
-
             if stmt.is_query() {
                 let limit = extract_pagination(&stmt);
                 let order = extract_query_pk_order(&stmt);
@@ -1688,7 +1694,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
                 // For queries, stream all matching records with the requested columns.
                 self.insert_mir_with_deps(mir::QueryPk {
-                    input,
+                    inputs: self.load_data.inputs.clone(),
                     table: index_plan.table_id(),
                     index: None, // Querying primary key
                     columns: self.load_data.select_items.extract_expr_references(),
@@ -1716,15 +1722,23 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     }));
                 }
 
+                let mut pk_filter = index_plan.index_filter.take();
                 let mut row_filter = index_plan.result_filter.take();
+                // Mutation filters still use HIR argument positions. Both
+                // filters must share the QueryPk node's compact input list.
+                let (_, inputs) = self.rewrite_exprs_for_mir(
+                    std::iter::once(&mut pk_filter).chain(row_filter.iter_mut()),
+                    0,
+                    ArgPositions::Statement,
+                );
                 self.legalize_kv_expr(&mut row_filter);
 
                 let query_pk_node = self.insert_mir_with_deps(mir::QueryPk {
-                    input,
+                    inputs,
                     table: index_plan.table_id(),
                     index: None, // Querying primary key
                     columns,
-                    pk_filter: index_plan.index_filter.take(),
+                    pk_filter,
                     row_filter,
                     ty: index_key_ty,
                     limit: None,
@@ -1744,7 +1758,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     ) -> mir::NodeId {
         let inputs = mem::take(&mut self.load_data.inputs);
         assert!(index_plan.post_filter.is_none(), "TODO");
-        assert!(inputs.len() <= 1, "TODO: inputs={:#?}", inputs);
 
         // For queries on NON-UNIQUE indexes, use QueryPk optimization
         // Non-unique indexes are created as DynamoDB GSIs with ProjectionType::All,
@@ -1754,12 +1767,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // To support DDB's other projection types, Index will need to track projected columns, not
         // just the columns that are part of the index key.
         if stmt.is_query() && !index_plan.index.unique {
-            let input = if inputs.is_empty() {
-                None
-            } else {
-                Some(inputs[0])
-            };
-
             let limit = extract_pagination(&stmt);
             let order = extract_query_pk_order(&stmt);
 
@@ -1769,7 +1776,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             // Use QueryPk with index to query the secondary index and return full records
             // This eliminates the N+1 pattern of FindPkByIndex + GetByKey
             return self.insert_mir_with_deps(mir::QueryPk {
-                input,
+                inputs,
                 table: index_plan.index.on,
                 index: Some(index_plan.index.id), // Query the secondary index
                 columns: self.load_data.select_items.extract_expr_references(), // Return full records
@@ -1801,7 +1808,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         &mut self,
         stmt: &stmt::Statement,
         index_plan: &mut index::IndexPlan,
-    ) -> Option<stmt::Expr> {
+    ) -> Option<(eval::Func, IndexSet<mir::NodeId>)> {
         let mut post_filter = index_plan.post_filter.clone();
 
         // If fetching rows using GetByKey, some databases do not support
@@ -1823,37 +1830,40 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             stmt
         );
 
-        // Make sure we are including columns needed to apply the post filter
-        if let Some(post_filter) = &mut post_filter {
-            visit_mut::for_each_expr_mut(post_filter, |expr| match expr {
-                stmt::Expr::Reference(expr_reference) => {
-                    let (index, _) = self
-                        .load_data
-                        .select_items
-                        .insert_full((*expr_reference).into());
-                    *expr = stmt::Expr::arg_project(0, [index]);
-                }
-                stmt::Expr::Arg(_) => todo!("expr={expr:#?}"),
-                _ => {}
-            });
-        }
+        let mut post_filter = post_filter?;
+        // Capture subquery inputs before planning the key lookup consumes
+        // load_data.inputs. Reserve arg(0) for the current row.
+        let (mut arg_tys, args) =
+            self.rewrite_exprs_for_mir([&mut post_filter], 1, ArgPositions::LoadData);
 
-        post_filter
+        // Include columns needed to apply the post filter.
+        visit_mut::for_each_expr_mut(&mut post_filter, |expr| {
+            if let stmt::Expr::Reference(expr_reference) = expr {
+                let (index, _) = self
+                    .load_data
+                    .select_items
+                    .insert_full((*expr_reference).into());
+                *expr = stmt::Expr::arg_project(0, [index]);
+            }
+        });
+
+        let ty = self.infer_nosql_record_ty(stmt);
+        arg_tys.insert(0, ty.as_list_unwrap().clone());
+        Some((eval::Func::from_stmt(post_filter, arg_tys), args))
     }
 
     fn apply_post_filter(
         &mut self,
         mut node_id: mir::NodeId,
-        post_filter: Option<stmt::Expr>,
+        post_filter: Option<(eval::Func, IndexSet<mir::NodeId>)>,
         ty: stmt::Type,
     ) -> mir::NodeId {
         // If there is a post filter, we need to apply a filter step on the returned rows.
-        if let Some(post_filter) = post_filter {
-            let item_ty = ty.as_list_unwrap();
+        if let Some((predicate, args)) = post_filter {
             node_id = self.planner.mir.insert(mir::Filter {
                 input: node_id,
-                args: IndexSet::new(),
-                predicate: eval::Func::from_stmt(post_filter, vec![item_ty.clone()]),
+                args,
+                predicate,
                 ty,
             });
         }
@@ -1972,7 +1982,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         // The predicate's `arg(0)` is the current row, so the pre-filter's
         // inputs start at `arg(1)`.
-        let (arg_tys, args) = self.rewrite_expr_for_mir(&mut pre_filter_expr, 1);
+        let (arg_tys, args) =
+            self.rewrite_exprs_for_mir([&mut pre_filter_expr], 1, ArgPositions::Statement);
 
         let ty = self.planner.mir[input].ty().clone();
         let mut func_args = vec![ty.as_list_unwrap().clone()];
@@ -1986,14 +1997,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         })
     }
 
-    /// Rewrite a statement-level expression for use in a MIR node.
+    /// Rewrite statement-level expressions for use in one MIR node.
     ///
-    /// Statement-level expressions contain `Arg(n)` where `n` is a position in
-    /// `stmt_info.args` (the HIR arg list). Each HIR arg maps to an entry in
-    /// `load_data.inputs` via `hir::Arg::Sub { input, .. }`.
+    /// `positions` identifies whether `Arg(n)` indexes `stmt_info.args`
+    /// (mutation filters) or the already-rewritten `load_data.inputs`
+    /// (query filters).
     ///
-    /// MIR nodes have their own compact input lists. This method:
-    /// 1. Resolves each HIR arg to its `load_data.inputs` node ID
+    /// The expressions share the node's compact input list. This method:
+    /// 1. Resolves each argument to its `load_data.inputs` node ID
     /// 2. Assigns a new compact position, starting at `arg_offset`
     /// 3. Rewrites the `Arg` position in the expression
     ///
@@ -2001,29 +2012,32 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     /// Arguments bound by nested `Map` or `Let` expressions remain unchanged.
     ///
     /// Returns `(arg_types, input_node_ids)` for constructing the MIR node.
-    fn rewrite_expr_for_mir(
+    fn rewrite_exprs_for_mir<'e>(
         &self,
-        expr: &mut stmt::Expr,
+        exprs: impl IntoIterator<Item = &'e mut stmt::Expr>,
         arg_offset: usize,
+        positions: ArgPositions,
     ) -> (Vec<stmt::Type>, IndexSet<mir::NodeId>) {
         let mut arg_map: IndexMap<usize, (stmt::Type, mir::NodeId)> = IndexMap::new();
 
-        visit_mut::walk_expr_scoped_mut(expr, 0, |expr, scope_depth| {
+        let mut rewrite = |expr: &mut stmt::Expr, scope_depth| {
             if let stmt::Expr::Arg(expr_arg) = expr
                 && expr_arg.nesting == scope_depth
             {
-                let hir_pos = expr_arg.position;
-                let new_pos = match arg_map.get_index_of(&hir_pos) {
+                let position = expr_arg.position;
+                let new_pos = match arg_map.get_index_of(&position) {
                     Some(idx) => idx,
                     None => {
-                        // Resolve the HIR arg to its load_data input
-                        let input_idx = match &self.stmt_info.args[hir_pos] {
-                            hir::Arg::Sub { input, .. } => input.get().unwrap(),
-                            _ => todo!("rewrite_expr_for_mir with non-Sub arg"),
+                        let input_idx = match positions {
+                            ArgPositions::LoadData => position,
+                            ArgPositions::Statement => match &self.stmt_info.args[position] {
+                                hir::Arg::Sub { input, .. } => input.get().unwrap(),
+                                _ => todo!("rewrite_exprs_for_mir with non-Sub arg"),
+                            },
                         };
                         let node_id = self.load_data.inputs[input_idx];
                         let ty = self.planner.mir[node_id].ty().clone();
-                        let (idx, _) = arg_map.insert_full(hir_pos, (ty, node_id));
+                        let (idx, _) = arg_map.insert_full(position, (ty, node_id));
                         idx
                     }
                 };
@@ -2031,7 +2045,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             }
 
             true
-        });
+        };
+
+        for expr in exprs {
+            visit_mut::walk_expr_scoped_mut(expr, 0, &mut rewrite);
+        }
 
         let mut types = Vec::with_capacity(arg_map.len());
         let mut nodes = IndexSet::with_capacity(arg_map.len());

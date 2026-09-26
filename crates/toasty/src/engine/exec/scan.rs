@@ -11,7 +11,7 @@ impl Exec<'_> {
     pub(super) async fn exec_scan(&mut self, action: &mir::Scan) -> Result<ExecResponse> {
         let mut row_filter = action.row_filter.clone();
 
-        let input = self.collect_input(action.input).await?;
+        let input = self.collect_input(action.inputs.iter().copied()).await?;
         if !self.prepare_kv_row_filter(&mut row_filter, &input, action.table) {
             return Ok(ExecResponse::empty_value_stream());
         }
