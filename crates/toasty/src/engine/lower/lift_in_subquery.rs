@@ -79,29 +79,86 @@ impl<'a> LiftInSubquery<'a> {
         }
     }
 
+    /// Restrict a lifted relation predicate to present keys on both sides.
+    ///
+    /// SQL compares a `NULL` key as unknown, which a surrounding `NOT` keeps
+    /// unknown, so a row with an absent foreign key would drop out of both a
+    /// membership test and its negation. Guarding the host-side key with
+    /// `IS NOT NULL` makes the predicate plainly false for absent keys, and
+    /// filtering null keys out of the subquery keeps its result from
+    /// poisoning a negated `IN`.
+    ///
+    /// A subquery with `LIMIT`/`OFFSET` must select its candidates before the
+    /// null keys are removed, so its null exclusion is applied outside the
+    /// limited query during lowering instead.
     fn exclude_nulls(&self, expr: &mut stmt::Expr) {
         if !self.exclude_nulls {
             return;
         }
 
-        let stmt::Expr::InSubquery(expr) = expr else {
-            return;
-        };
-        let select = expr.query.body.as_select_mut_unwrap();
-        let target = select.source.model_id_unwrap();
-        let returning = select.returning.as_project_unwrap().clone();
+        let mut guards = vec![];
 
-        for field in returning
-            .as_record()
-            .map_or(std::slice::from_ref(&returning), |record| &record.fields)
-        {
-            let stmt::Expr::Reference(stmt::ExprReference::Field { index, .. }) = field else {
-                unreachable!();
-            };
-            if self.cx.schema().app.field(target.field(*index)).nullable {
-                select.add_filter(stmt::Expr::is_not_null(field.clone()));
+        match expr {
+            stmt::Expr::InSubquery(e) => {
+                self.push_key_guards(&e.expr, &mut guards);
+
+                if e.query.limit.is_none() {
+                    let select = e.query.body.as_select_mut_unwrap();
+                    let target = select.source.model_id_unwrap();
+                    let returning = select.returning.as_project_unwrap().clone();
+
+                    for field in key_fields(&returning) {
+                        let stmt::Expr::Reference(stmt::ExprReference::Field { index, .. }) = field
+                        else {
+                            unreachable!();
+                        };
+                        if self.cx.schema().app.field(target.field(*index)).nullable {
+                            select.add_filter(stmt::Expr::is_not_null(field.clone()));
+                        }
+                    }
+                }
+            }
+            // Direct foreign-key comparisons produced by the `BelongsTo` lift.
+            stmt::Expr::BinaryOp(e) => self.push_key_guards(&e.lhs, &mut guards),
+            stmt::Expr::And(e) => {
+                for operand in &e.operands {
+                    if let stmt::Expr::BinaryOp(e) = operand {
+                        self.push_key_guards(&e.lhs, &mut guards);
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        if !guards.is_empty() {
+            guards.push(expr.take());
+            *expr = stmt::Expr::and_from_vec(guards);
+        }
+    }
+
+    /// Push an `IS NOT NULL` guard for each nullable field of the host-side
+    /// key expression `lhs`.
+    fn push_key_guards(&self, lhs: &stmt::Expr, guards: &mut Vec<stmt::Expr>) {
+        for field in key_fields(lhs) {
+            if let stmt::Expr::Reference(expr_reference @ stmt::ExprReference::Field { .. }) = field
+                && self
+                    .cx
+                    .resolve_expr_reference(expr_reference)
+                    .as_field_unwrap()
+                    .nullable
+            {
+                guards.push(stmt::Expr::is_not_null(field.clone()));
             }
         }
+    }
+}
+
+/// The components of a key expression: the fields of a composite key's
+/// record, or the expression itself for a single-column key.
+fn key_fields(expr: &stmt::Expr) -> &[stmt::Expr] {
+    match expr {
+        stmt::Expr::Record(record) => &record.fields,
+        expr => std::slice::from_ref(expr),
     }
 }
 
@@ -654,6 +711,15 @@ fn lift_belongs_to_in_subquery(
         return None;
     }
 
+    let fk_in_subquery = || {
+        lift_fk_in_subquery(
+            belongs_to.target,
+            super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.source)),
+            super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.target)),
+            query,
+        )
+    };
+
     let select = query.body.as_select_unwrap();
 
     let mut lift = LiftBelongsTo {
@@ -674,13 +740,19 @@ fn lift_belongs_to_in_subquery(
     // visitor deliberately skips (see `visit_expr_in_subquery`).
     let all_fks_matched = lift.fk_field_matches.iter().all(|m| *m);
 
-    if lift.fail || !all_fks_matched {
-        lift_fk_in_subquery(
-            belongs_to.target,
-            super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.source)),
-            super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.target)),
-            query,
-        )
+    // A direct comparison discards the subquery's `LIMIT`/`OFFSET`. That is
+    // only sound when the filter pins every referenced key by equality, so
+    // the subquery yields at most one row, and the limit keeps that row.
+    let limit_is_exact = query.limit.as_ref().is_none_or(|limit| {
+        keeps_first_row(limit)
+            && lift
+                .operands
+                .iter()
+                .all(|operand| matches!(operand, stmt::Expr::BinaryOp(e) if e.op.is_eq()))
+    });
+
+    if lift.fail || !all_fks_matched || !limit_is_exact {
+        fk_in_subquery()
     } else {
         Some(if lift.operands.len() == 1 {
             lift.operands.into_iter().next().unwrap()
@@ -691,6 +763,28 @@ fn lift_belongs_to_in_subquery(
             .into()
         })
     }
+}
+
+/// Whether `limit` retains the first row of its query: a static, positive
+/// row count with no offset.
+fn keeps_first_row(limit: &stmt::Limit) -> bool {
+    let stmt::Limit::Offset(limit) = limit else {
+        return false;
+    };
+
+    let positive = matches!(
+        &limit.limit,
+        stmt::Expr::Value(stmt::Value::I64(n)) | stmt::Expr::Static(stmt::Value::I64(n)) if *n > 0
+    );
+    let no_offset = match &limit.offset {
+        None => true,
+        Some(stmt::Expr::Value(stmt::Value::I64(0)) | stmt::Expr::Static(stmt::Value::I64(0))) => {
+            true
+        }
+        Some(_) => false,
+    };
+
+    positive && no_offset
 }
 
 /// HasOne/HasMany branch: rewrite to a foreign-key IN subquery against

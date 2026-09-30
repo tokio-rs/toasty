@@ -512,6 +512,14 @@ impl ApplyInsertScope<'_> {
                 },
                 _ => todo!("EXPR = {:#?}", stmt),
             },
+            // A present-key guard on a lifted relation constraint. The
+            // equality it accompanies assigns the key.
+            stmt::Expr::IsNull(e)
+                if e.negated
+                    && matches!(
+                        &*e.expr,
+                        stmt::Expr::Reference(stmt::ExprReference::Field { .. })
+                    ) => {}
             // Constants are ignored
             stmt::Expr::Value(_) => {}
             _ => todo!("EXPR = {:#?}", stmt),
