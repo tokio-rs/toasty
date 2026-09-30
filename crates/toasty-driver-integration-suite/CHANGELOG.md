@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.1](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.11.0...toasty-driver-integration-suite-v0.11.1) - 2026-09-30
+
+- Internal improvements only.
+
 ## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.10.0...toasty-driver-integration-suite-v0.11.0) - 2026-09-24
 
 ### Added
