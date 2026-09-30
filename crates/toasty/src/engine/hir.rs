@@ -47,6 +47,10 @@ pub(super) struct StatementInfo {
     /// are complete. Contains the table-level statement ready for planning.
     pub(super) stmt: Option<Box<stmt::Statement>>,
 
+    /// The query supplying rows to a single derived-table source on NoSQL.
+    /// Its output is filtered and projected in memory, without another read.
+    pub(super) derived_source: Option<StmtId>,
+
     /// Whether cursor pagination resumed this query after an earlier page.
     pub(super) has_pagination_cursor: bool,
 
@@ -137,6 +141,7 @@ impl StatementInfo {
     pub(super) fn new(deps: IndexMap<StmtId, DepKind>) -> StatementInfo {
         StatementInfo {
             stmt: None,
+            derived_source: None,
             has_pagination_cursor: false,
             deps,
             args: vec![],

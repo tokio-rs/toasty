@@ -60,12 +60,11 @@ use super::relation_expr;
 /// `ApplyInsertScope::apply_expr`) see the already-lifted form.
 pub(super) struct LiftInSubquery<'a> {
     cx: ExprContext<'a>,
-    exclude_nulls: bool,
 }
 
 impl<'a> LiftInSubquery<'a> {
-    pub(super) fn new(cx: ExprContext<'a>, exclude_nulls: bool) -> Self {
-        Self { cx, exclude_nulls }
+    pub(super) fn new(cx: ExprContext<'a>) -> Self {
+        Self { cx }
     }
 
     pub(super) fn rewrite(&mut self, stmt: &mut stmt::Statement) {
@@ -75,33 +74,107 @@ impl<'a> LiftInSubquery<'a> {
     fn scope<'scope>(&'scope self, target: impl IntoExprTarget<'scope>) -> LiftInSubquery<'scope> {
         LiftInSubquery {
             cx: self.cx.scope(target),
-            exclude_nulls: self.exclude_nulls,
         }
     }
 
     fn exclude_nulls(&self, expr: &mut stmt::Expr) {
-        if !self.exclude_nulls {
+        let stmt::Expr::InSubquery(in_subquery) = expr else {
+            return;
+        };
+
+        self.exclude_null_returning_fields(in_subquery);
+        Self::require_non_null_membership_key(expr);
+    }
+
+    fn exclude_null_returning_fields(&self, in_subquery: &mut stmt::ExprInSubquery) {
+        let select = in_subquery.query.body.as_select_mut_unwrap();
+        let target = select.source.model_id_unwrap();
+        let fields = Self::scalar_or_record_fields(select.returning.as_project_unwrap());
+        let nullable = self.nullable_returning_fields(target, fields);
+
+        if nullable.is_empty() {
             return;
         }
 
-        let stmt::Expr::InSubquery(expr) = expr else {
-            return;
-        };
-        let select = expr.query.body.as_select_mut_unwrap();
-        let target = select.source.model_id_unwrap();
-        let returning = select.returning.as_project_unwrap().clone();
+        if in_subquery.query.limit.is_some() {
+            Self::wrap_limited_candidates(in_subquery);
+        }
+        let select = in_subquery.query.body.as_select_mut_unwrap();
+        let fields = Self::scalar_or_record_fields(select.returning.as_project_unwrap());
+        let guards = nullable
+            .iter()
+            .map(|&index| stmt::Expr::is_not_null(fields[index].clone()))
+            .collect();
+        select.add_filter(stmt::Expr::and_from_vec(guards));
+    }
 
-        for field in returning
-            .as_record()
-            .map_or(std::slice::from_ref(&returning), |record| &record.fields)
-        {
+    fn nullable_returning_fields(&self, target: ModelId, fields: &[stmt::Expr]) -> Vec<usize> {
+        let mut nullable = vec![];
+        for (position, field) in fields.iter().enumerate() {
             let stmt::Expr::Reference(stmt::ExprReference::Field { index, .. }) = field else {
                 unreachable!();
             };
             if self.cx.schema().app.field(target.field(*index)).nullable {
-                select.add_filter(stmt::Expr::is_not_null(field.clone()));
+                nullable.push(position);
             }
         }
+        nullable
+    }
+
+    /// Wraps LIMIT/OFFSET so null keys can be filtered from the selected rows.
+    ///
+    /// For example, if `LIMIT 1` selects a row with a null relation key, the result
+    /// must be empty even if later rows have non-null keys.
+    fn wrap_limited_candidates(in_subquery: &mut stmt::ExprInSubquery) {
+        let mut candidates = std::mem::replace(&mut *in_subquery.query, stmt::Query::unit());
+        let returning = candidates.returning_mut_unwrap().as_project_mut_unwrap();
+        let scalar = !returning.is_record();
+        if scalar {
+            *returning = stmt::Expr::record([returning.take()]);
+        }
+        let columns: Vec<_> = (0..returning.as_record_unwrap().len())
+            .map(|column| {
+                stmt::Expr::column(stmt::ExprColumn {
+                    nesting: 0,
+                    table: 0,
+                    column,
+                })
+            })
+            .collect();
+
+        let projection = if scalar {
+            columns.into_iter().next().unwrap()
+        } else {
+            stmt::Expr::record_from_vec(columns)
+        };
+        let source = stmt::TableRef::Derived(stmt::TableDerived {
+            subquery: Box::new(candidates),
+        });
+        *in_subquery.query = stmt::Query::builder(stmt::Select::new(source, true))
+            .returning_project(projection)
+            .build();
+    }
+
+    fn require_non_null_membership_key(expr: &mut stmt::Expr) {
+        // A null foreign key means the relation is absent. Make membership
+        // false instead of SQL UNKNOWN so negating it includes those rows.
+        // This also prevents null keys from matching each other in memory.
+        // Simplification removes guards on non-nullable key fields.
+        let stmt::Expr::InSubquery(in_subquery) = expr else {
+            unreachable!();
+        };
+        let lhs = &*in_subquery.expr;
+        let mut operands = Self::scalar_or_record_fields(lhs)
+            .iter()
+            .map(|field| stmt::Expr::is_not_null(field.clone()))
+            .collect::<Vec<_>>();
+        operands.push(expr.take());
+        *expr = stmt::Expr::and_from_vec(operands);
+    }
+
+    fn scalar_or_record_fields(expr: &stmt::Expr) -> &[stmt::Expr] {
+        expr.as_record()
+            .map_or(std::slice::from_ref(expr), |record| &record.fields)
     }
 }
 
@@ -674,7 +747,10 @@ fn lift_belongs_to_in_subquery(
     // visitor deliberately skips (see `visit_expr_in_subquery`).
     let all_fks_matched = lift.fk_field_matches.iter().all(|m| *m);
 
-    if lift.fail || !all_fks_matched {
+    let can_lift_directly =
+        !lift.fail && all_fks_matched && lift.limit_is_redundant(query.limit.as_ref());
+
+    if !can_lift_directly {
         lift_fk_in_subquery(
             belongs_to.target,
             super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.source)),
@@ -682,6 +758,8 @@ fn lift_belongs_to_in_subquery(
             query,
         )
     } else {
+        lift.add_non_null_foreign_key_guards(cx);
+
         Some(if lift.operands.len() == 1 {
             lift.operands.into_iter().next().unwrap()
         } else {
@@ -750,6 +828,56 @@ impl Visit for LiftBelongsTo<'_> {
 }
 
 impl LiftBelongsTo<'_> {
+    fn limit_is_redundant(&self, limit: Option<&stmt::Limit>) -> bool {
+        match limit {
+            None => true,
+            Some(stmt::Limit::Offset(limit)) => self.offset_limit_is_redundant(limit),
+            Some(stmt::Limit::Cursor(_)) => false,
+        }
+    }
+
+    fn offset_limit_is_redundant(&self, limit: &stmt::LimitOffset) -> bool {
+        // Complete key equalities select at most one record. A positive
+        // limit without an offset is redundant, including `.first()`.
+        self.has_only_equality_comparisons()
+            && Self::is_positive_integer(&limit.limit)
+            && limit.offset.as_ref().is_none_or(Self::is_zero)
+    }
+
+    fn has_only_equality_comparisons(&self) -> bool {
+        self.operands
+            .iter()
+            .all(|expr| matches!(expr, Expr::BinaryOp(op) if op.op.is_eq()))
+    }
+
+    fn is_positive_integer(expr: &stmt::Expr) -> bool {
+        Self::integer_value(expr).is_some_and(|value| value > 0)
+    }
+
+    fn is_zero(expr: &stmt::Expr) -> bool {
+        Self::integer_value(expr) == Some(0)
+    }
+
+    fn integer_value(expr: &stmt::Expr) -> Option<i64> {
+        match expr {
+            Expr::Value(stmt::Value::I64(value)) | Expr::Static(stmt::Value::I64(value)) => {
+                Some(*value)
+            }
+            _ => None,
+        }
+    }
+
+    fn add_non_null_foreign_key_guards(&mut self, cx: &ExprContext) {
+        // A directly lifted comparison must also make an absent relation
+        // false, so its negation includes rows with null foreign keys.
+        for field in &self.belongs_to.foreign_key.fields {
+            if cx.schema().app.field(field.source).nullable {
+                let field = stmt::Expr::ref_self_field(field.source);
+                self.operands.push(stmt::Expr::is_not_null(field));
+            }
+        }
+    }
+
     fn lift_fk_constraint(&mut self, field: FieldId, op: stmt::BinaryOp, expr: &stmt::Expr) {
         for (i, fk_field) in self.belongs_to.foreign_key.fields.iter().enumerate() {
             if fk_field.target == field {

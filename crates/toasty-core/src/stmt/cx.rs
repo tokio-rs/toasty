@@ -96,6 +96,9 @@ pub enum ResolvedRef<'a> {
     /// table itself. This allows consumers to inspect the derived table's
     /// content (e.g., checking VALUES rows for constant values).
     Derived(DerivedRef<'a>),
+
+    /// The type of a column supplied by another engine statement.
+    Input(&'a Type),
 }
 
 /// A resolved reference into a derived table column.
@@ -369,6 +372,9 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                                     nesting: expr_column.nesting + cte_nesting,
                                     index: *index,
                                 }
+                            }
+                            TableRef::Input(columns) => {
+                                ResolvedRef::Input(&columns[expr_column.column])
                             }
                             TableRef::Arg(_) => todo!(),
                         }
@@ -646,6 +652,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
         match self.resolve_expr_reference(expr_reference) {
             ResolvedRef::Model(model) => Type::Model(model.id),
             ResolvedRef::Column(column) => column.ty.clone(),
+            ResolvedRef::Input(ty) => ty.clone(),
             ResolvedRef::Field(field) => field.expr_ty().clone(),
             ResolvedRef::Cte { .. } => todo!("type inference for CTE columns not implemented"),
             ResolvedRef::Derived(derived) => {

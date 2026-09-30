@@ -7,6 +7,31 @@ use crate::engine::simplify;
 use super::Exec;
 
 impl Exec<'_> {
+    /// Bind subquery results in a driver row filter. Returns false when no
+    /// row can match, and removes a filter that always matches.
+    pub(super) fn prepare_kv_row_filter(
+        &self,
+        filter: &mut Option<stmt::Expr>,
+        input: &[stmt::Value],
+        table: TableId,
+    ) -> bool {
+        let Some(expr) = filter else {
+            return true;
+        };
+        if !input.is_empty() {
+            expr.substitute(input);
+            let cx = self.engine.expr_cx_for(self.engine.schema.db.table(table));
+            simplify::simplify_expr(cx, self.engine.capability, expr);
+        }
+        if expr.is_unsatisfiable() {
+            return false;
+        }
+        if expr.is_true() {
+            *filter = None;
+        }
+        true
+    }
+
     /// Split a composite filter into individual key predicates.
     ///
     /// Recognizes these forms and decomposes them:

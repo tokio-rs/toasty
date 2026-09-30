@@ -512,6 +512,16 @@ impl ApplyInsertScope<'_> {
                 },
                 _ => todo!("EXPR = {:#?}", stmt),
             },
+            stmt::Expr::IsNull(e) if e.negated => {
+                let stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }) =
+                    &*e.expr
+                else {
+                    todo!("EXPR = {stmt:#?}");
+                };
+                // Relation lifting adds this guard after the equality that
+                // assigns the foreign key. It contributes no new assignment.
+                assert!(!self.expr.entry(*index).unwrap().is_value_null());
+            }
             // Constants are ignored
             stmt::Expr::Value(_) => {}
             _ => todo!("EXPR = {:#?}", stmt),

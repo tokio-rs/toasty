@@ -1634,7 +1634,7 @@ where
     match node {
         TableRef::Cte { .. } => {}
         TableRef::Derived(table_derived) => v.visit_table_derived(table_derived),
-        TableRef::Table(_) => {}
+        TableRef::Table(_) | TableRef::Input(_) => {}
         TableRef::Arg(expr_arg) => v.visit_expr_arg(expr_arg),
     }
 }
