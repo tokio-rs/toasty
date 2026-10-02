@@ -96,28 +96,7 @@ Rust field name each variant used for the same logical field.
 
 ### Design
 
-The shared identifier names an accessor on the enum's fields struct that
-resolves to the shared column directly, with **no variant gate**:
-
-```rust
-// Any creature named "Bob", regardless of variant.
-Character::all().filter(Character::fields().creature().name().eq("Bob"));
-```
-
-The accessor is named after the shared identifier, never after a variant's Rust
-field name. It is distinct from `creature().human().full_name()`, which stays
-variant-rooted and gated. Rows whose variant does not declare the field hold
-NULL and match no equality predicate.
-
-### What to change
-
-- **Generate the accessor** on the enum fields struct, alongside the
-  per-variant accessors in `model/expand/embedded_enum.rs`. It produces an
-  un-gated, model-rooted `Path` to the shared column.
-- **Name collision check.** The shared identifier must not collide with another
-  shared identifier or with anything else that names an accessor on the enum's
-  fields struct (variant accessors like `human()`). Nothing checks this today;
-  the accessor is what makes a collision observable.
+Detailed design lives in `shared-column-gateless-accessor.md`, which refines this section with the gateless accessor's filter and `order_by` behavior and its collision rule. This section keeps only the problem statement above.
 
 ---
 

@@ -354,6 +354,72 @@ impl EmbeddedEnum {
         &self.fields[self.variants[variant_index].field_range.clone()]
     }
 
+    /// Returns the flattened index of the first variant field stored at
+    /// record `position`, for projection validation. Position 0 is the
+    /// discriminant, so this returns `None` for 0.
+    pub fn field_at_record_position(&self, position: usize) -> Option<usize> {
+        if position == 0 {
+            return None;
+        }
+        let mut flattened = 0;
+        for variant_index in 0..self.variants.len() {
+            let count = self.variant_fields(variant_index).len();
+            if count >= position {
+                return Some(flattened + position - 1);
+            }
+            flattened += count;
+        }
+        None
+    }
+
+    /// Returns the `(variant, local)` indexes of the flattened field at
+    /// `index`.
+    pub fn variant_local_index(&self, index: usize) -> Option<(usize, usize)> {
+        let mut remaining = index;
+        for variant_index in 0..self.variants.len() {
+            let count = self.variant_fields(variant_index).len();
+            if remaining < count {
+                return Some((variant_index, remaining));
+            }
+            remaining -= count;
+        }
+        None
+    }
+
+    /// First trailing-step value reserved for gateless shared reads in an
+    /// enum with `len` flattened fields and `variant_count` variants. A
+    /// variant-gated read encodes its trailing step as a record position (at
+    /// most `len`, since a variant's fields are a subset of the flattened
+    /// list), and a discriminant access encodes its step as a variant index
+    /// (at most `variant_count - 1`), so steps at or above this base can
+    /// never collide with either. The generated accessor emits
+    /// `shared_step_base(len, variant_count) + flattened index`; see
+    /// `shared_read_at_step`.
+    pub const fn shared_step_base(len: usize, variant_count: usize) -> usize {
+        if len + 1 > variant_count {
+            len + 1
+        } else {
+            variant_count
+        }
+    }
+
+    /// Returns the flattened index and field of the gateless shared read
+    /// encoded as trailing projection step `step`, or `None` when `step` does
+    /// not encode a shared read.
+    ///
+    /// Decodes steps emitted as `shared_step_base(fields.len(),
+    /// variants.len()) + flattened index`; see [`Self::shared_step_base`]
+    /// for why the encodings cannot collide.
+    pub fn shared_read_at_step(&self, step: usize) -> Option<(usize, &Field)> {
+        let index = step.checked_sub(Self::shared_step_base(
+            self.fields.len(),
+            self.variants.len(),
+        ))?;
+        let field = self.fields.get(index)?;
+        field.shared.as_ref()?;
+        Some((index, field))
+    }
+
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
         self.verify_variant_field_layout()?;
 

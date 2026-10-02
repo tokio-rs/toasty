@@ -1,0 +1,5 @@
+error: shared field `human` collides with an existing method on this enum's fields struct; rename the shared field
+ --> tests/ui/enum_shared_accessor_collision.rs:8:18
+  |
+8 |         #[shared(human)]
+  |                  ^^^^^
