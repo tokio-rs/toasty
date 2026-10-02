@@ -65,7 +65,11 @@ impl<'a> Table<'a> {
 
             let columns = Column::diff(cx, &previous.columns, &next.columns);
             let indices = Index::diff(cx, &previous.indices, &next.indices);
-            if previous.name != next.name || !columns.is_empty() || !indices.is_empty() {
+            if previous.name != next.name
+                || previous.comment != next.comment
+                || !columns.is_empty()
+                || !indices.is_empty()
+            {
                 changes.push(Self::Alter {
                     previous,
                     next,

@@ -17,6 +17,7 @@ fn make_column(
             index,
         },
         name: name.to_string(),
+        comment: None,
         ty: stmt::Type::String,
         storage_ty,
         nullable,
@@ -31,6 +32,7 @@ fn make_schema_with_columns(table_id: usize, columns: Vec<Column>) -> Schema {
     schema.tables.push(Table {
         id: TableId(table_id),
         name: "test_table".to_string(),
+        comment: None,
         columns,
         primary_key: PrimaryKey {
             columns: vec![],

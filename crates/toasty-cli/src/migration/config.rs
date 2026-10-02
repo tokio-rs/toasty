@@ -51,6 +51,10 @@ pub struct MigrationConfig {
     /// some (like PostgreSQL) can execute multiple statements in one batch, while others
     /// require each statement to be executed separately.
     pub statement_breakpoints: bool,
+
+    /// Whether generated migrations manage native table and column comments.
+    #[serde(default)]
+    pub schema_comments: bool,
 }
 
 /// Controls the prefix format used when naming generated migration files.
@@ -83,6 +87,7 @@ impl Default for MigrationConfig {
             prefix_style: MigrationPrefixStyle::Sequential,
             checksums: false,
             statement_breakpoints: true,
+            schema_comments: false,
         }
     }
 }
@@ -102,6 +107,12 @@ impl MigrationConfig {
     /// Set the migration prefix style
     pub fn prefix_style(mut self, style: MigrationPrefixStyle) -> Self {
         self.prefix_style = style;
+        self
+    }
+
+    /// Configure whether generated migrations manage native schema comments.
+    pub fn schema_comments(mut self, enabled: bool) -> Self {
+        self.schema_comments = enabled;
         self
     }
 
