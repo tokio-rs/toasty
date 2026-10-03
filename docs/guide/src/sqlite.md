@@ -91,6 +91,7 @@ underlying SQLite storage class.
 | `jiff::civil::Date` *(feature)* | `TEXT` (ISO 8601) |
 | `jiff::civil::Time` *(feature)* | `TEXT` (ISO 8601) |
 | `jiff::civil::DateTime` *(feature)* | `TEXT` (ISO 8601) |
+| `jiff::tz::TimeZone` *(feature)* | `TEXT` (IANA identifier, fixed offset, or POSIX TZ string) |
 | `toasty::stmt::IpCidr`, `toasty::stmt::IpInet` *(feature)* | `TEXT` |
 | `toasty::stmt::MacAddr6`, `toasty::stmt::MacAddr8` *(feature)* | `TEXT` |
 | `Vec<T>` *(T scalar)* | `TEXT` holding a JSON array |

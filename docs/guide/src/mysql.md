@@ -87,6 +87,7 @@ quirks worth knowing about; the notes below the table call them out.
 | `jiff::civil::Date` *(feature)* | `DATE` |
 | `jiff::civil::Time` *(feature)* | `TIME(6)` |
 | `jiff::civil::DateTime` *(feature)* | `DATETIME(6)` |
+| `jiff::tz::TimeZone` *(feature)* | `VARCHAR(191)` |
 | `toasty::stmt::IpCidr` *(feature)* | `VARCHAR(43)` |
 | `toasty::stmt::IpInet` *(feature)* | `VARCHAR(43)` |
 | `toasty::stmt::MacAddr6` *(feature)* | `VARCHAR(17)` |

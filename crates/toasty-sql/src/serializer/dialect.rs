@@ -50,8 +50,21 @@ impl<'a> Serializer<'a> {
         }
     }
 
+    /// Creates a serializer that emits MariaDB SQL.
+    pub fn mariadb(schema: &'a db::Schema) -> Self {
+        Serializer {
+            schema,
+            dialect: Dialect::MariaDb,
+            sqlite_default_begin: "BEGIN",
+        }
+    }
+
+    /// Returns `true` for both MySQL and MariaDB.
+    ///
+    /// Most rendering is shared; the places that are not match on
+    /// [`Dialect`] directly.
     pub(super) fn is_mysql(&self) -> bool {
-        matches!(self.dialect, Dialect::Mysql)
+        matches!(self.dialect, Dialect::Mysql | Dialect::MariaDb)
     }
 }
 
@@ -60,6 +73,6 @@ pub(super) fn sql_placeholder(dialect: Dialect) -> SqlPlaceholder {
     match dialect {
         Dialect::Postgresql => SqlPlaceholder::DollarNumber,
         Dialect::Sqlite => SqlPlaceholder::NumberedQuestionMark,
-        Dialect::Mysql => SqlPlaceholder::QuestionMark,
+        Dialect::Mysql | Dialect::MariaDb => SqlPlaceholder::QuestionMark,
     }
 }

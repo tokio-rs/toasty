@@ -32,6 +32,7 @@ Guide-level design documents for specific features. Use
 - [Enums and Embedded Structs](./design/enums-and-embedded-structs.md)
 - [Filtering Included Relations](./design/include-filters.md)
 - [Lower-then-Simplify Pipeline](./design/lower-then-simplify.md)
+- [Option Values and Database Nulls](./design/option-semantics.md)
 - [`query!` Macro](./design/query-macro.md)
 - [Retry-Safe Recovery from Connection Loss](./design/retry-safe-recovery.md)
 - [Static Assertions for `create!` Required Fields](./design/static-assertions-create-macro.md)

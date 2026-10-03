@@ -26,6 +26,7 @@ fn is_null_non_nullable_field() {
             nesting: 0,
             index: 1,
         })),
+        negated: false,
     };
 
     let result = simplify.simplify_expr_is_null(&mut field);

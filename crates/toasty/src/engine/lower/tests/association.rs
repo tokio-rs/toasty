@@ -136,6 +136,7 @@ fn has_many_via_becomes_in_subquery() {
     let Expr::InSubquery(ExprInSubquery {
         expr,
         query: subquery,
+        ..
     }) = filter_expr
     else {
         panic!("expected filter expression to be an `Expr::InSubquery`");
@@ -203,6 +204,7 @@ fn multi_step_via_unfolds_into_nested_in_subqueries() {
     let Expr::InSubquery(ExprInSubquery {
         expr,
         query: outer_subquery,
+        ..
     }) = select.filter.as_expr()
     else {
         panic!("expected outer filter to be Expr::InSubquery");

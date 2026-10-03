@@ -215,8 +215,10 @@ impl BuildSchema<'_> {
                         panic!("enum field mapping on a non-enum embed")
                     };
                     for (index, variant) in e.variants.iter().enumerate() {
-                        for (field, mapped) in
-                            embedded_enum.variant_fields(index).zip(&variant.fields)
+                        for (field, mapped) in embedded_enum
+                            .variant_fields(index)
+                            .iter()
+                            .zip(&variant.fields)
                         {
                             collect_field(app, field, mapped, out);
                         }

@@ -206,6 +206,7 @@ impl Expand<'_> {
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
         let target = quote!(<#ty as #toasty::RelationOneField>::Target);
+        let field_offset = util::int(field.id);
 
         // A `via` relation reaches its target through a path of existing
         // relations; it has no paired `BelongsTo`, so skip the back-reference
@@ -244,7 +245,7 @@ impl Expand<'_> {
                     use #toasty::IntoStatement;
                     let assoc = #toasty::stmt::Association::one(
                         self.into_statement().into_query().unwrap().to_list(),
-                        Self::fields().#field_ident().into(),
+                        <Self as #toasty::Model>::path_field::<#target>(#field_offset),
                     );
                     let query = <#target as #toasty::Model>::wrap_query(
                         assoc.into_statement().into_query().unwrap(),

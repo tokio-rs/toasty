@@ -161,7 +161,7 @@ pub async fn query_infers_storage_values(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(Item)).await;
     let table = table_name(&db, "items");
-    let uuid = uuid::Uuid::from_u128(0x0123456789abcdef0123456789abcdef);
+    let uuid = uuid::Uuid::from_u128(0x0123456789ab4def8123456789abcdef);
 
     let item = toasty::create!(Item {
         bool_v: true,

@@ -222,6 +222,9 @@ mod jiff_impls {
     impl CompatibleWith<tag::VarChar> for jiff::civil::Time {}
     impl CompatibleWith<tag::Text> for jiff::civil::DateTime {}
     impl CompatibleWith<tag::VarChar> for jiff::civil::DateTime {}
+
+    impl CompatibleWith<tag::Text> for jiff::tz::TimeZone {}
+    impl CompatibleWith<tag::VarChar> for jiff::tz::TimeZone {}
 }
 
 #[cfg(feature = "net")]

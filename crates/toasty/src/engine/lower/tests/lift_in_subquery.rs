@@ -151,6 +151,7 @@ fn belongs_to_has_many_fuses_to_direct_fk() {
     let Expr::InSubquery(ExprInSubquery {
         expr: lhs,
         query: fused,
+        ..
     }) = lifted
     else {
         panic!("expected InSubquery, got {lifted:?}");

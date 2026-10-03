@@ -55,9 +55,11 @@ With optional feature flags:
 | `rust_decimal` | `rust_decimal::Decimal` | Decimal |
 | `bigdecimal` | `bigdecimal::BigDecimal` | Decimal |
 | `jiff` | `jiff::Timestamp` | Timestamp |
+| `jiff` | `jiff::Zoned` | Text (ISO 8601 with an RFC 9557 zone annotation) |
 | `jiff` | `jiff::civil::Date` | Date |
 | `jiff` | `jiff::civil::Time` | Time |
 | `jiff` | `jiff::civil::DateTime` | DateTime |
+| `jiff` | `jiff::tz::TimeZone` | Text (IANA identifier, fixed offset, or POSIX TZ string) |
 | `net` | `toasty::stmt::IpCidr` | IP network prefix |
 | `net` | `toasty::stmt::IpInet` | IP host address with a network prefix |
 | `net` | `toasty::stmt::MacAddr6` | Six-byte MAC address |

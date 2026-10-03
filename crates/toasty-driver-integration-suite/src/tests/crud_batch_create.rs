@@ -68,7 +68,7 @@ pub async fn batch_create_many(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(requires(and(auto_increment, returning_from_mutation)))]
+#[driver_test(requires(and(auto_increment, returning_from_insert)))]
 pub async fn batch_create_many_auto_increment(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
@@ -91,7 +91,7 @@ pub async fn batch_create_many_auto_increment(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(requires(and(auto_increment, not(returning_from_mutation))))]
+#[driver_test(requires(and(auto_increment, not(returning_from_insert))))]
 pub async fn batch_create_many_auto_increment_requires_returning(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Generated {
@@ -133,7 +133,7 @@ pub async fn batch_create_many_auto_increment_requires_returning(test: &mut Test
         .await?;
 
     assert_struct!(items, [{ id: 10, name: "one" }, { id: 20, name: "two" }]);
-    assert_struct!(test.log().pop_op(), Operation::Insert({ ret: None, .. }));
+    assert_struct!(test.log().pop_op(), Operation::Insert({ ret: None }));
     assert!(test.log().is_empty());
 
     Ok(())

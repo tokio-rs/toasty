@@ -74,29 +74,36 @@ unsafe_code = "deny"
 
 [workspace.dependencies]
 # Toasty crates
-toasty = { version = "0.10.0", path = "crates/toasty" }
-toasty-cli = { version = "0.10.0", path = "crates/toasty-cli" }
-toasty-core = { version = "0.10.0", path = "crates/toasty-core" }
-toasty-macros = { version = "0.10.0", path = "crates/toasty-macros" }
-toasty-sql = { version = "0.10.0", path = "crates/toasty-sql" }
+toasty = { version = "0.11.0", path = "crates/toasty" }
+toasty-cli = { version = "0.11.0", path = "crates/toasty-cli" }
+toasty-core = { version = "0.11.0", path = "crates/toasty-core" }
+toasty-macros = { version = "0.11.0", path = "crates/toasty-macros" }
+toasty-sql = { version = "0.11.0", path = "crates/toasty-sql" }
 # Driver implementations
-toasty-driver-dynamodb = { version = "0.10.0", path = "crates/toasty-driver-dynamodb" }
-toasty-driver-mysql = { version = "0.10.0", path = "crates/toasty-driver-mysql", default-features = false }
-toasty-driver-postgresql = { version = "0.10.0", path = "crates/toasty-driver-postgresql" }
-toasty-driver-sqlite = { version = "0.10.0", path = "crates/toasty-driver-sqlite" }
-toasty-driver-turso = { version = "0.10.0", path = "crates/toasty-driver-turso" }
+toasty-driver-dynamodb = { version = "0.11.0", path = "crates/toasty-driver-dynamodb" }
+toasty-driver-mysql = { version = "0.11.0", path = "crates/toasty-driver-mysql", default-features = false }
+toasty-driver-postgresql = { version = "0.11.0", path = "crates/toasty-driver-postgresql" }
+toasty-driver-sqlite = { version = "0.11.0", path = "crates/toasty-driver-sqlite" }
+toasty-driver-turso = { version = "0.11.0", path = "crates/toasty-driver-turso" }
 
 # Driver integration test suite dependencies
-toasty-driver-integration-suite = { version = "0.10.0", path = "crates/toasty-driver-integration-suite" }
-toasty-driver-integration-suite-macros = { version = "0.10.0", path = "crates/toasty-driver-integration-suite-macros" }
+toasty-driver-integration-suite = { version = "0.11.0", path = "crates/toasty-driver-integration-suite" }
+toasty-driver-integration-suite-macros = { version = "0.11.0", path = "crates/toasty-driver-integration-suite-macros" }
 
 # Other crates
-assert-struct = "0.4.2"
+assert-struct = "0.5.0"
 async-recursion = "1.1.1"
 async-stream = "0.3.6"
 async-trait = "0.1.89"
 aws-config = "1"
-aws-sdk-dynamodb = { version = "1.110.0", features = ["test-util"] }
+# Skip the deprecated `rustls` feature: it pulls rustls-webpki 0.101 (RUSTSEC-2026-0104).
+aws-sdk-dynamodb = { version = "1.110.0", default-features = false, features = [
+    "default-https-client",
+    "rt-tokio",
+    "test-util",
+] }
+# aws-smithy-json 0.63.0 is incompatible with the Document changes in 1.7.0.
+aws-smithy-types = "=1.8.1"
 bit-set = "0.11.0"
 by_address = "1.2.1"
 cfg-if = "1.0.4"
@@ -150,7 +157,9 @@ rustls-pemfile = "2"
 rustls-webpki = { version = "0.103", default-features = false, features = ["alloc", "std"] }
 tokio-stream = { version = "0.1.18", default-features = false }
 tracing = "0.1"
-turso = "0.7"
+# Disable turso's default features to let the toasty user choose which allocator to use
+turso = { version = "0.8", default-features = false }
+turso_serverless = "0.1.3"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 trybuild = { version = "1.0.116", features = ["diff"] }
 url = "2.5.8"

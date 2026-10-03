@@ -1,11 +1,11 @@
-use crate::stmt::{ExprExists, Input};
+use crate::stmt::{ExprExists, ExprSet, Input};
 
 use super::{
     Entry, EntryMut, EntryPath, ExprAllOp, ExprAnd, ExprAny, ExprAnyOp, ExprArg, ExprBetween,
     ExprBinaryOp, ExprCast, ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIncoming,
     ExprIntersects, ExprIsNull, ExprIsSuperset, ExprIsVariant, ExprLength, ExprLet, ExprLike,
     ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStartsWith,
-    ExprStmt, Node, Projection, Resolve, Substitute, Type, Value, Visit, VisitMut,
+    ExprStmt, ExprVariant, Node, Projection, Resolve, Substitute, Type, Value, Visit, VisitMut,
     expr_reference::ExprReference,
 };
 use std::fmt;
@@ -162,6 +162,9 @@ pub enum Expr {
     /// Use it for values the statement itself fixes. `.first()` emits its
     /// `LIMIT 1` this way. Caller-supplied values use [`Expr::Value`].
     Static(Value),
+
+    /// Selects a variant of an embedded enum value. See [`ExprVariant`].
+    Variant(ExprVariant),
 }
 
 impl Expr {
@@ -406,6 +409,7 @@ impl Expr {
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_stable()),
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_stable(),
             Self::IsVariant(expr_is_variant) => expr_is_variant.expr.is_stable(),
+            Self::Variant(expr_variant) => expr_variant.base.is_stable(),
             Self::Not(expr_not) => expr_not.expr.is_stable(),
             Self::InList(expr_in_list) => {
                 expr_in_list.expr.is_stable() && expr_in_list.list.is_stable()
@@ -528,6 +532,7 @@ impl Expr {
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_const_at_depth(map_depth)),
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_const_at_depth(map_depth),
             Self::IsVariant(expr_is_variant) => expr_is_variant.expr.is_const_at_depth(map_depth),
+            Self::Variant(expr_variant) => expr_variant.base.is_const_at_depth(map_depth),
             Self::InList(expr_in_list) => {
                 expr_in_list.expr.is_const_at_depth(map_depth)
                     && expr_in_list.list.is_const_at_depth(map_depth)
@@ -568,11 +573,12 @@ impl Expr {
         }
     }
 
-    /// Returns `true` if the expression can be evaluated.
+    /// Returns `true` if the in-memory evaluator supports this expression.
     ///
-    /// An expression can be evaluated if it doesn't contain references to external
-    /// data sources like subqueries or references. Args are allowed since they
-    /// represent function parameters that can be bound at evaluation time.
+    /// Args are allowed because they can be bound at evaluation time. References
+    /// to external data and operations that require lowering or a database are
+    /// rejected. `Exists` supports only `Values` bodies with evaluable rows.
+    /// Evaluation can still fail for invalid values or missing arguments.
     pub fn is_eval(&self) -> bool {
         match self {
             // Always evaluable
@@ -587,25 +593,25 @@ impl Expr {
             // Error expressions are evaluable (they produce an error)
             Self::Error(_) => true,
 
-            // Never evaluable - references external data or requires a database driver
+            // Requires external data, lowering, or a database driver.
             Self::Default
             | Self::Reference(_)
             | Self::Incoming(_)
             | Self::Stmt(_)
             | Self::InSubquery(_)
-            | Self::Exists(_)
             | Self::StartsWith(_)
-            | Self::Like(_) => false,
+            | Self::Like(_)
+            | Self::Between(_)
+            | Self::IsVariant(_)
+            | Self::Variant(_)
+            | Self::IsSuperset(_)
+            | Self::Intersects(_)
+            | Self::Length(_) => false,
 
             // Evaluable if all children are evaluable
             Self::Record(expr_record) => expr_record.iter().all(|expr| expr.is_eval()),
             Self::List(expr_list) => expr_list.items.iter().all(|expr| expr.is_eval()),
             Self::Cast(expr_cast) => expr_cast.expr.is_eval(),
-            Self::Between(expr_between) => {
-                expr_between.expr.is_eval()
-                    && expr_between.low.is_eval()
-                    && expr_between.high.is_eval()
-            }
             Self::BinaryOp(expr_binary) => expr_binary.lhs.is_eval() && expr_binary.rhs.is_eval(),
             Self::And(expr_and) => expr_and.iter().all(|expr| expr.is_eval()),
             Self::Any(expr_any) => expr_any.expr.is_eval(),
@@ -614,7 +620,6 @@ impl Expr {
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_eval()),
             Self::Not(expr_not) => expr_not.expr.is_eval(),
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_eval(),
-            Self::IsVariant(expr_is_variant) => expr_is_variant.expr.is_eval(),
             Self::InList(expr_in_list) => {
                 expr_in_list.expr.is_eval() && expr_in_list.list.is_eval()
             }
@@ -624,13 +629,16 @@ impl Expr {
             }
             Self::Map(expr_map) => expr_map.base.is_eval() && expr_map.map.is_eval(),
             Self::Match(expr_match) => {
-                expr_match.subject.is_eval() && expr_match.arms.iter().all(|arm| arm.expr.is_eval())
+                expr_match.subject.is_eval()
+                    && expr_match.arms.iter().all(|arm| arm.expr.is_eval())
+                    && expr_match.else_expr.is_eval()
             }
+            Self::Exists(expr_exists) => match &expr_exists.subquery.body {
+                ExprSet::Values(values) => values.rows.iter().all(Self::is_eval),
+                _ => false,
+            },
+            Self::Func(ExprFunc::JsonExtract(func)) => func.base.is_eval(),
             Self::Func(_) => false,
-            // Array predicates and length: evaluable iff all operands are.
-            Self::IsSuperset(e) => e.lhs.is_eval() && e.rhs.is_eval(),
-            Self::Intersects(e) => e.lhs.is_eval() && e.rhs.is_eval(),
-            Self::Length(e) => e.expr.is_eval(),
         }
     }
 
@@ -802,6 +810,7 @@ impl fmt::Debug for Expr {
             Self::IsNull(e) => e.fmt(f),
             Self::IsSuperset(e) => e.fmt(f),
             Self::IsVariant(e) => e.fmt(f),
+            Self::Variant(e) => e.fmt(f),
             Self::Length(e) => e.fmt(f),
             Self::Let(e) => e.fmt(f),
             Self::Like(e) => e.fmt(f),

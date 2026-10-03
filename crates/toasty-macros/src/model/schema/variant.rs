@@ -24,6 +24,13 @@ pub(crate) struct Variant {
     /// carries both the `matches(closure)` filter API and the variant-field
     /// path accessors.
     pub(crate) variant_handle_ident: Option<syn::Ident>,
+
+    /// Construction builder struct identifier (e.g., `OwnerHumanCreate`).
+    /// Only set for data-carrying variants. Returned by the
+    /// `{variant_method}()` selector on the enum's `{Enum}Create` builder;
+    /// carries one setter per variant field and builds the variant's
+    /// record expression.
+    pub(crate) create_struct_ident: Option<syn::Ident>,
 }
 
 #[derive(Debug)]
@@ -70,13 +77,16 @@ impl Variant {
         let is_method_ident =
             syn::Ident::new(&format!("is_{}", name.as_str()), variant.ident.span());
 
-        let variant_handle_ident = if has_fields {
-            Some(syn::Ident::new(
-                &format!("{}{}Variant", enum_ident, variant.ident),
+        let suffixed = |suffix: &str| {
+            syn::Ident::new(
+                &format!("{}{}{}", enum_ident, variant.ident, suffix),
                 variant.ident.span(),
-            ))
+            )
+        };
+        let (variant_handle_ident, create_struct_ident) = if has_fields {
+            (Some(suffixed("Variant")), Some(suffixed("Create")))
         } else {
-            None
+            (None, None)
         };
 
         Ok(Variant {
@@ -86,6 +96,7 @@ impl Variant {
             fields_named,
             is_method_ident,
             variant_handle_ident,
+            create_struct_ident,
         })
     }
 }

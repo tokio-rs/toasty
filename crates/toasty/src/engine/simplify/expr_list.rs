@@ -71,7 +71,7 @@ impl Simplify<'_> {
         }
 
         // All inserts are compatible, merge them into a single batch insert
-        let mut items = expr.items.drain(..).collect::<Vec<_>>();
+        let mut items = std::mem::take(&mut expr.items);
         let mut merged_insert = match items.remove(0) {
             stmt::Expr::Stmt(s) => s.stmt.into_insert_unwrap(),
             _ => unreachable!(),

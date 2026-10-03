@@ -239,12 +239,14 @@ let name = match &object.owner {
 };
 ```
 
-To avoid the extra round-trip, `.include()` preloads the relation field of
-whichever variant each row holds:
+To avoid the extra round-trip, name each relation to preload with
+`.include()`:
 
 ```rust
 let objects = Object::all()
-    .include(Object::fields().owner())
+    .include(Object::fields().owner().human().human())
+    .include(Object::fields().owner().animal().animal())
+    .include(Object::fields().owner().bot().bot())
     .collect(&mut db)
     .await?;
 
@@ -254,6 +256,12 @@ for object in &objects {
     }
 }
 ```
+
+An include loads only the field its path names. Because `owner: Owner` is
+not deferred, `.include(Object::fields().owner())` has no effect. If the
+model stores `owner: Deferred<Owner>`, that include loads the enum value and
+leaves its deferred relations unloaded. A full relation path loads any
+deferred embeds along the path as well as the relation at its end.
 
 ### Creating and updating
 
@@ -266,6 +274,12 @@ toasty::create!(Object { owner: Owner::Human { human: &alice } })
     .exec(&mut db)
     .await?;
 ```
+
+The macro expands the literal into a chain on the builder of the enum it
+names: `<Owner as EmbedCreate>::create().human().human(&alice)`. The first
+`human()` selects the variant, the second sets its relation field. A
+literal naming a different enum than the field holds fails to compile at
+the field's setter.
 
 Supplying the key directly also works; the relation field carries no
 storage, so an unloaded placeholder is valid:
@@ -295,9 +309,10 @@ missing — the exclusivity that the status-quo encoding cannot enforce.
 - `human.objects()` and other pair queries add the discriminant predicate
   automatically. On SQL backends the query has the form
   `WHERE owner = 'human' AND owner_id = ?`.
-- `.include(Object::fields().owner())` issues one query per variant present
-  in the result set and merges the results into each row's enum value.
-  Variants not present in the result set cost nothing.
+- An include of an embedded relation path issues a query when that variant is
+  present in the result set and merges the result into each row's enum value.
+  An include ending at an embed loads only that embed when it is deferred.
+  It does not load relations inside the embed.
 - Writes set the discriminant and key columns together, as one embed value.
   Columns belonging to other variants are written NULL, per existing
   embedded-enum storage semantics.
@@ -316,9 +331,12 @@ missing — the exclusivity that the status-quo encoding cannot enforce.
 - **Dangling keys.** As with model-level `belongs_to`, nothing prevents a
   stored key from referencing a deleted owner; loading it yields the same
   not-found behavior as any stale foreign key.
-- **Within-variant patch.** `stmt::patch` on a variant field follows the
-  existing embedded-enum rules (variant-gated, SQL-only). Patching a key
-  field re-points the relation without touching the kind.
+- **Within-variant patch.** `stmt::patch` cannot enter an enum variant on
+  any backend. A path into a variant — to change a key field, increment a
+  counter, or set any other variant field — makes the update fail with
+  `unsupported_feature` before it executes, so no assignment in that
+  statement is written. Re-pointing a relation through a variant is a
+  whole-value replacement of the embed, as shown above.
 
 ## Pair resolution and lowering
 
@@ -438,25 +456,26 @@ consumer funnels through that rewrite — the `has_many` association filter,
 includes, subquery lifting, and user-written comparisons on relation paths.
 
 A variant-scoped pair extends that invariant rather than adding machinery.
-At the same rewrite, a reference to a relation reached through `Pair` steps
-lowers into two things at once:
+A reference to a relation reached through `Pair` steps is a path expression
+whose variant steps are `ExprVariant` selections. The rewrite substitutes
+the foreign-key comparison, with source fields projected through the same
+selections (the shared or per-variant key columns), and the `is_variant`
+gate for each selected variant is already part of the predicate: statement
+normalization collects the gates from both operands and every enclosing
+variant at each predicate boundary, before lowering sees the statement.
 
-- the foreign-key comparison, with source fields projected through the
-  embed (the shared or per-variant key columns), and
-- an `is_variant` gate for each step that selects a variant, ANDed into
-  the enclosing boolean expression.
-
-Fusing the gate with the key comparison at the single rewrite is a
-correctness requirement, not a style choice: with a `#[shared]` key column,
-`owner_id = ?` without the gate matches an `Animal` row holding the same
-UUID. No consumer can obtain the key comparison without the gate, so no
+Keeping the gate with the key comparison is a correctness requirement, not
+a style choice: with a `#[shared]` key column, `owner_id = ?` without the
+gate matches an `Animal` row holding the same UUID. The gate is fixed by
+normalization and the rewrite keeps the selection in the key expression,
+so no consumer can obtain the key comparison without the gate and no
 expansion site can leak rows of the wrong variant.
 
-Negation follows the existing variant-field convention: the typed layer
-lowers `ne` on a variant field to `is_variant AND field != x`, and a `ne`
-through a variant-scoped relation lowers the same way — false for rows of
-other variants — so filter semantics do not depend on whether the gate
-comes from the typed layer or the engine rewrite.
+Negation follows the existing variant-field convention: `ne` on a variant
+field is `is_variant AND field != x`, and a `ne` through a variant-scoped
+relation is the same — false for rows of other variants. Comparing two
+relations in variants requires both variants. Negating a predicate negates
+the guarded comparison as a whole.
 
 On the write side, `Pair` carries the intent mutations need: associating
 through the pair (`human.objects().create(...)`) constructs the variant
@@ -530,8 +549,8 @@ Checked for redundancy and deliberately kept:
   steps vs. value steps) with opposite validation rules; merging them
   would turn structural rejections into runtime checks.
 - **`stmt::PathRoot::Variant`** — serves typed filter paths generally;
-  `Pair` is schema-layer and converts to a variant-rooted projection
-  during lowering.
+  `Pair` is schema-layer and converts to a variant selection
+  (`ExprVariant`) during lowering.
 - **`ForeignKey` / `ForeignKeyField`** — already host-independent
   (embed-local sources, owner-model targets); instancing never touches
   them.
@@ -546,12 +565,8 @@ The work ships in steps, each providing user value on its own.
    `match` gives direct access to the stored keys, and the owner loads
    with an ordinary `find_by_*` — the polymorphic shape is fully
    modelable, storable, and queryable by key through the existing
-   variant filter paths. Three limitations remain, each lifted by a
+   variant filter paths. Two limitations remain, each lifted by a
    later step:
-   - The relation cannot be set or filtered by model value. Writes set
-     the key fields explicitly and leave the relation unloaded
-     (`Owner::Bot { serial, bot: Deferred::default() }`); a loaded value
-     is rejected at runtime. Lifted in step 2.
    - The relation field must be declared `Deferred`, and no `.include()`
      exists to load it. Lifted in step 3.
    - No inverse: `has_many` / `has_one` cannot pair into the embedding.
@@ -566,12 +581,14 @@ The work ships in steps, each providing user value on its own.
    This lifts step 1's explicit-keys restriction: a loaded relation
    value in a write is rewritten to its key assignments instead of
    rejected.
-3. **Preloading with `.include()`.** `.include(Object::fields().owner())`
-   issues one query per variant present and merges results into each
-   row's enum value. This lifts step 1's `Deferred`-only requirement on
-   embedded relation fields: a non-deferred field (`human: Human`) needs
-   its value present on every load, which only works once includes can
-   populate it — with them, it behaves as at model level.
+3. **Preloading with `.include()`.** An explicit relation path such as
+   `.include(Object::fields().owner().human().human())` loads that relation
+   for rows holding the matching variant. An include ending at an embed is
+   shallow: it loads the embed itself when deferred and leaves deferred
+   relations inside it unloaded. This lifts step 1's `Deferred`-only
+   requirement on embedded relation fields: a non-deferred field
+   (`human: Human`) needs its value present on every load, which only works
+   once includes can populate it — with them, it behaves as at model level.
 4. **Inverse pairs, queries.** `pair` paths, the `Pair` struct, the
    per-embedding instance records, linker recursion, and the removals
    listed above land together; `has_many` / `has_one` declarations on
@@ -632,6 +649,8 @@ None.
 
 ## Out of scope
 
+- **Loading every relation inside an embed with one include.** Each relation
+  currently needs its own include path. A shorter form requires a separate API.
 - **`via` relations through a polymorphic owner** (e.g. collecting all
   objects of all humans in a group) — composition with `via` is a separate
   design.

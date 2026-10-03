@@ -1,5 +1,4 @@
 .cargo
 **/target
-/Cargo.lock
 docs/guide/book/
 tests/tls/certs/

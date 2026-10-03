@@ -1,4 +1,4 @@
-use super::Simplify;
+use super::{Simplify, dedup_operands, has_complement};
 use std::mem;
 use toasty_core::stmt::{self, BinaryOp, Expr};
 
@@ -7,20 +7,8 @@ impl Simplify<'_> {
     /// literals, null propagation, single/empty collapse on canonical input)
     /// runs in `fold::expr_and` before this is reached.
     pub(super) fn simplify_expr_and(&mut self, expr: &mut stmt::ExprAnd) -> Option<stmt::Expr> {
-        // Idempotent law, `a and a` → `a`
-        // Note: O(n) lookups are acceptable here since operand lists are typically small.
-        // `is_equivalent_to` (not `PartialEq`) keeps this sound for non-deterministic
-        // operands like `LAST_INSERT_ID()` — two syntactically identical calls may
-        // return different values, so the second occurrence must survive.
-        let mut seen: Vec<Expr> = Vec::new();
-        expr.operands.retain(|operand| {
-            if seen.iter().any(|e| e.is_equivalent_to(operand)) {
-                false
-            } else {
-                seen.push(operand.clone());
-                true
-            }
-        });
+        self.merge_in_subqueries(&mut expr.operands);
+        dedup_operands(&mut expr.operands);
 
         // Absorption law, `x and (x or y)` → `x`
         // If an operand is an OR that contains another operand of the AND, remove the OR.
@@ -44,7 +32,7 @@ impl Simplify<'_> {
         });
 
         // Complement law, `a and not(a)` → `false` (only if `a` is non-nullable)
-        if self.try_complement_and(expr) {
+        if has_complement(&expr.operands) {
             return Some(false.into());
         }
 
@@ -70,40 +58,6 @@ impl Simplify<'_> {
         } else {
             None
         }
-    }
-
-    /// Checks for complement law: `a and not(a)` → `false`
-    /// Returns true if a complementary pair is found and both are non-nullable.
-    fn try_complement_and(&self, expr: &stmt::ExprAnd) -> bool {
-        // Collect all NOT expressions and their inner expressions
-        let negated: Vec<_> = expr
-            .operands
-            .iter()
-            .filter_map(|op| {
-                if let stmt::Expr::Not(not_expr) = op {
-                    Some(not_expr.expr.as_ref())
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        // Check if any operand has its negation also present
-        for operand in &expr.operands {
-            // Skip NOT expressions themselves
-            if matches!(operand, stmt::Expr::Not(_)) {
-                continue;
-            }
-
-            // Check if not(operand) exists and operand is non-nullable
-            if negated.iter().any(|n| n.is_equivalent_to(operand))
-                && operand.is_always_non_nullable()
-            {
-                return true;
-            }
-        }
-
-        false
     }
 
     /// Finds pairs of range comparisons that collapse to equality.
@@ -227,18 +181,8 @@ fn prune_or_branches(expr: &mut stmt::ExprAnd) -> Option<Expr> {
         return Some(false.into());
     }
 
-    // Deduplicate after flattening (flatten can reintroduce operands
-    // already present in the outer AND). `is_equivalent_to` skips dedup
-    // of non-deterministic operands, preserving their independent evaluations.
-    let mut seen: Vec<Expr> = Vec::new();
-    expr.operands.retain(|operand| {
-        if seen.iter().any(|e| e.is_equivalent_to(operand)) {
-            false
-        } else {
-            seen.push(operand.clone());
-            true
-        }
-    });
+    // Flattening can reintroduce operands already present in the outer AND.
+    dedup_operands(&mut expr.operands);
 
     None
 }

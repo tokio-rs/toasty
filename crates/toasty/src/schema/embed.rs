@@ -39,3 +39,18 @@ pub trait Embed {
         Path::field_at(Self::id(), index)
     }
 }
+
+/// An embedded type that can be constructed as a write value through a
+/// builder: an enum with data-carrying variants.
+///
+/// `create!` and `update!` expand a variant literal
+/// (`Owner::Human { human: &alice }`) into a chain on
+/// [`Create`](Self::Create): `<Owner as EmbedCreate>::create().human().human(&alice)`.
+pub trait EmbedCreate: Embed {
+    /// The variant-selection builder (`OwnerCreate`), with one method per
+    /// data-carrying variant.
+    type Create;
+
+    /// Returns the variant-selection builder.
+    fn create() -> Self::Create;
+}
