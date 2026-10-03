@@ -105,7 +105,6 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let storage_compat_checks = expand.expand_storage_compat_checks();
     let column_type_requirement_checks = expand.expand_column_type_requirement_checks();
     let indexable_checks = expand.expand_indexable_checks();
-    let embedded_relation_checks = expand.expand_embedded_relation_checks();
     let newtype_marker = expand.expand_embedded_newtype_marker();
     let newtype_indexable_impl = expand.expand_embedded_indexable_impl();
     let field_list_struct_ident = &embedded.field_list_struct_ident;
@@ -124,7 +123,6 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         #storage_compat_checks
         #column_type_requirement_checks
         #indexable_checks
-        #embedded_relation_checks
 
         impl #toasty::Embed for #model_ident {
             fn id() -> #toasty::core::schema::app::ModelId {
@@ -259,6 +257,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let field_struct_ident = &embedded_enum.field_struct_ident;
     let field_list_struct_ident = &embedded_enum.field_list_struct_ident;
     let enum_field_struct = e.expand_enum_field_struct();
+    let create_builders = e.expand_enum_create_builders();
     let enum_field_list_struct = e.expand_field_list_struct();
     let field_register_calls = e.expand_field_register_calls();
     let storage_compat_checks = e.expand_storage_compat_checks();
@@ -266,7 +265,6 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let discriminant_storage_compat_impls = e.expand_enum_discriminant_compat_impls();
     let shared_column_checks = e.expand_shared_column_checks();
     let indexable_checks = e.expand_indexable_checks();
-    let embedded_relation_checks = e.expand_embedded_relation_checks();
 
     // A unit (data-less) enum is a single scalar discriminant: indexable, and a
     // valid `Vec<Enum>` element (`Scalar` unlocks the container operators).
@@ -283,13 +281,13 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     wrap_in_const(quote! {
         #enum_field_struct
         #enum_field_list_struct
+        #create_builders
 
         #storage_compat_checks
         #column_type_requirement_checks
         #discriminant_storage_compat_impls
         #shared_column_checks
         #indexable_checks
-        #embedded_relation_checks
         #unit_enum_impls
 
         impl #toasty::Embed for #model_ident {
@@ -391,32 +389,48 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 // === Shared token-generation helpers ===
 
 impl Expand<'_> {
-    /// For relation fields in embedded types, require the declared type to be
-    /// deferred (`toasty::Deferred<..>`). A non-deferred relation could never
-    /// load: the relation carries no storage, so its record slot always
-    /// decodes from `Null`, which only a deferred type represents (as the
-    /// unloaded state).
-    fn expand_embedded_relation_checks(&self) -> TokenStream {
+    /// Expression target for create/update setters. Via relations cannot be
+    /// assigned directly because they require an intermediate record.
+    fn expand_setter_target(&self, field: &FieldTy) -> Option<TokenStream> {
         let toasty = &self.toasty;
+        Some(match field {
+            // Field decides the target for scalars, collections, and embeds,
+            // including fields stored as documents.
+            FieldTy::Primitive(ty) => quote!(FieldExprTarget<#ty>),
+            FieldTy::BelongsTo(rel) => {
+                let ty = &rel.ty;
+                quote!(<#ty as #toasty::RelationOneField>::Expr)
+            }
+            FieldTy::HasOne(rel) if rel.via.is_none() => {
+                let ty = &rel.ty;
+                quote!(<#ty as #toasty::RelationOneField>::Expr)
+            }
+            FieldTy::HasMany(rel) if rel.via.is_none() => {
+                let ty = &rel.ty;
+                quote!(#toasty::List<<#ty as #toasty::RelationManyField>::Target>)
+            }
+            _ => return None,
+        })
+    }
 
-        let checks = self.model.fields.iter().filter_map(|field| {
-            let FieldTy::BelongsTo(rel) = &field.ty else {
-                return None;
-            };
-            let ty = &rel.ty;
-
-            Some(quote_spanned! { syn::spanned::Spanned::span(ty)=>
-                const _: () = {
-                    assert!(
-                        <#ty as #toasty::RelationOneField>::DEFERRED,
-                        "a relation stored in an embedded type must be wrapped \
-                         in `toasty::Deferred`",
-                    );
-                };
-            })
-        });
-
-        quote! { #( #checks )* }
+    /// Retains the schema identity of records whose relations the engine resolves.
+    fn expand_embedded_record(&self, record: TokenStream) -> TokenStream {
+        if !self
+            .model
+            .fields
+            .iter()
+            .any(|f| matches!(f.ty, FieldTy::BelongsTo(_)))
+        {
+            return record;
+        }
+        let toasty = &self.toasty;
+        let model = &self.model.ident;
+        quote! {
+            #toasty::core::stmt::Expr::cast(
+                #record,
+                #toasty::core::stmt::Type::Model(<#model as #toasty::Embed>::id()),
+            )
+        }
     }
 
     /// For canonical newtype `#[derive(Embed)]` types — a single unnamed
@@ -504,6 +518,7 @@ impl Expand<'_> {
         field_trait: TokenStream,
         ty: &syn::Type,
         field_offset: &TokenStream,
+        parent_path: &TokenStream,
     ) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
@@ -512,9 +527,9 @@ impl Expand<'_> {
         let span = field_ident.span();
 
         quote_spanned! { span=>
-            #vis fn #field_ident(&self) -> <<#ty as #field_trait>::Target as #toasty::Model>::OneField<__Origin> {
+            #vis fn #field_ident(&self) -> RelationOnePath<#ty, __Origin> {
                 <<#ty as #field_trait>::Target as #toasty::ModelCodegen>::new_one_field(
-                    self.path.clone().chain(
+                    #parent_path.chain(
                         <#model_ident as #schema_trait>::path_field(#field_offset)
                     )
                 )
@@ -561,14 +576,12 @@ fn wrap_in_const(code: TokenStream) -> TokenStream {
     quote! {
         const _: () = {
             use toasty as _toasty;
-            // Import the setter-bound names unqualified so the `impl Trait`
-            // parameter types on create/update setters render as
-            // `impl IntoExpr<FieldExprTarget<..>>` in compiler errors rather
-            // than the much longer `_toasty::codegen_support::..` paths. Not
-            // every model uses all three (a model with only relation setters
-            // never names `Assign` here), so silence the unused-import lint.
+            // Import signature types unqualified so compiler errors can show
+            // `impl IntoExpr<FieldExprTarget<..>>` and `RelationOnePath<..>`
+            // without the longer `_toasty::codegen_support::..` paths.
+            // Not every model uses every import.
             #[allow(unused_imports)]
-            use _toasty::codegen_support::{Assign, FieldExprTarget, IntoExpr};
+            use _toasty::codegen_support::{Assign, FieldExprTarget, IntoExpr, RelationOnePath};
             #code
         };
     }

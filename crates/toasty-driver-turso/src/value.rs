@@ -87,6 +87,33 @@ pub(crate) fn from_turso_infer(value: TursoValue) -> CoreValue {
     }
 }
 
+/// Converts a [`turso::Value`] to a [`turso_serverless::Value`]. The two
+/// enums are structurally identical (SQLite's five storage classes).
+#[cfg(feature = "serverless")]
+pub(crate) fn to_serverless(value: TursoValue) -> turso_serverless::Value {
+    use turso_serverless::Value as ServerlessValue;
+    match value {
+        TursoValue::Null => ServerlessValue::Null,
+        TursoValue::Integer(v) => ServerlessValue::Integer(v),
+        TursoValue::Real(v) => ServerlessValue::Real(v),
+        TursoValue::Text(v) => ServerlessValue::Text(v),
+        TursoValue::Blob(v) => ServerlessValue::Blob(v),
+    }
+}
+
+/// Converts a [`turso_serverless::Value`] to a [`turso::Value`].
+#[cfg(feature = "serverless")]
+pub(crate) fn from_serverless(value: turso_serverless::Value) -> TursoValue {
+    use turso_serverless::Value as ServerlessValue;
+    match value {
+        ServerlessValue::Null => TursoValue::Null,
+        ServerlessValue::Integer(v) => TursoValue::Integer(v),
+        ServerlessValue::Real(v) => TursoValue::Real(v),
+        ServerlessValue::Text(v) => TursoValue::Text(v),
+        ServerlessValue::Blob(v) => TursoValue::Blob(v),
+    }
+}
+
 fn value_to_json_text(value: &CoreValue) -> String {
     toasty_sql::json::to_string(value).expect("serialize document value to JSON")
 }

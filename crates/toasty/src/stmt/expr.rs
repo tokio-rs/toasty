@@ -71,12 +71,20 @@ impl<T> Expr<T> {
     }
 
     /// Test whether this expression equals `rhs`.
+    ///
+    /// When either side selects an enum variant (a path such as
+    /// `contact().email().address()`), the filter also requires that
+    /// variant: the engine attaches the check when it normalizes the
+    /// statement.
     pub fn eq(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         let rhs = rhs.into_expr().untyped;
         Expr::from_untyped(stmt::Expr::eq(self.untyped, rhs))
     }
 
     /// Test whether this expression does not equal `rhs`.
+    ///
+    /// Like [`eq`](Expr::eq), the filter requires any variant either side
+    /// selects: rows of other variants do not match.
     pub fn ne(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         let rhs = rhs.into_expr().untyped;
         Expr::from_untyped(stmt::Expr::ne(self.untyped, rhs))

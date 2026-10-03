@@ -1,4 +1,5 @@
 use super::parse::{FieldEntry, FieldSet, FieldValue, UpdateItem};
+use crate::variant_literal::expand_value;
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned};
@@ -34,6 +35,16 @@ impl Hoist {
         self.exprs.push(quote_spanned! { span=> #expr });
         self.idents.push(ident.clone());
         quote!(#ident)
+    }
+
+    /// Tokens for a field value.
+    ///
+    /// A variant literal (`Enum::Variant { .. }`) becomes a construction
+    /// builder chain; only its written field values are hoisted, so the
+    /// chain itself runs inside the `match` arm, after the target's
+    /// `.update()`. Any other expression is hoisted whole.
+    fn value(&mut self, expr: &syn::Expr) -> TokenStream {
+        expand_value(expr, |value| self.hoist(value))
     }
 }
 
@@ -118,7 +129,7 @@ fn expand_field_entry(
 
     match &entry.value {
         FieldValue::Expr(expr) => {
-            let value = hoist.hoist(expr);
+            let value = hoist.value(expr);
             quote_spanned! { span=> .#name(#value) }
         }
         FieldValue::Method { combinator, args } => {
@@ -228,20 +239,24 @@ fn expand_patch_entry(
 
     // The patch path is rooted at the embedded type itself, obtained
     // via the `into_root()` inherent method on the parent fields path.
-    let rooted = quote_spanned! { span=> #parent_path.into_root() };
+    // The `.into()` accepts both a plain `Path` (a scalar field) and a
+    // fields handle (an embedded field), which converts to its path.
+    let patch_path = quote_spanned! { span=> #parent_path.into_root().#name().into() };
 
     match &entry.value {
         FieldValue::Expr(expr) => {
-            let value = hoist.hoist(expr);
+            // A variant literal replaces the nested field as a whole: its
+            // builder is handed to `patch` like any other value.
+            let value = hoist.value(expr);
             quote_spanned! { span=>
-                toasty::stmt::patch(#rooted.#name(), #value)
+                toasty::stmt::patch(#patch_path, #value)
             }
         }
         FieldValue::Method { combinator, args } => {
             let args = hoist_args(args, hoist);
             quote_spanned! { span=>
                 toasty::stmt::patch(
-                    #rooted.#name(),
+                    #patch_path,
                     toasty::stmt::#combinator(#(#args),*),
                 )
             }
@@ -252,7 +267,7 @@ fn expand_patch_entry(
             let inner_patches = expand_patch_entries(sub_fields, &nested_path, hoist);
             quote_spanned! { span=>
                 toasty::stmt::patch(
-                    #rooted.#name(),
+                    #patch_path,
                     toasty::stmt::apply([ #( #inner_patches ),* ]),
                 )
             }
@@ -309,7 +324,7 @@ fn expand_create_setters(fields: &FieldSet, hoist: &mut Hoist) -> Vec<TokenStrea
             let span = name.span();
             match &entry.value {
                 FieldValue::Expr(expr) => {
-                    let value = hoist.hoist(expr);
+                    let value = hoist.value(expr);
                     quote_spanned! { span=> .#name(#value) }
                 }
                 FieldValue::Method { combinator, args } => {

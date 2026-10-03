@@ -330,8 +330,8 @@ pub async fn preload_has_many_limit_without_order(test: &mut Test) -> Result<()>
         .await?;
 
     assert_struct!(users, [
-        _ { todos.get().len(): 2, .. },
-        _ { todos.get().len(): 2, .. },
+        { todos.get().len(): 2 },
+        { todos.get().len(): 2 },
     ]);
 
     Ok(())

@@ -19,6 +19,7 @@ cargo test -p tests <test_name>
 
 # Run tests with specific database drivers (requires running external services)
 cargo test -p tests --features mysql
+cargo test -p tests --features mariadb
 cargo test -p tests --features postgresql
 
 # DynamoDB only (requires local DynamoDB running)

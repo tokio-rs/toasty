@@ -33,7 +33,7 @@ impl LowerStatement<'_, '_> {
     /// returning, where relation slots are filled later with per-row context:
     /// local `has_many` / `has_one` slots from nested relation inserts during
     /// insert relation planning, and `belongs_to` slots from per-row load
-    /// subqueries in [`Self::plan_insert_returning_belongs_to`]. Building an
+    /// subqueries in [`Self::plan_insert_returning_relations`]. Building an
     /// include subquery here would create a stale (and, for `belongs_to`,
     /// row-less) dependency for the same returning slot.
     pub(super) fn prepare_model_returning_for_context(

@@ -6,11 +6,11 @@ use super::{
     ExprExists, ExprFunc, ExprInList, ExprInSubquery, ExprIncoming, ExprIntersects, ExprIsNull,
     ExprIsSuperset, ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch,
     ExprNot, ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStartsWith,
-    ExprStmt, Filter, FuncCount, FuncJsonExtract, FuncLastInsertId, Include, Insert, InsertTarget,
-    Join, JoinOp, Limit, LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection,
-    Query, Returning, Select, Source, SourceModel, SourceTable, SourceTableId, Statement,
-    TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget, Value,
-    ValueRecord, Values, With,
+    ExprStmt, ExprVariant, Filter, FuncCount, FuncJsonExtract, FuncLastInsertId, Include, Insert,
+    InsertTarget, Join, JoinOp, Limit, LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path,
+    Projection, Query, Returning, Select, Source, SourceModel, SourceTable, SourceTableId,
+    Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget,
+    Value, ValueRecord, Values, With,
 };
 
 /// Mutable visitor trait for the statement AST.
@@ -239,6 +239,13 @@ pub trait VisitMut {
     /// The default implementation delegates to [`visit_expr_is_variant_mut`].
     fn visit_expr_is_variant_mut(&mut self, i: &mut ExprIsVariant) {
         visit_expr_is_variant_mut(self, i);
+    }
+
+    /// Visits an [`ExprVariant`] node mutably.
+    ///
+    /// The default implementation delegates to [`visit_expr_variant_mut`].
+    fn visit_expr_variant_mut(&mut self, i: &mut ExprVariant) {
+        visit_expr_variant_mut(self, i);
     }
 
     /// Visits an [`ExprLength`] node mutably.
@@ -683,6 +690,10 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_is_variant_mut(&mut **self, i);
     }
 
+    fn visit_expr_variant_mut(&mut self, i: &mut ExprVariant) {
+        VisitMut::visit_expr_variant_mut(&mut **self, i);
+    }
+
     fn visit_expr_length_mut(&mut self, i: &mut ExprLength) {
         VisitMut::visit_expr_length_mut(&mut **self, i);
     }
@@ -952,6 +963,7 @@ where
         Expr::IsNull(expr) => v.visit_expr_is_null_mut(expr),
         Expr::IsSuperset(expr) => v.visit_expr_is_superset_mut(expr),
         Expr::IsVariant(expr) => v.visit_expr_is_variant_mut(expr),
+        Expr::Variant(expr) => v.visit_expr_variant_mut(expr),
         Expr::Length(expr) => v.visit_expr_length_mut(expr),
         Expr::Let(expr) => v.visit_expr_let_mut(expr),
         Expr::Like(expr) => v.visit_expr_like_mut(expr),
@@ -1170,6 +1182,14 @@ where
     V: VisitMut + ?Sized,
 {
     v.visit_expr_mut(&mut node.expr);
+}
+
+/// Default mutable traversal for [`ExprVariant`] nodes. Visits the base expression.
+pub fn visit_expr_variant_mut<V>(v: &mut V, node: &mut ExprVariant)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_expr_mut(&mut node.base);
 }
 
 /// Default mutable traversal for [`ExprLength`] nodes. Visits the inner expression.

@@ -75,6 +75,8 @@ pub use update::Update;
 mod upsert;
 pub use upsert::Upsert;
 
+#[cfg(feature = "jiff")]
+pub use jiff::tz::TimeZone;
 #[cfg(feature = "bigdecimal")]
 pub use toasty_core::stmt::BigDecimal;
 #[cfg(feature = "rust_decimal")]

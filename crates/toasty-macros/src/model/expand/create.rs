@@ -13,6 +13,11 @@ impl Expand<'_> {
         let create_struct_ident = &self.model.kind.as_root_unwrap().create_struct_ident;
         let create_methods = self.expand_create_methods();
         let default_stmts = self.expand_create_default_stmts();
+        let conversions = self.expand_create_conversions(
+            create_struct_ident,
+            quote!(self.stmt.into()),
+            quote!(todo!()),
+        );
 
         // Span the struct definition to the model ident so that "method not
         // found for this struct" errors point at `struct User`, not the derive
@@ -51,41 +56,7 @@ impl Expand<'_> {
                 }
             }
 
-            impl #toasty::IntoExpr<#model_ident> for #create_struct_ident {
-                fn into_expr(self) -> #toasty::stmt::Expr<#model_ident> {
-                    self.stmt.into()
-                }
-
-                fn by_ref(&self) -> #toasty::stmt::Expr<#model_ident> {
-                    todo!()
-                }
-            }
-
-            impl #toasty::IntoExpr<Option<#model_ident>> for #create_struct_ident {
-                fn into_expr(self) -> #toasty::stmt::Expr<Option<#model_ident>> {
-                    self.stmt.into()
-                }
-
-                fn by_ref(&self) -> #toasty::stmt::Expr<Option<#model_ident>> {
-                    todo!()
-                }
-            }
-
-            impl #toasty::Assign<#model_ident> for #create_struct_ident {
-                fn into_assignment(self) -> #toasty::stmt::Assignment<#model_ident> {
-                    #toasty::stmt::set(
-                        <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self)
-                    )
-                }
-            }
-
-            impl #toasty::Assign<Option<#model_ident>> for #create_struct_ident {
-                fn into_assignment(self) -> #toasty::stmt::Assignment<Option<#model_ident>> {
-                    #toasty::stmt::set(
-                        <Self as #toasty::IntoExpr<Option<#model_ident>>>::into_expr(self)
-                    )
-                }
-            }
+            #conversions
 
             impl Default for #create_struct_ident {
                 fn default() -> #create_struct_ident {
@@ -97,6 +68,50 @@ impl Expand<'_> {
                 }
             }
         }
+    }
+
+    /// Generates expression and assignment conversions for a construction
+    /// builder, accepting both the model and its nullable form.
+    pub(super) fn expand_create_conversions(
+        &self,
+        builder_ident: &syn::Ident,
+        into_expr: TokenStream,
+        by_ref: TokenStream,
+    ) -> TokenStream {
+        let toasty = &self.toasty;
+        let model_ident = &self.model.ident;
+
+        [
+            (quote!(#model_ident), into_expr, by_ref),
+            (
+                quote!(#toasty::Option<#model_ident>),
+                quote!(<Self as #toasty::IntoExpr<#model_ident>>::into_expr(self).cast()),
+                quote!(<Self as #toasty::IntoExpr<#model_ident>>::by_ref(self).cast()),
+            ),
+        ]
+        .into_iter()
+        .map(|(target, into_expr, by_ref)| {
+            quote! {
+                impl #toasty::IntoExpr<#target> for #builder_ident {
+                    fn into_expr(self) -> #toasty::stmt::Expr<#target> {
+                        #into_expr
+                    }
+
+                    fn by_ref(&self) -> #toasty::stmt::Expr<#target> {
+                        #by_ref
+                    }
+                }
+
+                impl #toasty::Assign<#target> for #builder_ident {
+                    fn into_assignment(self) -> #toasty::stmt::Assignment<#target> {
+                        #toasty::stmt::set(
+                            <Self as #toasty::IntoExpr<#target>>::into_expr(self)
+                        )
+                    }
+                }
+            }
+        })
+        .collect()
     }
 
     fn expand_create_default_stmts(&self) -> TokenStream {
@@ -136,72 +151,35 @@ impl Expand<'_> {
             .fields
             .iter()
             .enumerate()
-            .map(move |(index, field)| {
+            .filter_map(|(index, field)| {
+                let target = self.expand_setter_target(&field.ty)?;
+                let into_expr = if field.ty.is_primitive() {
+                    quote!(IntoExpr)
+                } else {
+                    quote!(#toasty::IntoExpr)
+                };
                 let name = &field.name.ident;
-                let index_tokenized = util::int(index);
-
-                match &field.ty {
-                    FieldTy::BelongsTo(rel) => {
-                        let ty = &rel.ty;
-
-                        quote! {
-                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::RelationOneField>::Expr>) -> Self {
-                                // Silences unused field warning when the field is set on creation.
-                                if false {
-                                    let m = <#model_ident as #toasty::Load>::load(Default::default()).unwrap();
-                                    let _ = &m.#name;
-                                }
-
-                                self.stmt.set(#index_tokenized, #name.into_expr());
-                                self
-                            }
-                        }
+                let index = util::int(index);
+                let method = if matches!(field.ty, FieldTy::HasMany(_)) {
+                    quote!(insert_all)
+                } else {
+                    quote!(set)
+                };
+                let field_use = matches!(field.ty, FieldTy::BelongsTo(_)).then(|| quote! {
+                    // Silences unused field warning when the field is set on creation.
+                    if false {
+                        let m = <#model_ident as #toasty::Load>::load(Default::default()).unwrap();
+                        let _ = &m.#name;
                     }
-                    FieldTy::HasMany(rel) => {
-                        if rel.via.is_some() {
-                            TokenStream::new()
-                        } else {
-                            let plural = name;
-                            let ty = &rel.ty;
-                            let target = quote!(<#ty as #toasty::RelationManyField>::Target);
+                });
 
-                            quote! {
-                                #vis fn #plural(mut self, #plural: impl #toasty::IntoExpr<#toasty::List<#target>>) -> Self {
-                                    self.stmt.insert_all(#index_tokenized, #plural.into_expr());
-                                    self
-                                }
-                            }
-                        }
+                Some(quote! {
+                    #vis fn #name(mut self, #name: impl #into_expr<#target>) -> Self {
+                        #field_use
+                        self.stmt.#method(#index, #name.into_expr());
+                        self
                     }
-                    FieldTy::HasOne(rel) => {
-                        if rel.via.is_some() {
-                            TokenStream::new()
-                        } else {
-                            let ty = &rel.ty;
-
-                            quote! {
-                                #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::RelationOneField>::Expr>) -> Self {
-                                    self.stmt.set(#index_tokenized, #name.into_expr());
-                                    self
-                                }
-                            }
-                        }
-                    }
-                    FieldTy::Primitive(ty) => {
-                        // The setter binds through `<Ty as Field>::ExprTarget`
-                        // — `Self` for scalars/`Vec<u8>`/struct embeds,
-                        // `List<T>` for `Vec<T>` collections (scalar or embed).
-                        // A `#[document]` field uses the same `Field` impl as
-                        // its column-expanded form; only the schema `field_ty`
-                        // differs.
-                        quote! {
-                            #vis fn #name(mut self, #name: impl IntoExpr<FieldExprTarget<#ty>>) -> Self {
-                                self.stmt.set(#index_tokenized, #name.into_expr());
-                                self
-                            }
-                        }
-                    }
-                }
+                })
             })
             .collect()
     }

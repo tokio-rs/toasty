@@ -125,25 +125,13 @@ NULL and match no equality predicate.
 
 Two pieces are missing. `#[derive(Embed)]` enums get no `fields()` associated
 function, so a variant-rooted path cannot be spelled relative to the enum. And
-`stmt::patch` (`toasty/src/stmt/assignment.rs:369`) reads only
-`path.untyped.projection` and **discards `path.untyped.root`**:
-
-```rust
-pub fn patch<T, U>(path: Path<T, U>, value: impl Assign<U>) -> Assignment<T> {
-    let inner = value.into_assignment();
-    Assignment {
-        kind: AssignmentKind::Patch {
-            path_projection: path.untyped.projection, // root ignored
-            inner: Box::new(inner.kind),
-        },
-        _p: PhantomData,
-    }
-}
-```
-
-A variant-rooted path therefore loses its discriminator context, and the
-assignment would write the column unconditionally — wrong for a row whose
-discriminator does not match the patched variant.
+`stmt::patch` (`toasty/src/stmt/assignment.rs`) carries no variant root: it
+keeps `path.untyped.projection` only. A path whose root is
+`PathRoot::Variant` would otherwise lose its discriminator context and write
+the variant-local column indices against the parent type, so `patch` rejects
+it. `patch` is infallible, so the rejection is recorded on the statement's
+`Assignments` and surfaces as an `unsupported_feature` error when the
+statement is verified, before planning, on every backend.
 
 ### Design
 
@@ -177,11 +165,9 @@ column.
   does not compile. Without it, variant-rooted paths are reachable only through
   the owning model (`Character::fields().creature().human().full_name()`),
   which is rooted at the model rather than the enum and so cannot be passed to
-  the enum field's setter. The `ignore` rustdoc example on `stmt::patch`
-  (`assignment.rs:354`) is written against the missing API and additionally uses
-  `Kind::variants()`, which is not being built; fix it when `fields()` lands.
-- **Carry the variant root.** In `stmt::patch`, inspect `path.untyped.root`;
-  when it is `PathRoot::Variant { variant_id, .. }`, record `variant_id` on
+  the enum field's setter.
+- **Carry the variant root.** In `stmt::patch`, replace the rejection of a
+  `PathRoot::Variant { variant_id, .. }` root by recording `variant_id` on
   the assignment (add a field to `AssignmentKind::Patch`, or a sibling
   `PatchVariant` kind). A non-variant root behaves exactly as today.
 - **Lower to a guarded assignment (SQL).** For a variant-gated patch on

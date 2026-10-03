@@ -23,6 +23,11 @@ pub enum PathRoot {
 }
 
 impl PathRoot {
+    /// Returns `true` if this root is an embedded enum variant.
+    pub fn is_variant(&self) -> bool {
+        matches!(self, Self::Variant { .. })
+    }
+
     /// Returns the `ModelId`, panicking if this root is a `Variant` root.
     pub fn as_model_unwrap(&self) -> ModelId {
         match self {
@@ -95,7 +100,11 @@ impl Path {
     ///
     /// `parent` is the path that navigates to the enum field. Subsequent
     /// projection steps (appended via [`chain`][Path::chain]) index into the
-    /// variant's fields using 0-based local indices.
+    /// variant's fields using 0-based local indices. [`into_stmt`] renders
+    /// the root as a variant selection ([`Expr::variant`]) over the parent's
+    /// expression.
+    ///
+    /// [`into_stmt`]: Path::into_stmt
     pub fn from_variant(parent: Path, variant_id: VariantId) -> Self {
         Self {
             root: PathRoot::Variant {
@@ -106,23 +115,50 @@ impl Path {
         }
     }
 
-    /// Appends all field steps from `other` onto this path's projection.
+    /// Appends `other`'s traversal onto this path.
+    ///
+    /// `other`'s root model is dropped: its steps continue from wherever
+    /// `self` ends. A variant selection in `other` is preserved — the result
+    /// selects the same variant at the same point of the traversal — so a
+    /// variant-rooted path can be chained onto a path reaching its enum from
+    /// another model.
     pub fn chain(&mut self, other: &Self) {
+        if let PathRoot::Variant { parent, variant_id } = &other.root {
+            self.chain(parent);
+            *self = Self::from_variant(self.clone(), *variant_id);
+        }
+
         for field in &other.projection[..] {
             self.projection.push(*field);
         }
     }
 
     /// Converts this path into an [`Expr`] that references the path's field.
+    ///
+    /// A variant root becomes an [`ExprVariant`](super::ExprVariant) over the
+    /// parent path's expression, projected by the variant-local steps. The
+    /// expression carries no variant check; the engine's statement
+    /// normalization adds one per selection to the predicate built over it.
     pub fn into_stmt(self) -> Expr {
+        self.into_stmt_with_nesting(0)
+    }
+
+    /// Converts this path into an [`Expr`] at the specified query nesting level.
+    ///
+    /// A nesting level of `0` references the current query; `1` references its
+    /// parent. Projections and variant selections preserve this nesting level.
+    pub fn into_stmt_with_nesting(self, nesting: usize) -> Expr {
         match self.root {
             PathRoot::Model(model_id) => match self.projection.as_slice() {
-                [] => Expr::ref_ancestor_model(0),
+                [] => Expr::ref_ancestor_model(nesting),
                 [field, project @ ..] => {
-                    let mut ret = Expr::ref_self_field(FieldId {
-                        model: model_id,
-                        index: *field,
-                    });
+                    let mut ret = Expr::ref_field(
+                        nesting,
+                        FieldId {
+                            model: model_id,
+                            index: *field,
+                        },
+                    );
 
                     if !project.is_empty() {
                         ret = Expr::project(ret, project);
@@ -131,21 +167,14 @@ impl Path {
                     ret
                 }
             },
-            PathRoot::Variant { parent, .. } => {
-                let parent_expr = parent.into_stmt();
+            PathRoot::Variant { parent, variant_id } => {
+                // The selection stands for the variant's payload, so the
+                // steps index the variant's fields by their local positions.
+                let selection = Expr::variant(parent.into_stmt_with_nesting(nesting), variant_id);
+
                 match self.projection.as_slice() {
-                    [] => parent_expr,
-                    [local_idx, rest @ ..] => {
-                        // Record position 0 is the discriminant; variant fields
-                        // start at position 1, so add 1 to the local field index.
-                        let mut ret = Expr::project(parent_expr, Projection::single(local_idx + 1));
-
-                        if !rest.is_empty() {
-                            ret = Expr::project(ret, rest);
-                        }
-
-                        ret
-                    }
+                    [] => selection,
+                    steps => Expr::project(selection, steps),
                 }
             }
         }

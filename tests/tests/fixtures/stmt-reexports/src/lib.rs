@@ -17,6 +17,7 @@ struct ExternalStatementTypes {
     date: toasty::stmt::Date,
     time: toasty::stmt::Time,
     date_time: toasty::stmt::DateTime,
+    time_zone: toasty::stmt::TimeZone,
 
     cidr: toasty::stmt::IpCidr,
     inet: toasty::stmt::IpInet,

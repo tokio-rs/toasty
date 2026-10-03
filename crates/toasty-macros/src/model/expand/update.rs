@@ -31,7 +31,7 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
 
-        self.model.fields.iter().enumerate().map(|(field_index, field)| {
+        self.model.fields.iter().enumerate().filter_map(|(field_index, field)| {
             let field_ident = &field.name.ident;
             let set_field_ident = &field.set_ident;
 
@@ -39,7 +39,7 @@ impl Expand<'_> {
             // by assigning its key field(s) or replacing the whole embed
             // value.
             if is_embedded && !field.ty.is_primitive() {
-                return TokenStream::new();
+                return None;
             }
 
             let index = util::int(field_index);
@@ -55,92 +55,24 @@ impl Expand<'_> {
                 }
             };
 
-            match &field.ty {
-            FieldTy::BelongsTo(rel) => {
-                let ty = &rel.ty;
-
-                quote! {
-                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::RelationOneField>::Expr>) -> Self {
-                        self.#set_field_ident(#field_ident);
-                        self
-                    }
-
-                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::RelationOneField>::Expr>) -> &mut Self {
-                        let projection = #projection;
-                        #field_ident.assign(&mut self.assignments, projection);
-                        self
-                    }
+            let target = self.expand_setter_target(&field.ty)?;
+            let assign = if field.ty.is_primitive() {
+                quote!(Assign)
+            } else {
+                quote!(#toasty::Assign)
+            };
+            Some(quote! {
+                #vis fn #field_ident(mut self, #field_ident: impl #assign<#target>) -> Self {
+                    self.#set_field_ident(#field_ident);
+                    self
                 }
-            }
-            FieldTy::HasMany(rel) => {
-                if rel.via.is_some() {
-                    // Relation setters mutate membership through `Assign`
-                    // (set/insert/remove/apply). A via field has no direct
-                    // pair FK, and `Assignment` does not preserve enough type
-                    // information to reject only insert/create while accepting
-                    // narrower operations like remove.
-                    TokenStream::new()
-                } else {
-                    let ty = &rel.ty;
-                    let target = quote!(<#ty as #toasty::RelationManyField>::Target);
 
-                    quote! {
-                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<#toasty::List<#target>>) -> Self {
-                            self.#set_field_ident(#field_ident);
-                            self
-                        }
-
-                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<#toasty::List<#target>>) -> &mut Self {
-                            let projection = #projection;
-                            #field_ident.assign(&mut self.assignments, projection);
-                            self
-                        }
-                    }
+                #vis fn #set_field_ident(&mut self, #field_ident: impl #assign<#target>) -> &mut Self {
+                    let projection = #projection;
+                    #field_ident.assign(&mut self.assignments, projection);
+                    self
                 }
-            }
-            FieldTy::HasOne(rel) => {
-                if rel.via.is_some() {
-                    // See the has-many via case above. Any has-one membership
-                    // assignment would require choosing or creating an
-                    // intermediate record, which this setter cannot express.
-                    TokenStream::new()
-                } else {
-                    let ty = &rel.ty;
-
-                    quote! {
-                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::RelationOneField>::Expr>) -> Self {
-                            self.#set_field_ident(#field_ident);
-                            self
-                        }
-
-                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::RelationOneField>::Expr>) -> &mut Self {
-                            let projection = #projection;
-                            #field_ident.assign(&mut self.assignments, projection);
-                            self
-                        }
-                    }
-                }
-            }
-            FieldTy::Primitive(ty) => {
-                // Bind through `<Ty as Field>::ExprTarget` so each field's
-                // setter accepts whatever its expression-level type permits —
-                // `Self` for scalars, `List<T>` for `Vec<T>` collections, and
-                // so on. A `#[document]` field uses the same `Field` impl as
-                // its column-expanded form; only the schema `field_ty` differs.
-                quote! {
-                    #vis fn #field_ident(mut self, #field_ident: impl Assign<FieldExprTarget<#ty>>) -> Self {
-                        self.#set_field_ident(#field_ident);
-                        self
-                    }
-
-                    #vis fn #set_field_ident(&mut self, #field_ident: impl Assign<FieldExprTarget<#ty>>) -> &mut Self {
-                        let projection = #projection;
-                        #field_ident.assign(&mut self.assignments, projection);
-                        self
-                    }
-                }
-            }
-            }
+            })
         }).collect()
     }
 

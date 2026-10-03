@@ -152,6 +152,72 @@ pub async fn include_deferred_inside_embed_in_enum_variant(t: &mut Test) -> Resu
     Ok(())
 }
 
+#[driver_test(scenario(crate::scenarios::person_contact_deferred_metadata))]
+pub async fn update_with_variant_rooted_include(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    for contact in [
+        ContactInfo::Email {
+            address: "alice@example.com".to_string(),
+            metadata: Metadata {
+                author: "Alice".to_string(),
+                notes: "Important".to_string().into(),
+            },
+        },
+        ContactInfo::Phone {
+            number: "555-0100".to_string(),
+        },
+    ] {
+        let person = toasty::create!(Person {
+            name: "before",
+            contact,
+        })
+        .exec(&mut db)
+        .await?;
+
+        Person::filter_by_id(person.id)
+            .include(Person::fields().contact().email().metadata().notes())
+            .update()
+            .name("updated")
+            .exec(&mut db)
+            .await?;
+
+        let read = Person::get_by_id(&mut db, person.id).await?;
+        assert_eq!(read.name, "updated");
+    }
+
+    Person::filter_by_id(uuid::Uuid::new_v4())
+        .include(Person::fields().contact().email().metadata().notes())
+        .update()
+        .name("updated")
+        .exec(&mut db)
+        .await?;
+
+    Ok(())
+}
+
+#[driver_test(
+    requires(not(native_ilike)),
+    scenario(crate::scenarios::person_contact_deferred_metadata)
+)]
+pub async fn update_with_variant_rooted_include_verifies_filter(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+    t.log().clear();
+
+    let err = assert_err!(
+        Person::filter(Person::fields().name().ilike("alice"))
+            .include(Person::fields().contact().email().metadata().notes())
+            .update()
+            .name("updated")
+            .exec(&mut db)
+            .await
+    );
+    assert!(err.is_unsupported_feature());
+    assert!(t.log().is_empty());
+
+    Ok(())
+}
+
 // ---------- Deferred<UnitEnum> ----------
 
 #[driver_test]

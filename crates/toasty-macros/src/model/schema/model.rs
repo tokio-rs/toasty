@@ -107,6 +107,11 @@ pub(crate) struct ModelEmbeddedEnum {
     /// The list field struct identifier (e.g., `ContactInfoListFields`)
     pub(crate) field_list_struct_ident: syn::Ident,
 
+    /// Variant-selection builder struct identifier (e.g., `OwnerCreate`).
+    /// Returned by `EmbedCreate::create()`; one method per data-carrying
+    /// variant returns that variant's construction builder.
+    pub(crate) create_struct_ident: syn::Ident,
+
     /// The enum's variants with their names and discriminant values
     pub(crate) variants: Vec<Variant>,
 
@@ -742,6 +747,7 @@ impl Model {
             kind: ModelKind::EmbeddedEnum(ModelEmbeddedEnum {
                 field_struct_ident: suffixed_ident(&ast.ident, "Fields"),
                 field_list_struct_ident: suffixed_ident(&ast.ident, "ListFields"),
+                create_struct_ident: suffixed_ident(&ast.ident, "Create"),
                 variants,
                 storage_strategy,
             }),

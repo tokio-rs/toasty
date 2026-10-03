@@ -101,6 +101,26 @@ impl_into_expr_for_copy! {
     DateTime(jiff::civil::DateTime);
 }
 
+/// A time zone binds as its text form (see `schema::jiff`). Unlike the other
+/// conversions here this one can fail, and `into_expr` has no error channel —
+/// carrying the zone to a fallible cast instead would mean a `Value::TimeZone`
+/// variant and the core plumbing behind it.
+#[cfg(feature = "jiff")]
+impl IntoExpr<jiff::tz::TimeZone> for jiff::tz::TimeZone {
+    fn into_expr(self) -> Expr<jiff::tz::TimeZone> {
+        self.by_ref()
+    }
+
+    fn by_ref(&self) -> Expr<jiff::tz::TimeZone> {
+        let text = crate::schema::jiff::time_zone_to_text(self)
+            .expect("time zone cannot be stored: no IANA identifier, fixed offset, or POSIX rule");
+        Expr::from_value(Value::String(text))
+    }
+}
+
+#[cfg(feature = "jiff")]
+impl_assign_via_expr!(jiff::tz::TimeZone => jiff::tz::TimeZone);
+
 #[cfg(feature = "net")]
 impl_into_expr_for_copy! {
     Cidr(IpCidr);
@@ -366,6 +386,16 @@ impl_assign_via_expr!({T: IntoExpr<T>} T => Rc<T>);
 macro_rules! ref_smart_ptr_impl {
     ( $( $ptr:ident ,)* ) => {
         $(
+            impl<T: IntoExpr<T>> IntoExpr<$ptr<T>> for $ptr<T> {
+                fn into_expr(self) -> Expr<$ptr<T>> {
+                    T::by_ref(&self).cast()
+                }
+
+                fn by_ref(&self) -> Expr<$ptr<T>> {
+                    T::by_ref(self).cast()
+                }
+            }
+
             impl<T: IntoExpr<T>> IntoExpr<T> for &$ptr<T> {
                 fn into_expr(self) -> Expr<T> {
                     T::by_ref(self)

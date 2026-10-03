@@ -28,6 +28,14 @@ pub struct Assignments {
     /// single-step (e.g., `[0]`) and multi-step projections (e.g., `[0, 1]`
     /// for nested fields).
     assignments: BTreeMap<Projection, Assignment>,
+
+    /// Reasons the builder API recorded for assignments Toasty does not
+    /// support. Builder combinators such as `stmt::patch` are infallible, so
+    /// one that cannot express its operation records a reason here instead of
+    /// an entry. Verification reports the first reason as an
+    /// `unsupported_feature` error before the statement is planned, rejecting
+    /// the statement as a whole.
+    unsupported: Vec<String>,
 }
 
 /// A field assignment within an [`Update`](super::Update) statement.
@@ -98,6 +106,7 @@ impl Assignments {
     pub fn new() -> Self {
         Self {
             assignments: BTreeMap::new(),
+            unsupported: Vec::new(),
         }
     }
 
@@ -297,10 +306,28 @@ impl Assignments {
         self.assignments.remove(key.as_ref())
     }
 
+    /// Records that a requested assignment is unsupported, without adding an
+    /// entry. The statement carrying these assignments fails verification
+    /// with an `unsupported_feature` error built from `reason`.
+    pub fn reject_unsupported(&mut self, reason: impl Into<String>) {
+        self.unsupported.push(reason.into());
+    }
+
+    /// Returns the reasons recorded by [`reject_unsupported`], in the order
+    /// they were recorded. Empty when every requested assignment is
+    /// supported.
+    ///
+    /// [`reject_unsupported`]: Assignments::reject_unsupported
+    pub fn unsupported(&self) -> &[String] {
+        &self.unsupported
+    }
+
     /// Replaces assignments with entries from `other`, preserving entries
-    /// whose projections do not appear in `other`.
+    /// whose projections do not appear in `other`. Unsupported-assignment
+    /// reasons from both sides are kept.
     pub fn overlay(&mut self, other: Self) {
         self.assignments.extend(other.assignments);
+        self.unsupported.extend(other.unsupported);
     }
 
     /// Returns an iterator over the assignment projections (keys).

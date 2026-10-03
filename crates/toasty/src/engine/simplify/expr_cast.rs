@@ -6,6 +6,18 @@ impl Simplify<'_> {
     /// Heavyweight `CAST` rewrites. Cheap canonicalization (constant
     /// folding) runs in `fold::expr_cast` before this is reached.
     pub(super) fn simplify_expr_cast(&self, expr: &mut stmt::ExprCast) -> Option<stmt::Expr> {
+        // Typed model records retain relation slots until relation planning
+        // in lowering has assigned their foreign keys.
+        if expr.from.is_none()
+            && let stmt::Type::Model(model) = expr.ty
+            && expr.expr.record_len().is_some()
+        {
+            let model = self.cx.schema().app.model(model);
+            if model.is_root() || model.fields().iter().any(|field| field.ty.is_belongs_to()) {
+                return None;
+            }
+        }
+
         // Schema-directed constant folding: a `#[document]` cast (marked by a
         // source type or a model-typed target) resolves the embed's field
         // names through the schema, so the schema-free fold pass skips it and

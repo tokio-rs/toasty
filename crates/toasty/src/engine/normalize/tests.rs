@@ -1,3 +1,5 @@
+mod variant_guards;
+
 use std::sync::Arc;
 
 use toasty_core::{

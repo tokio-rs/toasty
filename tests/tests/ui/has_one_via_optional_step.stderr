@@ -1,0 +1,104 @@
+error[E0277]: `#[has_one(via = ...)]` result `Subscription` cannot traverse a step targeting `Option<Account>`
+  --> tests/ui/has_one_via_optional_step.rs:22:21
+   |
+22 |     #[has_one(via = eager_optional.subscription)]
+   |                     ^^^^^^^^^^^^^^ incompatible via step
+   |
+help: the trait `toasty::codegen_support::via::AllowsViaStep<Option<Account>>` is not implemented for `Subscription`
+  --> tests/ui/has_one_via_optional_step.rs:51:1
+   |
+51 | struct Subscription {
+   | ^^^^^^^^^^^^^^^^^^^
+   = note: a required via cannot traverse optional relations; declare the via field as `Option<_>` or `Deferred<Option<_>>`
+note: required by a bound in `toasty::codegen_support::via::check_one_step`
+  --> $WORKSPACE/crates/toasty/src/codegen_support/via.rs
+   |
+   | pub fn check_one_step<F, Origin, Target>(_: &impl Into<Path<Origin, Target>>)
+   |        -------------- required by a bound in this function
+...
+   |     F::Expr: AllowsViaStep<Target>,
+   |              ^^^^^^^^^^^^^^^^^^^^^ required by this bound in `check_one_step`
+
+error[E0277]: `#[has_one(via = ...)]` result `Subscription` cannot traverse a step targeting `Option<Account>`
+  --> tests/ui/has_one_via_optional_step.rs:24:21
+   |
+24 |     #[has_one(via = deferred_optional.subscription)]
+   |                     ^^^^^^^^^^^^^^^^^ incompatible via step
+   |
+help: the trait `toasty::codegen_support::via::AllowsViaStep<Option<Account>>` is not implemented for `Subscription`
+  --> tests/ui/has_one_via_optional_step.rs:51:1
+   |
+51 | struct Subscription {
+   | ^^^^^^^^^^^^^^^^^^^
+   = note: a required via cannot traverse optional relations; declare the via field as `Option<_>` or `Deferred<Option<_>>`
+note: required by a bound in `toasty::codegen_support::via::check_one_step`
+  --> $WORKSPACE/crates/toasty/src/codegen_support/via.rs
+   |
+   | pub fn check_one_step<F, Origin, Target>(_: &impl Into<Path<Origin, Target>>)
+   |        -------------- required by a bound in this function
+...
+   |     F::Expr: AllowsViaStep<Target>,
+   |              ^^^^^^^^^^^^^^^^^^^^^ required by this bound in `check_one_step`
+
+error[E0277]: `#[has_one(via = ...)]` result `Subscription` cannot traverse a step targeting `Option<Subscription>`
+  --> tests/ui/has_one_via_optional_step.rs:26:29
+   |
+26 |     #[has_one(via = account.eager_optional)]
+   |                             ^^^^^^^^^^^^^^ incompatible via step
+   |
+help: the trait `toasty::codegen_support::via::AllowsViaStep<Option<Subscription>>` is not implemented for `Subscription`
+  --> tests/ui/has_one_via_optional_step.rs:51:1
+   |
+51 | struct Subscription {
+   | ^^^^^^^^^^^^^^^^^^^
+   = note: a required via cannot traverse optional relations; declare the via field as `Option<_>` or `Deferred<Option<_>>`
+note: required by a bound in `toasty::codegen_support::via::check_one_step`
+  --> $WORKSPACE/crates/toasty/src/codegen_support/via.rs
+   |
+   | pub fn check_one_step<F, Origin, Target>(_: &impl Into<Path<Origin, Target>>)
+   |        -------------- required by a bound in this function
+...
+   |     F::Expr: AllowsViaStep<Target>,
+   |              ^^^^^^^^^^^^^^^^^^^^^ required by this bound in `check_one_step`
+
+error[E0277]: `#[has_one(via = ...)]` result `Subscription` cannot traverse a step targeting `Option<Subscription>`
+  --> tests/ui/has_one_via_optional_step.rs:28:29
+   |
+28 |     #[has_one(via = account.deferred_optional)]
+   |                             ^^^^^^^^^^^^^^^^^ incompatible via step
+   |
+help: the trait `toasty::codegen_support::via::AllowsViaStep<Option<Subscription>>` is not implemented for `Subscription`
+  --> tests/ui/has_one_via_optional_step.rs:51:1
+   |
+51 | struct Subscription {
+   | ^^^^^^^^^^^^^^^^^^^
+   = note: a required via cannot traverse optional relations; declare the via field as `Option<_>` or `Deferred<Option<_>>`
+note: required by a bound in `toasty::codegen_support::via::check_one_step`
+  --> $WORKSPACE/crates/toasty/src/codegen_support/via.rs
+   |
+   | pub fn check_one_step<F, Origin, Target>(_: &impl Into<Path<Origin, Target>>)
+   |        -------------- required by a bound in this function
+...
+   |     F::Expr: AllowsViaStep<Target>,
+   |              ^^^^^^^^^^^^^^^^^^^^^ required by this bound in `check_one_step`
+
+error[E0277]: `#[has_one(via = ...)]` result `Subscription` cannot traverse a step targeting `Option<Subscription>`
+  --> tests/ui/has_one_via_optional_step.rs:32:21
+   |
+32 |     #[has_one(via = optional_via)]
+   |                     ^^^^^^^^^^^^ incompatible via step
+   |
+help: the trait `toasty::codegen_support::via::AllowsViaStep<Option<Subscription>>` is not implemented for `Subscription`
+  --> tests/ui/has_one_via_optional_step.rs:51:1
+   |
+51 | struct Subscription {
+   | ^^^^^^^^^^^^^^^^^^^
+   = note: a required via cannot traverse optional relations; declare the via field as `Option<_>` or `Deferred<Option<_>>`
+note: required by a bound in `toasty::codegen_support::via::check_one_step`
+  --> $WORKSPACE/crates/toasty/src/codegen_support/via.rs
+   |
+   | pub fn check_one_step<F, Origin, Target>(_: &impl Into<Path<Origin, Target>>)
+   |        -------------- required by a bound in this function
+...
+   |     F::Expr: AllowsViaStep<Target>,
+   |              ^^^^^^^^^^^^^^^^^^^^^ required by this bound in `check_one_step`

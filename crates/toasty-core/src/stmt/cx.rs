@@ -1,3 +1,6 @@
+mod projected_field;
+pub use projected_field::ProjectedField;
+
 use crate::{
     Schema,
     schema::{
@@ -221,6 +224,10 @@ impl<'a, T> ExprContext<'a, T> {
 
     /// Return the target at a specific nesting
     pub fn target_at(&self, nesting: usize) -> &ExprTarget<'a> {
+        &self.context_at(nesting).target
+    }
+
+    fn context_at(&self, nesting: usize) -> &Self {
         let mut curr = self;
 
         // Walk up the stack to the correct nesting level
@@ -232,7 +239,7 @@ impl<'a, T> ExprContext<'a, T> {
             curr = parent;
         }
 
-        &curr.target
+        curr
     }
 }
 
@@ -418,7 +425,15 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
 
     fn infer_returning_ty(&self, returning: &Returning, args: &[Type], single: bool) -> Type {
         let arg_ty_stack = ArgTyStack::new(args);
+        self.infer_returning_ty2(returning, &arg_ty_stack, single)
+    }
 
+    fn infer_returning_ty2(
+        &self,
+        returning: &Returning,
+        args: &ArgTyStack<'_>,
+        single: bool,
+    ) -> Type {
         match returning {
             Returning::Model { .. } => {
                 let ty = Type::Model(
@@ -431,11 +446,11 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             }
             Returning::Changed => todo!(),
             Returning::Project(expr) => {
-                let ty = self.infer_expr_ty2(&arg_ty_stack, expr, false);
+                let ty = self.infer_expr_ty2(args, expr, false);
 
                 if single { ty } else { Type::list(ty) }
             }
-            Returning::Expr(expr) => self.infer_expr_ty2(&arg_ty_stack, expr, true),
+            Returning::Expr(expr) => self.infer_expr_ty2(args, expr, true),
         }
     }
 
@@ -449,7 +464,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
         match expr {
             Expr::Arg(e) => args.resolve_arg_ty(e).clone(),
             Expr::And(_) => Type::Bool,
-            Expr::AnyOp(_) | Expr::AllOp(_) => Type::Bool,
+            Expr::Any(_) | Expr::AnyOp(_) | Expr::AllOp(_) | Expr::InList(_) => Type::Bool,
             Expr::BinaryOp(_) => Type::Bool,
             Expr::Cast(e) => e.ty.clone(),
             Expr::Reference(expr_ref) => {
@@ -457,10 +472,29 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     !returning_expr,
                     "should have been handled in Expr::Project. Invalid expr?"
                 );
-                self.infer_expr_reference_ty(expr_ref)
+                self.infer_expr_reference_ty2(expr_ref, args)
             }
             Expr::IsNull(_) => Type::Bool,
             Expr::IsVariant(_) => Type::Bool,
+            Expr::Variant(e) => {
+                // The selected variant's payload: its fields, without the
+                // discriminant.
+                let base = self.infer_expr_ty2(args, &e.base, returning_expr);
+                let Type::Model(id) = base else {
+                    todo!("variant selection on non-enum type {base:#?}")
+                };
+                assert_eq!(id, e.variant.model, "variant selection on the wrong enum");
+                let Some(Model::EmbeddedEnum(embedded)) = self.schema.model(id) else {
+                    todo!("variant selection on non-enum model {id:?}")
+                };
+                Type::Record(
+                    embedded
+                        .variant_fields(e.variant.index)
+                        .iter()
+                        .map(|field| field.expr_ty().clone())
+                        .collect(),
+                )
+            }
             Expr::List(e) => {
                 debug_assert!(!e.items.is_empty());
                 Type::list(self.infer_expr_ty2(args, &e.items[0], returning_expr))
@@ -485,6 +519,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 // The mapped type is a list
                 Type::list(ty)
             }
+            Expr::Not(_) => Type::Bool,
             Expr::Or(_) => Type::Bool,
             Expr::Project(e) => {
                 if returning_expr {
@@ -503,7 +538,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                             // returning expression is *not* a projection. Referencing a
                             // column implies a *list* of
                             assert!(e.projection.as_slice().len() == 1);
-                            return self.infer_expr_reference_ty(expr_reference);
+                            return self.infer_expr_reference_ty2(expr_reference, args);
                         }
                         _ => {}
                     }
@@ -544,7 +579,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                     .map(|field| self.infer_expr_ty2(args, field, returning_expr))
                     .collect(),
             ),
-            Expr::Value(value) => value.infer_ty(),
+            Expr::Value(value) | Expr::Static(value) => value.infer_ty(),
             Expr::Let(expr_let) => {
                 let scope_tys: Vec<_> = expr_let
                     .bindings
@@ -596,14 +631,52 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
     }
 
     /// Infers the type of an expression reference (field or column).
+    ///
+    /// Derived columns use the types in the `VALUES` rows or the `SELECT` projection.
+    /// An empty `VALUES` body has no type information and yields [`Type::Unknown`].
     pub fn infer_expr_reference_ty(&self, expr_reference: &ExprReference) -> Type {
+        self.infer_expr_reference_ty2(expr_reference, &ArgTyStack::new(&[]))
+    }
+
+    fn infer_expr_reference_ty2(
+        &self,
+        expr_reference: &ExprReference,
+        args: &ArgTyStack<'_>,
+    ) -> Type {
         match self.resolve_expr_reference(expr_reference) {
             ResolvedRef::Model(model) => Type::Model(model.id),
             ResolvedRef::Column(column) => column.ty.clone(),
             ResolvedRef::Field(field) => field.expr_ty().clone(),
             ResolvedRef::Cte { .. } => todo!("type inference for CTE columns not implemented"),
-            ResolvedRef::Derived(_) => {
-                todo!("type inference for derived table columns not implemented")
+            ResolvedRef::Derived(derived) => {
+                // Resolve the subquery from the scope that owns the derived table.
+                let owner = self.context_at(derived.nesting);
+
+                let query = &*derived.derived.subquery;
+                let cx = owner.scope(query);
+                let column_ty = |row_ty| match row_ty {
+                    Type::Record(mut fields) => fields.swap_remove(derived.index),
+                    ty => {
+                        assert_eq!(derived.index, 0, "scalar derived column index");
+                        ty
+                    }
+                };
+
+                match &query.body {
+                    ExprSet::Values(values) => {
+                        if values.is_empty() {
+                            return Type::Unknown;
+                        }
+                        let mut union = TypeUnion::new();
+                        for row in &values.rows {
+                            union.insert(column_ty(cx.infer_expr_ty2(args, row, false)));
+                        }
+                        union.simplify()
+                    }
+                    // A derived column refers to one row, regardless of how many
+                    // rows the subquery returns.
+                    _ => column_ty(cx.infer_returning_ty2(query.returning_unwrap(), args, true)),
+                }
             }
         }
     }
