@@ -21,18 +21,23 @@ impl Exec<'_> {
             return true;
         };
 
-        expr.substitute(input);
-
         // An absent candidate key matches no row. Dropping it keeps the
         // key-value comparison two-valued, so a negated membership still
-        // admits every other row.
+        // admits every other row. Only lists bound from the input carry
+        // candidate keys; constant lists in the filter are left as written.
         stmt::visit_mut::for_each_expr_mut(expr, |expr| {
             if let stmt::Expr::InList(in_list) = expr
-                && let stmt::Expr::Value(stmt::Value::List(values)) = &mut *in_list.list
+                && is_input_arg(&in_list.list)
             {
-                values.retain(|value| !is_absent_key(value));
+                in_list.list.substitute(input);
+
+                if let stmt::Expr::Value(stmt::Value::List(values)) = &mut *in_list.list {
+                    values.retain(|value| !is_absent_key(value));
+                }
             }
         });
+
+        expr.substitute(input);
 
         // Bound inputs can reduce the filter to a constant, e.g. an empty
         // candidate list turns `x IN ()` into `false`.
@@ -146,6 +151,15 @@ impl Exec<'_> {
                 (!pred.is_unsatisfiable()).then_some(pred)
             })
             .collect()
+    }
+}
+
+/// Whether `expr` is a reference to the operation's input, possibly projected.
+fn is_input_arg(expr: &stmt::Expr) -> bool {
+    match expr {
+        stmt::Expr::Arg(_) => true,
+        stmt::Expr::Project(project) => matches!(&*project.base, stmt::Expr::Arg(_)),
+        _ => false,
     }
 }
 
