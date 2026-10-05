@@ -199,6 +199,10 @@ impl Expand<'_> {
                 }
             }
 
+            impl<#generics> #toasty::foreign_key::FieldPath for #field_struct_ident<#generics> {
+                type Ty = #target_ty;
+            }
+
             impl<#generics> #toasty::IntoExpr<#target_ty> for #field_struct_ident<#generics> {
                 fn into_expr(self) -> #toasty::stmt::Expr<#target_ty> {
                     self.path.into_expr()
