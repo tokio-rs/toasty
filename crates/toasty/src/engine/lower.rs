@@ -788,7 +788,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         limited_subquery::wrap_limited_in_subquery(
                             &self.expr_cx,
                             &mut e.query,
-                            e.exclude_null_keys,
+                            e.relation_key,
                         );
                     }
                 } else {

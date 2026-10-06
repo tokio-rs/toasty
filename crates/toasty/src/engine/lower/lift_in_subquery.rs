@@ -89,8 +89,8 @@ impl<'a> LiftInSubquery<'a> {
     /// poisoning a negated `IN`.
     ///
     /// A subquery with `LIMIT`/`OFFSET` must select its candidates before the
-    /// null keys are removed, so it is marked with `exclude_null_keys` and
-    /// lowering applies the exclusion outside the limited query instead.
+    /// null keys are removed, so lowering applies the exclusion outside the
+    /// limited query instead (see `ExprInSubquery::relation_key`).
     fn exclude_nulls(&self, expr: &mut stmt::Expr) {
         if !self.exclude_nulls {
             return;
@@ -102,9 +102,7 @@ impl<'a> LiftInSubquery<'a> {
             stmt::Expr::InSubquery(e) => {
                 self.push_key_guards(&e.expr, &mut guards);
 
-                if e.query.limit.is_some() {
-                    e.exclude_null_keys = true;
-                } else {
+                if e.query.limit.is_none() {
                     let select = e.query.body.as_select_mut_unwrap();
                     let target = select.source.model_id_unwrap();
                     let returning = select.returning.as_project_unwrap().clone();
@@ -183,6 +181,9 @@ impl VisitMut for LiftInSubquery<'_> {
         };
 
         if let Some(mut lifted) = lifted {
+            if let stmt::Expr::InSubquery(e) = &mut lifted {
+                e.relation_key = true;
+            }
             self.exclude_nulls(&mut lifted);
             *expr = lifted;
         }

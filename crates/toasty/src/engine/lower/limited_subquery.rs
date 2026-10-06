@@ -1,6 +1,7 @@
 //! SQL `IN` subqueries with `LIMIT`/`OFFSET`.
 //!
-//! Relation membership compares keys, and an absent key never matches. An
+//! Relation-key membership (`ExprInSubquery::relation_key`) compares keys,
+//! and an absent key never matches. An
 //! unlimited subquery drops its null keys with a filter (see
 //! `LiftInSubquery`), but a limited one must not: the filter would change
 //! which rows the `LIMIT` selects. For documents ordered by position where
@@ -21,64 +22,90 @@
 //! ```
 //!
 //! The derived table also satisfies MySQL, which rejects `LIMIT` directly
-//! inside an `IN` subquery, so a value membership that is not a relation's
-//! (`ExprInSubquery::exclude_null_keys` unset) is wrapped too, without the
-//! filter, and keeps SQL's `NULL` semantics.
+//! inside an `IN` subquery, so a value membership (`relation_key` unset) is
+//! wrapped too, without the filter, and keeps its result unchanged.
 
 use toasty_core::stmt::{self, VisitMut, visit_mut};
 
-/// Move the lowered subquery of a SQL `IN` into a derived table. With
-/// `exclude_null_keys`, the null keys are dropped after its `LIMIT` applies;
-/// otherwise the result is unchanged. `query` must return a record.
+/// Move the lowered subquery of a SQL `IN` into a derived table. For a
+/// relation-key membership, absent keys are dropped after its `LIMIT`
+/// applies. `query` must return a record.
 pub(super) fn wrap_limited_in_subquery(
     cx: &stmt::ExprContext<'_>,
     query: &mut stmt::Query,
-    exclude_null_keys: bool,
+    relation_key: bool,
 ) {
     debug_assert!(query.limit.is_some());
 
-    let mut inner = std::mem::replace(query, stmt::Query::unit());
-    ShiftOuterReferences { depth: 0 }.visit_stmt_query_mut(&mut inner);
-
+    let inner = std::mem::replace(query, stmt::Query::unit());
     let select = inner.body.as_select_unwrap();
     let inner_cx = cx.scope(select);
-    let fields = &select
+    let nullable: Vec<_> = select
+        .returning
+        .as_project_unwrap()
+        .as_record_unwrap()
+        .fields
+        .iter()
+        .map(|field| relation_key && may_be_null(&inner_cx, field))
+        .collect();
+
+    let mut outer = derived_table(inner);
+    let columns = &outer
         .returning
         .as_project_unwrap()
         .as_record_unwrap()
         .fields;
-
-    let columns: Vec<_> = (0..fields.len())
-        .map(|column| {
-            stmt::Expr::column(stmt::ExprColumn {
-                nesting: 0,
-                table: 0,
-                column,
-            })
-        })
-        .collect();
-
-    let filter = fields
+    let filter = columns
         .iter()
-        .zip(&columns)
-        .filter(|(field, _)| exclude_null_keys && may_be_null(&inner_cx, field))
-        .map(|(_, column)| stmt::Expr::is_not_null(column.clone()))
+        .zip(nullable)
+        .filter(|(_, nullable)| *nullable)
+        .map(|(column, _)| stmt::Expr::is_not_null(column.clone()))
         .collect();
+    outer.filter = stmt::Expr::and_from_vec(filter).into();
 
-    *query = stmt::Query::new(stmt::Select {
+    *query = stmt::Query::new(outer);
+}
+
+/// Move a lowered query into a derived table, returning an unfiltered
+/// `SELECT` of its record's columns.
+///
+/// The derived table keeps the query whole, `ORDER BY` and `LIMIT`/`OFFSET`
+/// included, so a filter added to the returned select applies to the
+/// query's result instead of the rows it scans. Column references inside
+/// the query that escape it are shifted one level further out.
+pub(super) fn derived_table(mut query: stmt::Query) -> stmt::Select {
+    ShiftOuterReferences { depth: 0 }.visit_stmt_query_mut(&mut query);
+
+    let width = query
+        .body
+        .as_select_unwrap()
+        .returning
+        .as_project_unwrap()
+        .as_record_unwrap()
+        .len();
+
+    let columns = (0..width).map(|column| {
+        stmt::Expr::column(stmt::ExprColumn {
+            nesting: 0,
+            table: 0,
+            column,
+        })
+    });
+
+    stmt::Select {
         returning: stmt::Returning::Project(stmt::Expr::record(columns)),
         source: stmt::Source::Table(stmt::SourceTable::new(
             vec![stmt::TableRef::Derived(stmt::TableDerived {
-                subquery: Box::new(inner),
+                subquery: Box::new(query),
             })],
             stmt::TableWithJoins {
                 relation: stmt::TableFactor::Table(stmt::SourceTableId(0)),
                 joins: vec![],
             },
         )),
-        filter: stmt::Expr::and_from_vec(filter).into(),
+        filter: stmt::Filter::default(),
         distinct: false,
-    });
+    }
 }
 
 /// Whether a returned key expression can be null. Only a (possibly cast)
