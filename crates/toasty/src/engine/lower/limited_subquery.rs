@@ -21,13 +21,20 @@
 //! ```
 //!
 //! The derived table also satisfies MySQL, which rejects `LIMIT` directly
-//! inside an `IN` subquery.
+//! inside an `IN` subquery, so a value membership that is not a relation's
+//! (`ExprInSubquery::exclude_null_keys` unset) is wrapped too, without the
+//! filter, and keeps SQL's `NULL` semantics.
 
 use toasty_core::stmt::{self, VisitMut, visit_mut};
 
-/// Rewrite the lowered subquery of a SQL `IN` so its `LIMIT` applies before
-/// null keys are excluded. `query` must return a record of key columns.
-pub(super) fn wrap_limited_in_subquery(cx: &stmt::ExprContext<'_>, query: &mut stmt::Query) {
+/// Move the lowered subquery of a SQL `IN` into a derived table. With
+/// `exclude_null_keys`, the null keys are dropped after its `LIMIT` applies;
+/// otherwise the result is unchanged. `query` must return a record.
+pub(super) fn wrap_limited_in_subquery(
+    cx: &stmt::ExprContext<'_>,
+    query: &mut stmt::Query,
+    exclude_null_keys: bool,
+) {
     debug_assert!(query.limit.is_some());
 
     let mut inner = std::mem::replace(query, stmt::Query::unit());
@@ -54,7 +61,7 @@ pub(super) fn wrap_limited_in_subquery(cx: &stmt::ExprContext<'_>, query: &mut s
     let filter = fields
         .iter()
         .zip(&columns)
-        .filter(|(field, _)| may_be_null(&inner_cx, field))
+        .filter(|(field, _)| exclude_null_keys && may_be_null(&inner_cx, field))
         .map(|(_, column)| stmt::Expr::is_not_null(column.clone()))
         .collect();
 

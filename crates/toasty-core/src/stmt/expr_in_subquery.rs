@@ -27,6 +27,12 @@ pub struct ExprInSubquery {
 
     /// Whether the check is `NOT IN`.
     pub negated: bool,
+
+    /// Whether null keys in the subquery's result must be dropped after its
+    /// `LIMIT` applies. Relation lowering sets this on a limited relation-key
+    /// subquery, since a null key identifies no row; a plain value membership
+    /// keeps the database's own `NULL` semantics.
+    pub exclude_null_keys: bool,
 }
 
 impl Expr {
@@ -36,6 +42,7 @@ impl Expr {
             expr: Box::new(lhs.into()),
             query: Box::new(rhs.into()),
             negated: false,
+            exclude_null_keys: false,
         }
         .into()
     }
@@ -46,6 +53,7 @@ impl Expr {
             expr: Box::new(lhs.into()),
             query: Box::new(rhs.into()),
             negated: true,
+            exclude_null_keys: false,
         }
         .into()
     }

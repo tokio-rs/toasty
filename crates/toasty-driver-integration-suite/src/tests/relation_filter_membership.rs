@@ -315,3 +315,29 @@ fn assert_limited_membership_reads(t: &Test, outer_reads: usize) {
         }
     }
 }
+
+#[driver_test(id(ID), requires(sql))]
+pub async fn limited_scalar_membership_keeps_null(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        name: Option<String>,
+        alias: Option<String>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+    toasty::create!(Item { name: "item" }).exec(&mut db).await?;
+
+    // The projected value is a plain nullable column, not a relation key, so
+    // `NOT IN` keeps SQL's three-valued result: `'item' NOT IN (NULL)` matches
+    // nothing.
+    let aliases = Item::all().select(Item::fields().alias()).limit(1);
+    let found = Item::filter(Item::fields().name().in_query(aliases).not())
+        .exec(&mut db)
+        .await?;
+    assert!(found.is_empty());
+
+    Ok(())
+}
