@@ -298,6 +298,10 @@ impl Expand<'_> {
                 }
             }
 
+            impl<__Origin> #toasty::foreign_key::FieldPath for #field_struct_ident<__Origin> {
+                type Ty = #model_ident;
+            }
+
             impl<__Origin> #toasty::IntoExpr<#model_ident> for #field_struct_ident<__Origin> {
                 fn into_expr(self) -> #toasty::stmt::Expr<#model_ident> {
                     use #toasty::IntoExpr;
@@ -885,6 +889,51 @@ impl Expand<'_> {
                 });
             }
         }
+
+        quote! { #( #checks )* }
+    }
+
+    /// Emits compile-time checks that each `belongs_to` key field in a variant
+    /// has the same type as the target field it references.
+    ///
+    /// Root models get this check from their relation accessor, which compares
+    /// the key field to the target path. Variant relations have no such
+    /// accessor, so without this a `Uuid` key referencing a `u32` primary key
+    /// would compile and register a foreign key between mismatched columns.
+    pub(super) fn expand_belongs_to_key_type_checks(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        let checks = self.model.fields.iter().filter_map(|field| {
+            let FieldTy::BelongsTo(rel) = &field.ty else {
+                return None;
+            };
+            let rel_ty = &rel.ty;
+
+            let pairs = rel.foreign_key.iter().map(|fk_field| {
+                let key = &self.model.fields[fk_field.source];
+                let key_ty = primitive_ty_unwrap(key);
+                let target_field = &fk_field.target;
+
+                // Pin the diagnostic at the key field's name so the error lands
+                // on the user's declaration, not the derive call site.
+                quote_spanned! { key.name.ident.span()=>
+                    #toasty::foreign_key::target_field(
+                        <<#rel_ty as #toasty::RelationOneField>::Target>::fields()
+                            .#target_field(),
+                    )
+                    .check_key::<<#key_ty as #toasty::Field>::Inner>();
+                }
+            });
+
+            Some(quote! {
+                const _: () = {
+                    #[allow(dead_code)]
+                    fn check() {
+                        #( #pairs )*
+                    }
+                };
+            })
+        });
 
         quote! { #( #checks )* }
     }

@@ -264,6 +264,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let column_type_requirement_checks = e.expand_column_type_requirement_checks();
     let discriminant_storage_compat_impls = e.expand_enum_discriminant_compat_impls();
     let shared_column_checks = e.expand_shared_column_checks();
+    let belongs_to_key_type_checks = e.expand_belongs_to_key_type_checks();
     let indexable_checks = e.expand_indexable_checks();
 
     // A unit (data-less) enum is a single scalar discriminant: indexable, and a
@@ -287,6 +288,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
         #column_type_requirement_checks
         #discriminant_storage_compat_impls
         #shared_column_checks
+        #belongs_to_key_type_checks
         #indexable_checks
         #unit_enum_impls
 

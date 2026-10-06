@@ -5,6 +5,7 @@
 #![doc(hidden)]
 
 pub mod auto;
+pub mod foreign_key;
 pub mod index;
 pub mod newtype;
 pub mod shared_column;
