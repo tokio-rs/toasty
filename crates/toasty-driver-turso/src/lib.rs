@@ -78,7 +78,9 @@ use toasty_core::{
     driver::{
         Capability, ConnectContext, ConnectionUrl, Driver, ExecResponse, QueryLogConfig,
         log::QueryLog,
-        operation::{IsolationLevel, Operation, RawSqlRet, Transaction, TypedValue},
+        operation::{
+            IsolationLevel, Operation, RawSqlRet, Transaction, TransactionMode, TypedValue,
+        },
     },
     schema::{
         db::{self, Migration, Table},
@@ -179,6 +181,7 @@ enum TursoPath {
 #[derive(Debug, Default, Clone)]
 struct BuilderOptions {
     index_method: bool,
+    transaction_mode: TransactionMode,
 
     local_options: LocalBuilderOptions,
 
@@ -633,11 +636,28 @@ impl Turso {
     /// `Deferred` falls back to plain `BEGIN`, while `Immediate` and
     /// `Exclusive` issue `BEGIN IMMEDIATE` / `BEGIN EXCLUSIVE` respectively.
     ///
-    /// On a serverless (Turso Cloud) database this is a no-op: those
-    /// databases are MVCC-native and transactions already run under
-    /// `BEGIN CONCURRENT` by default.
+    /// On a serverless (Turso Cloud) database this is a no-op: transactions
+    /// already run under `BEGIN CONCURRENT` by default. For a libSQL Cloud
+    /// database, configure [`Self::with_transaction_mode`] with
+    /// [`TransactionMode::Deferred`] instead.
     pub fn concurrent_writes(mut self) -> Self {
         self.concurrent_writes = true;
+        self
+    }
+
+    /// Set the mode used when a transaction requests [`TransactionMode::Default`],
+    /// including transactions Toasty starts implicitly for multi-operation plans
+    /// and read-modify-write operations.
+    ///
+    /// Use [`TransactionMode::Deferred`] for libSQL databases on Turso Cloud,
+    /// which do not support `BEGIN CONCURRENT`. An explicit per-transaction mode
+    /// overrides this setting. [`TransactionMode::Default`] preserves the
+    /// driver's natural default: concurrent for serverless connections or with
+    /// [`Self::concurrent_writes`], deferred otherwise.
+    ///
+    /// This does not change the journal mode selected by [`Self::concurrent_writes`].
+    pub fn with_transaction_mode(mut self, mode: TransactionMode) -> Self {
+        self.options.transaction_mode = mode;
         self
     }
 
@@ -1088,16 +1108,17 @@ impl Driver for Turso {
             conn.pragma_update("journal_mode", "'mvcc'").await?;
         }
 
-        // Serverless databases are MVCC-native (Turso Cloud, created with
-        // `--tursodb`), so transactions default to `BEGIN CONCURRENT` —
-        // the same semantics `concurrent_writes()` opts into for the
-        // embedded engine, which makes that flag a no-op here. Callers can
-        // still choose classic locking per transaction with
-        // `TransactionMode::Deferred`/`Immediate`/`Exclusive`.
-        let default_begin_sql = if conn.is_serverless() || self.concurrent_writes {
-            "BEGIN CONCURRENT"
-        } else {
-            "BEGIN"
+        // Keep Turso's MVCC default unless the caller configures a mode,
+        // for example Deferred for a libSQL Cloud database. Explicit
+        // per-transaction modes still override this in the serializer.
+        let default_begin_sql = match self.options.transaction_mode {
+            TransactionMode::Default if conn.is_serverless() || self.concurrent_writes => {
+                "BEGIN CONCURRENT"
+            }
+            TransactionMode::Default => "BEGIN",
+            TransactionMode::Deferred => "BEGIN DEFERRED",
+            TransactionMode::Immediate => "BEGIN IMMEDIATE",
+            TransactionMode::Exclusive => "BEGIN EXCLUSIVE",
         };
 
         Ok(Box::new(Connection {
@@ -1168,12 +1189,8 @@ impl Driver for Turso {
 /// An open connection to a Turso database.
 pub struct Connection {
     conn: AnyConn,
-    /// SQL to issue for [`TransactionMode::Default`]. Resolved by the
-    /// driver at `connect()` time — either `"BEGIN"` for classic
-    /// deferred locking, or `"BEGIN CONCURRENT"` when the driver was
-    /// configured with `concurrent_writes()`. The connection no longer
-    /// needs to know which mode it was opened in; it just emits the
-    /// pre-baked command.
+    /// SQL to issue for [`TransactionMode::Default`], resolved from the
+    /// driver's configured mode and MVCC default at `connect()` time.
     default_begin_sql: &'static str,
     query_log: QueryLogConfig,
 }
