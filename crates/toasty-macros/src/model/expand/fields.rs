@@ -16,6 +16,22 @@ const FIELD_STRUCT_RESERVED_METHODS: &[&str] = &[
 
 const FIELD_LIST_STRUCT_RESERVED_METHODS: &[&str] = &["any", "all", "filter", "order_by", "create"];
 
+/// Returns the name of the fields-struct method that yields `field`'s path.
+///
+/// A field whose name collides with a built-in fields-struct method (`filter`,
+/// `eq`, ...) has no public accessor; generated code that must reach it, such
+/// as a `belongs_to` referencing it, calls this hidden accessor instead.
+pub(super) fn field_path_accessor(field: &syn::Ident) -> syn::Ident {
+    if util::ident_is_reserved(field, FIELD_STRUCT_RESERVED_METHODS) {
+        syn::Ident::new(
+            &format!("__toasty_field_{}", util::bare_ident_name(field)),
+            field.span(),
+        )
+    } else {
+        field.clone()
+    }
+}
+
 impl Expand<'_> {
     pub(super) fn expand_field_struct(&self) -> TokenStream {
         let toasty = &self.toasty;
@@ -55,16 +71,15 @@ impl Expand<'_> {
             .iter()
             .enumerate()
             .filter(|(_, field)| {
-                let ident = &field.name.ident;
-
-                if util::ident_is_reserved(ident, FIELD_STRUCT_RESERVED_METHODS) {
-                    return false;
-                }
-
-                true
+                // A reserved-name primitive field still gets a hidden
+                // accessor, so generated code can reach it (see
+                // `field_path_accessor`).
+                !util::ident_is_reserved(&field.name.ident, FIELD_STRUCT_RESERVED_METHODS)
+                    || matches!(field.ty, Primitive(_))
             })
             .map(move |(offset, field)| {
-                let field_ident = &field.name.ident;
+                let field_ident = &field_path_accessor(&field.name.ident);
+                let hidden = (field_ident != &field.name.ident).then(|| quote!(#[doc(hidden)]));
                 let field_offset = util::int(offset);
 
                 // `belongs_to` is the only relation kind allowed in embedded
@@ -87,12 +102,13 @@ impl Expand<'_> {
                         // `#[document]`) yields a chainable Fields handle
                         // (`profile().name()`), a `Vec<_>` collection yields a
                         // list leaf.
-                        self.expand_primitive_field_method(
+                        let method = self.expand_primitive_field_method(
                             field_ident,
                             ty,
                             &field_offset,
                             &quote!(self.path.clone()),
-                        )
+                        );
+                        quote!(#hidden #method)
                     }
                     BelongsTo(rel) => {
                         self.expand_one_relation_field_method(

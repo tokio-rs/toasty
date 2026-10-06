@@ -912,7 +912,7 @@ impl Expand<'_> {
             let pairs = rel.foreign_key.iter().map(|fk_field| {
                 let key = &self.model.fields[fk_field.source];
                 let key_ty = primitive_ty_unwrap(key);
-                let target_field = &fk_field.target;
+                let target_field = super::fields::field_path_accessor(&fk_field.target);
 
                 // Pin the diagnostic at the key field's name so the error lands
                 // on the user's declaration, not the derive call site.

@@ -57,7 +57,7 @@ impl Expand<'_> {
         let operands = rel.foreign_key.iter().map(|fk_field| {
             let source = &self.model.fields[fk_field.source];
             let source_field_ident = &source.name.ident;
-            let target_field = &fk_field.target;
+            let target_field = super::fields::field_path_accessor(&fk_field.target);
 
             // `fields().#target_field()` returns the target field's
             // `<Field>::Path<Origin>` — `Path<Origin, T>` for primitives and a
