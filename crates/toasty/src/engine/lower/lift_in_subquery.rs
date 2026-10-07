@@ -700,15 +700,6 @@ fn lift_belongs_to_in_subquery(
         return None;
     }
 
-    let fk_in_subquery = || {
-        lift_fk_in_subquery(
-            belongs_to.target,
-            super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.source)),
-            super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.target)),
-            query,
-        )
-    };
-
     let select = query.body.as_select_unwrap();
 
     let mut lift = LiftBelongsTo {
@@ -741,7 +732,12 @@ fn lift_belongs_to_in_subquery(
     });
 
     if lift.fail || !all_fks_matched || !limit_is_exact {
-        fk_in_subquery()
+        lift_fk_in_subquery(
+            belongs_to.target,
+            super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.source)),
+            super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.target)),
+            query,
+        )
     } else {
         Some(if lift.operands.len() == 1 {
             lift.operands.into_iter().next().unwrap()
