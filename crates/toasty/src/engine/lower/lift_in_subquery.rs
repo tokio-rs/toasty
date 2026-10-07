@@ -181,9 +181,6 @@ impl VisitMut for LiftInSubquery<'_> {
         };
 
         if let Some(mut lifted) = lifted {
-            if let stmt::Expr::InSubquery(e) = &mut lifted {
-                e.relation_key = true;
-            }
             self.exclude_nulls(&mut lifted);
             *expr = lifted;
         }
@@ -682,6 +679,8 @@ fn lift_relation_predicate(
 ///
 /// `lhs` references key fields on the current model. `returning` references
 /// the matching key fields on `target`, which is also the subquery source.
+/// Both sides are keys, so the result is marked as a relation-key
+/// membership (see `ExprInSubquery::relation_key`).
 fn lift_fk_in_subquery(
     target: ModelId,
     lhs: stmt::Expr,
@@ -695,7 +694,15 @@ fn lift_fk_in_subquery(
     let mut subquery = query.clone();
     subquery.body.as_select_mut_unwrap().returning = stmt::Returning::Project(returning);
 
-    Some(stmt::Expr::in_subquery(lhs, subquery))
+    Some(
+        stmt::ExprInSubquery {
+            expr: Box::new(lhs),
+            query: Box::new(subquery),
+            negated: false,
+            relation_key: true,
+        }
+        .into(),
+    )
 }
 
 /// BelongsTo branch: try to lift the subquery's filter into direct FK
