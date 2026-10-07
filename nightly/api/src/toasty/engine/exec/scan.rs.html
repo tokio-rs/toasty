@@ -13,34 +13,36 @@
 <a href=#13 id=13 data-nosnippet>13</a>
 <a href=#14 id=14 data-nosnippet>14</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(input) = action.input {
 <a href=#15 id=15 data-nosnippet>15</a>            <span class="kw">let </span>input = <span class="self">self</span>.collect_input([input]).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#16 id=16 data-nosnippet>16</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">ref mut </span>f) = row_filter {
-<a href=#17 id=17 data-nosnippet>17</a>                f.substitute(<span class="kw-2">&amp;</span>input);
-<a href=#18 id=18 data-nosnippet>18</a>            }
-<a href=#19 id=19 data-nosnippet>19</a>        }
-<a href=#20 id=20 data-nosnippet>20</a>
-<a href=#21 id=21 data-nosnippet>21</a>        <span class="kw">let </span>res = <span class="self">self
-<a href=#22 id=22 data-nosnippet>22</a>            </span>.connection
-<a href=#23 id=23 data-nosnippet>23</a>            .exec(
-<a href=#24 id=24 data-nosnippet>24</a>                <span class="kw-2">&amp;</span><span class="self">self</span>.engine.schema,
-<a href=#25 id=25 data-nosnippet>25</a>                operation::Scan {
-<a href=#26 id=26 data-nosnippet>26</a>                    table: action.table,
-<a href=#27 id=27 data-nosnippet>27</a>                    columns: mir::column_ids(action.table, <span class="kw-2">&amp;</span>action.columns)
-<a href=#28 id=28 data-nosnippet>28</a>                        .map(|col_id| col_id.index)
-<a href=#29 id=29 data-nosnippet>29</a>                        .collect(),
-<a href=#30 id=30 data-nosnippet>30</a>                    filter: row_filter,
-<a href=#31 id=31 data-nosnippet>31</a>                    limit: action.limit.clone(),
-<a href=#32 id=32 data-nosnippet>32</a>                }
-<a href=#33 id=33 data-nosnippet>33</a>                .into(),
-<a href=#34 id=34 data-nosnippet>34</a>            )
-<a href=#35 id=35 data-nosnippet>35</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#36 id=36 data-nosnippet>36</a>
-<a href=#37 id=37 data-nosnippet>37</a>        <span class="kw">let </span>rows: Vec&lt;stmt::Value&gt; = res.values.into_value_stream().collect().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#16 id=16 data-nosnippet>16</a>            <span class="kw">if </span>!<span class="self">self</span>.bind_row_filter(<span class="kw-2">&amp;mut </span>row_filter, <span class="kw-2">&amp;</span>input, action.table) {
+<a href=#17 id=17 data-nosnippet>17</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(ExecResponse::from_rows(Rows::value_stream(
+<a href=#18 id=18 data-nosnippet>18</a>                    stmt::ValueStream::default(),
+<a href=#19 id=19 data-nosnippet>19</a>                )));
+<a href=#20 id=20 data-nosnippet>20</a>            }
+<a href=#21 id=21 data-nosnippet>21</a>        }
+<a href=#22 id=22 data-nosnippet>22</a>
+<a href=#23 id=23 data-nosnippet>23</a>        <span class="kw">let </span>res = <span class="self">self
+<a href=#24 id=24 data-nosnippet>24</a>            </span>.connection
+<a href=#25 id=25 data-nosnippet>25</a>            .exec(
+<a href=#26 id=26 data-nosnippet>26</a>                <span class="kw-2">&amp;</span><span class="self">self</span>.engine.schema,
+<a href=#27 id=27 data-nosnippet>27</a>                operation::Scan {
+<a href=#28 id=28 data-nosnippet>28</a>                    table: action.table,
+<a href=#29 id=29 data-nosnippet>29</a>                    columns: mir::column_ids(action.table, <span class="kw-2">&amp;</span>action.columns)
+<a href=#30 id=30 data-nosnippet>30</a>                        .map(|col_id| col_id.index)
+<a href=#31 id=31 data-nosnippet>31</a>                        .collect(),
+<a href=#32 id=32 data-nosnippet>32</a>                    filter: row_filter,
+<a href=#33 id=33 data-nosnippet>33</a>                    limit: action.limit.clone(),
+<a href=#34 id=34 data-nosnippet>34</a>                }
+<a href=#35 id=35 data-nosnippet>35</a>                .into(),
+<a href=#36 id=36 data-nosnippet>36</a>            )
+<a href=#37 id=37 data-nosnippet>37</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#38 id=38 data-nosnippet>38</a>
-<a href=#39 id=39 data-nosnippet>39</a>        <span class="prelude-val">Ok</span>(ExecResponse {
-<a href=#40 id=40 data-nosnippet>40</a>            values: Rows::Stream(stmt::ValueStream::from_vec(rows)),
-<a href=#41 id=41 data-nosnippet>41</a>            next_cursor: res.next_cursor,
-<a href=#42 id=42 data-nosnippet>42</a>            prev_cursor: <span class="prelude-val">None</span>,
-<a href=#43 id=43 data-nosnippet>43</a>        })
-<a href=#44 id=44 data-nosnippet>44</a>    }
-<a href=#45 id=45 data-nosnippet>45</a>}
+<a href=#39 id=39 data-nosnippet>39</a>        <span class="kw">let </span>rows: Vec&lt;stmt::Value&gt; = res.values.into_value_stream().collect().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#40 id=40 data-nosnippet>40</a>
+<a href=#41 id=41 data-nosnippet>41</a>        <span class="prelude-val">Ok</span>(ExecResponse {
+<a href=#42 id=42 data-nosnippet>42</a>            values: Rows::Stream(stmt::ValueStream::from_vec(rows)),
+<a href=#43 id=43 data-nosnippet>43</a>            next_cursor: res.next_cursor,
+<a href=#44 id=44 data-nosnippet>44</a>            prev_cursor: <span class="prelude-val">None</span>,
+<a href=#45 id=45 data-nosnippet>45</a>        })
+<a href=#46 id=46 data-nosnippet>46</a>    }
+<a href=#47 id=47 data-nosnippet>47</a>}
 </code></pre></div></section></main></body></html>

@@ -512,34 +512,37 @@
 <a href=#512 id=512 data-nosnippet>512</a>                },
 <a href=#513 id=513 data-nosnippet>513</a>                <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"EXPR = {:#?}"</span>, stmt),
 <a href=#514 id=514 data-nosnippet>514</a>            },
-<a href=#515 id=515 data-nosnippet>515</a>            <span class="comment">// Constants are ignored
-<a href=#516 id=516 data-nosnippet>516</a>            </span>stmt::Expr::Value(<span class="kw">_</span>) =&gt; {}
-<a href=#517 id=517 data-nosnippet>517</a>            <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"EXPR = {:#?}"</span>, stmt),
-<a href=#518 id=518 data-nosnippet>518</a>        }
-<a href=#519 id=519 data-nosnippet>519</a>    }
-<a href=#520 id=520 data-nosnippet>520</a>
-<a href=#521 id=521 data-nosnippet>521</a>    <span class="kw">fn </span>apply_eq_constraint(<span class="kw-2">&amp;mut </span><span class="self">self</span>, expr_ref: <span class="kw-2">&amp;</span>stmt::ExprReference, val: <span class="kw-2">&amp;</span>stmt::Expr) {
-<a href=#522 id=522 data-nosnippet>522</a>        <span class="kw">let </span>stmt::ExprReference::Field { nesting, index } = expr_ref <span class="kw">else </span>{
-<a href=#523 id=523 data-nosnippet>523</a>            <span class="macro">todo!</span>(<span class="string">"handle non-field reference"</span>);
-<a href=#524 id=524 data-nosnippet>524</a>        };
-<a href=#525 id=525 data-nosnippet>525</a>
-<a href=#526 id=526 data-nosnippet>526</a>        <span class="macro">assert!</span>(<span class="kw-2">*</span>nesting == <span class="number">0</span>, <span class="string">"TODO: handle references to parent scopes"</span>);
-<a href=#527 id=527 data-nosnippet>527</a>
-<a href=#528 id=528 data-nosnippet>528</a>        <span class="kw">let </span><span class="kw-2">mut </span>existing = <span class="self">self</span>.expr.entry_mut(<span class="kw-2">*</span>index);
-<a href=#529 id=529 data-nosnippet>529</a>
-<a href=#530 id=530 data-nosnippet>530</a>        <span class="kw">if </span>!existing.is_value_null() &amp;&amp; !existing.is_default() {
-<a href=#531 id=531 data-nosnippet>531</a>            <span class="kw">if let </span>stmt::EntryMut::Value(existing) = existing {
-<a href=#532 id=532 data-nosnippet>532</a>                <span class="kw">if let </span>stmt::Expr::Value(val) = val {
-<a href=#533 id=533 data-nosnippet>533</a>                    <span class="macro">assert_eq!</span>(existing, val);
-<a href=#534 id=534 data-nosnippet>534</a>                } <span class="kw">else </span>{
-<a href=#535 id=535 data-nosnippet>535</a>                    <span class="macro">todo!</span>()
-<a href=#536 id=536 data-nosnippet>536</a>                }
-<a href=#537 id=537 data-nosnippet>537</a>            } <span class="kw">else </span>{
-<a href=#538 id=538 data-nosnippet>538</a>                <span class="macro">todo!</span>()
-<a href=#539 id=539 data-nosnippet>539</a>            }
-<a href=#540 id=540 data-nosnippet>540</a>        } <span class="kw">else </span>{
-<a href=#541 id=541 data-nosnippet>541</a>            existing.insert(val.clone());
-<a href=#542 id=542 data-nosnippet>542</a>        }
-<a href=#543 id=543 data-nosnippet>543</a>    }
-<a href=#544 id=544 data-nosnippet>544</a>}
+<a href=#515 id=515 data-nosnippet>515</a>            <span class="comment">// A present-key guard on a lifted relation constraint. The
+<a href=#516 id=516 data-nosnippet>516</a>            // equality it accompanies assigns the key.
+<a href=#517 id=517 data-nosnippet>517</a>            </span>stmt::Expr::IsNull(e) <span class="kw">if </span>e.negated &amp;&amp; e.expr.is_field() =&gt; {}
+<a href=#518 id=518 data-nosnippet>518</a>            <span class="comment">// Constants are ignored
+<a href=#519 id=519 data-nosnippet>519</a>            </span>stmt::Expr::Value(<span class="kw">_</span>) =&gt; {}
+<a href=#520 id=520 data-nosnippet>520</a>            <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"EXPR = {:#?}"</span>, stmt),
+<a href=#521 id=521 data-nosnippet>521</a>        }
+<a href=#522 id=522 data-nosnippet>522</a>    }
+<a href=#523 id=523 data-nosnippet>523</a>
+<a href=#524 id=524 data-nosnippet>524</a>    <span class="kw">fn </span>apply_eq_constraint(<span class="kw-2">&amp;mut </span><span class="self">self</span>, expr_ref: <span class="kw-2">&amp;</span>stmt::ExprReference, val: <span class="kw-2">&amp;</span>stmt::Expr) {
+<a href=#525 id=525 data-nosnippet>525</a>        <span class="kw">let </span>stmt::ExprReference::Field { nesting, index } = expr_ref <span class="kw">else </span>{
+<a href=#526 id=526 data-nosnippet>526</a>            <span class="macro">todo!</span>(<span class="string">"handle non-field reference"</span>);
+<a href=#527 id=527 data-nosnippet>527</a>        };
+<a href=#528 id=528 data-nosnippet>528</a>
+<a href=#529 id=529 data-nosnippet>529</a>        <span class="macro">assert!</span>(<span class="kw-2">*</span>nesting == <span class="number">0</span>, <span class="string">"TODO: handle references to parent scopes"</span>);
+<a href=#530 id=530 data-nosnippet>530</a>
+<a href=#531 id=531 data-nosnippet>531</a>        <span class="kw">let </span><span class="kw-2">mut </span>existing = <span class="self">self</span>.expr.entry_mut(<span class="kw-2">*</span>index);
+<a href=#532 id=532 data-nosnippet>532</a>
+<a href=#533 id=533 data-nosnippet>533</a>        <span class="kw">if </span>!existing.is_value_null() &amp;&amp; !existing.is_default() {
+<a href=#534 id=534 data-nosnippet>534</a>            <span class="kw">if let </span>stmt::EntryMut::Value(existing) = existing {
+<a href=#535 id=535 data-nosnippet>535</a>                <span class="kw">if let </span>stmt::Expr::Value(val) = val {
+<a href=#536 id=536 data-nosnippet>536</a>                    <span class="macro">assert_eq!</span>(existing, val);
+<a href=#537 id=537 data-nosnippet>537</a>                } <span class="kw">else </span>{
+<a href=#538 id=538 data-nosnippet>538</a>                    <span class="macro">todo!</span>()
+<a href=#539 id=539 data-nosnippet>539</a>                }
+<a href=#540 id=540 data-nosnippet>540</a>            } <span class="kw">else </span>{
+<a href=#541 id=541 data-nosnippet>541</a>                <span class="macro">todo!</span>()
+<a href=#542 id=542 data-nosnippet>542</a>            }
+<a href=#543 id=543 data-nosnippet>543</a>        } <span class="kw">else </span>{
+<a href=#544 id=544 data-nosnippet>544</a>            existing.insert(val.clone());
+<a href=#545 id=545 data-nosnippet>545</a>        }
+<a href=#546 id=546 data-nosnippet>546</a>    }
+<a href=#547 id=547 data-nosnippet>547</a>}
 </code></pre></div></section></main></body></html>

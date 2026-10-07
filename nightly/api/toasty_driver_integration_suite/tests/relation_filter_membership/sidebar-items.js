@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["belongs_to_membership","has_one_membership_with_null_foreign_key","limited_membership_with_composite_key","membership_with_composite_key","negated_direct_belongs_to_membership"],"mod":["limited_membership_preserves_candidates"]};

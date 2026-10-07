@@ -19,7 +19,7 @@
 <a href=#19 id=19 data-nosnippet>19</a>            .<span class="kw">await</span><span class="question-mark">?
 <a href=#20 id=20 data-nosnippet>20</a>            </span>.into_list_unwrap()
 <a href=#21 id=21 data-nosnippet>21</a>            .into_iter()
-<a href=#22 id=22 data-nosnippet>22</a>            .filter(|k| !k.is_null())
+<a href=#22 id=22 data-nosnippet>22</a>            .filter(|k| !<span class="kw">super</span>::kv::is_absent_key(k))
 <a href=#23 id=23 data-nosnippet>23</a>            .filter(|k| seen.insert(k.clone()))
 <a href=#24 id=24 data-nosnippet>24</a>            .collect();
 <a href=#25 id=25 data-nosnippet>25</a>
