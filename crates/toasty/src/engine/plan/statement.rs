@@ -440,18 +440,15 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     match &self.stmt_info.args[expr_arg.position] {
                         hir::Arg::Ref {
                             stmt_id: target_id,
+                            back_ref_column,
                             returning_input,
                             batch_load_index,
-                            target_expr_ref,
                             ..
                         } => {
-                            let target_stmt_info = &self.planner.hir[target_id];
-                            let back_ref = &target_stmt_info.back_refs[&self.stmt_id];
-
-                            // Find the column
-                            let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
-
                             if returning_input.get().is_none() {
+                                let target_stmt_info = &self.planner.hir[target_id];
+                                let back_ref = &target_stmt_info.back_refs[&self.stmt_id];
+
                                 // Find the node providing the data for the ref
                                 let node_id = back_ref.node_id.get().unwrap();
 
@@ -462,7 +459,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             let index = returning_input.get().unwrap();
                             let row = batch_load_index.get().unwrap();
 
-                            *expr = stmt::Expr::arg_project(input_offset + index, [row, column]);
+                            *expr = stmt::Expr::arg_project(
+                                input_offset + index,
+                                [row, *back_ref_column],
+                            );
                         }
                         hir::Arg::Sub {
                             stmt_id: target_id, ..
@@ -709,8 +709,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 }
                 stmt::Expr::Arg(expr_arg) => {
                     let hir::Arg::Ref {
-                        stmt_id: target_id,
-                        target_expr_ref,
+                        back_ref_column,
                         batch_load_index: batch_load_table_ref_index,
                         ..
                     } = &self.stmt_info.args[expr_arg.position]
@@ -718,14 +717,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         todo!()
                     };
 
-                    let back_ref = &self.planner.hir[target_id].back_refs[&self.stmt_id];
-                    let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
-
                     // Rewrite reference the new `FROM`.
                     *expr = stmt::Expr::column(stmt::ExprColumn {
                         nesting: 0,
                         table: batch_load_table_ref_index.get().unwrap(),
-                        column,
+                        column: *back_ref_column,
                     });
                 }
                 _ => {}
@@ -765,18 +761,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             }
             stmt::Expr::Arg(expr_arg) => {
                 let hir::Arg::Ref {
-                    stmt_id: target_id,
-                    target_expr_ref,
-                    ..
+                    back_ref_column, ..
                 } = &self.stmt_info.args[expr_arg.position]
                 else {
                     todo!()
                 };
 
-                let back_ref = &self.planner.hir[target_id].back_refs[&self.stmt_id];
-                let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
-
-                *expr = stmt::Expr::arg(column);
+                *expr = stmt::Expr::arg(*back_ref_column);
             }
             _ => {}
         });
@@ -890,21 +881,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         match &self.stmt_info.args[hir_position] {
             hir::Arg::Sub { input, .. } => (input.get().unwrap(), None),
             hir::Arg::Ref {
-                stmt_id: target_id,
-                target_expr_ref,
+                back_ref_column,
                 data_load_input,
                 batch_load_index,
                 ..
-            } => {
-                // TODO: this work seems to be duplicated in the returning as well.
-                let back_ref = &self.planner.hir[target_id].back_refs[&self.stmt_id];
-                let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
-
-                (
-                    data_load_input.get().unwrap(),
-                    Some([batch_load_index.get().unwrap(), column]),
-                )
-            }
+            } => (
+                data_load_input.get().unwrap(),
+                Some([batch_load_index.get().unwrap(), *back_ref_column]),
+            ),
         }
     }
 
@@ -2086,11 +2070,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 mir::Eval::map_over(&self.planner.mir, exec_stmt_node_id, IndexSet::new(), body);
             let project_node_id = self.planner.mir.insert(eval);
             let project_node_id = if self.stmt_info.stmt().is_query()
-                && let Some(predicate) = self.build_parent_only_back_ref_filter(
-                    *child_stmt_id,
-                    back_ref,
-                    project_node_id,
-                ) {
+                && let Some(predicate) =
+                    self.build_parent_only_back_ref_filter(*child_stmt_id, project_node_id)
+            {
                 self.planner.mir.insert(mir::Filter {
                     input: project_node_id,
                     args: IndexSet::new(),
@@ -2113,7 +2095,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     fn build_parent_only_back_ref_filter(
         &self,
         child_stmt_id: hir::StmtId,
-        back_ref: &hir::BackRef,
         project_node_id: mir::NodeId,
     ) -> Option<eval::Func> {
         let child_stmt = &self.planner.hir[child_stmt_id];
@@ -2130,9 +2111,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         };
         let predicates = top_level_conjuncts
             .iter()
-            .filter_map(|conjunct| {
-                self.rewrite_parent_only_conjunct(child_stmt, back_ref, conjunct.clone())
-            })
+            .filter_map(|conjunct| self.rewrite_parent_only_conjunct(child_stmt, conjunct.clone()))
             .collect::<Vec<_>>();
 
         if predicates.is_empty() {
@@ -2157,7 +2136,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     fn rewrite_parent_only_conjunct(
         &self,
         child_stmt: &hir::StatementInfo,
-        back_ref: &hir::BackRef,
         mut conjunct: stmt::Expr,
     ) -> Option<stmt::Expr> {
         if !conjunct.is_eval() {
@@ -2177,19 +2155,18 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 }
                 if let Some(hir::Arg::Ref {
                     stmt_id,
-                    target_expr_ref,
+                    back_ref_column,
                     ..
                 }) = child_stmt.args.get(arg.position)
                     && *stmt_id == self.stmt_id
                     && arg.nesting == scope_depth
                 {
-                    let back_ref_column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
                     *expr = stmt::Expr::arg_project(
                         stmt::ExprArg {
                             position: 0,
                             nesting: scope_depth,
                         },
-                        [back_ref_column],
+                        [*back_ref_column],
                     );
                     references_parent = true;
                 } else {

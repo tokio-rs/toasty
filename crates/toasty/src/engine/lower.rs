@@ -1819,7 +1819,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         // returned from the target statement's ExecStatement operation. This
         // ExecStatement operation batch loads all records needed to execute
         // the full root statement.
-        target
+        let (back_ref_column, _) = target
             .back_refs
             .entry(source_id)
             .or_default()
@@ -1848,6 +1848,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         source.args.push(hir::Arg::Ref {
             target_expr_ref: expr_reference,
             stmt_id: target_id,
+            back_ref_column,
             nesting,
             data_load_input: Cell::new(None),
             returning_input: Cell::new(None),

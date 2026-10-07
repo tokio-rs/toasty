@@ -136,15 +136,12 @@ fn rewrite(expr: Expr) -> Option<Expr> {
             column,
         })
     };
-    let back_ref = hir::BackRef {
-        exprs: [column(3), column(7)].into(),
-        ..Default::default()
-    };
     let mut child = hir::StatementInfo::new(IndexMap::new());
     for stmt_id in [parent, other] {
         child.args.push(hir::Arg::Ref {
             target_expr_ref: column(7),
             stmt_id,
+            back_ref_column: 1,
             nesting: 1,
             data_load_input: Default::default(),
             returning_input: Default::default(),
@@ -174,7 +171,7 @@ fn rewrite(expr: Expr) -> Option<Expr> {
         },
         remaining_deps: vec![],
     }
-    .rewrite_parent_only_conjunct(&child, &back_ref, expr)
+    .rewrite_parent_only_conjunct(&child, expr)
 }
 
 fn assert_parent_filter(expr: Expr) {
@@ -278,6 +275,7 @@ fn arg_dependencies_preserve_map_and_let_scopes() {
     hir[root].args.push(hir::Arg::Ref {
         stmt_id: parent,
         target_expr_ref: column,
+        back_ref_column: 0,
         nesting: 1,
         data_load_input: Cell::new(Some(1)),
         returning_input: Cell::new(None),
