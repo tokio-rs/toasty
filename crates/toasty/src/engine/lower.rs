@@ -1,5 +1,6 @@
 mod association;
 mod expr_or;
+mod in_subquery;
 mod include;
 mod insert;
 mod lift_in_subquery;
@@ -782,6 +783,8 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     if !returning.is_record() {
                         *returning = stmt::Expr::record([returning.take()]);
                     }
+
+                    in_subquery::finish_in_subquery(&self.expr_cx, &mut e.query, e.relation_key);
                 } else {
                     self.visit_expr_mut(&mut e.expr);
 
