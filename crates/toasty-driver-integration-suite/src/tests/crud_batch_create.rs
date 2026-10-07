@@ -68,7 +68,7 @@ pub async fn batch_create_many(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(requires(and(auto_increment, returning_from_mutation)))]
+#[driver_test(requires(and(auto_increment, returning_from_insert)))]
 pub async fn batch_create_many_auto_increment(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
@@ -91,7 +91,7 @@ pub async fn batch_create_many_auto_increment(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(requires(and(auto_increment, not(returning_from_mutation))))]
+#[driver_test(requires(and(auto_increment, not(returning_from_insert))))]
 pub async fn batch_create_many_auto_increment_requires_returning(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Generated {

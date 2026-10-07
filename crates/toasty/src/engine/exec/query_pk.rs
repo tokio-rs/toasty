@@ -10,10 +10,17 @@ use toasty_core::{
 impl Exec<'_> {
     pub(super) async fn exec_query_pk(&mut self, action: &mir::QueryPk) -> Result<ExecResponse> {
         let mut pk_filter = action.pk_filter.clone();
+        let mut row_filter = action.row_filter.clone();
 
         if let Some(input) = action.input {
             let input = self.collect_input([input]).await?;
             pk_filter.substitute(&input);
+
+            if !self.bind_row_filter(&mut row_filter, &input, action.table) {
+                return Ok(ExecResponse::from_rows(Rows::value_stream(
+                    stmt::ValueStream::default(),
+                )));
+            }
         }
 
         let filters = self.split_filter(pk_filter, action.table);
@@ -45,7 +52,7 @@ impl Exec<'_> {
                         index: action.index,
                         select: mir::column_ids(action.table, &action.columns).collect(),
                         pk_filter: f,
-                        filter: action.row_filter.clone(),
+                        filter: row_filter.clone(),
                         limit: action.limit.clone(),
                         order: action.order,
                     }

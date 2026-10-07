@@ -585,6 +585,68 @@ let users = User::filter(
 The `.matches()` closure receives the variant's field accessors. It checks both
 the discriminant and the field condition.
 
+## Relations inside embedded types
+
+An embedded struct or enum variant can contain a `#[belongs_to]` relation.
+Its key references a sibling field. An enum lets a model belong to one of
+several parent types:
+
+```rust,ignore
+#[derive(toasty::Embed)]
+enum Owner {
+    Human {
+        #[shared(id)]
+        id: uuid::Uuid,
+        #[belongs_to(key = id)]
+        human: toasty::Deferred<Human>,
+    },
+    Animal {
+        #[shared(id)]
+        id: uuid::Uuid,
+        #[belongs_to(key = id)]
+        animal: toasty::Deferred<Animal>,
+    },
+}
+
+#[derive(toasty::Model)]
+struct Object {
+    #[key]
+    #[auto]
+    id: uuid::Uuid,
+    owner: Owner,
+}
+
+let objects = Object::all()
+    .include(Object::fields().owner().human().human())
+    .include(Object::fields().owner().animal().animal())
+    .exec(&mut db)
+    .await?;
+
+for object in objects {
+    match object.owner {
+        Owner::Human { human, .. } => println!("{}", human.get().name),
+        Owner::Animal { animal, .. } => println!("{}", animal.get().name),
+    }
+}
+```
+
+The `owner` column stores the variant discriminant, and `owner_id` stores
+the shared key. The relation fields have no columns. Loading an owner
+checks its variant as well as its key, so a human and an animal with the
+same ID remain distinct.
+
+An include loads only the field its path names. The `owner` field above is
+not deferred, so `.include(Object::fields().owner())` has no effect. Name
+each deferred relation that the query should load, as in the example. If
+the model instead stores `owner: Deferred<Owner>`, including `owner()` loads
+the enum but leaves its deferred relations unloaded; including a relation's
+full path loads both the deferred enum and that relation. A non-deferred
+relation such as `human: Human` loads automatically whenever its containing
+embed loads. Relations can also sit inside nested embeds, and `Option<Owner>`
+represents an object without an owner.
+
+Inverse `has_many` and `has_one` fields cannot pair with an embedded relation.
+
 ## Indexing embedded fields
 
 Add `#[index]` or `#[unique]` to fields inside an embedded type. The index

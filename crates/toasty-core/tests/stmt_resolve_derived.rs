@@ -10,8 +10,8 @@ use toasty_core::schema::db::{
 };
 use toasty_core::stmt::{
     DerivedRef, Expr, ExprColumn, ExprContext, ExprReference, ExprSet, ExprTarget, Query,
-    ResolvedRef, SourceTable, SourceTableId, TableDerived, TableFactor, TableRef, TableWithJoins,
-    Type, Value, Values,
+    ResolvedRef, Returning, Select, Source, SourceTable, SourceTableId, TableDerived, TableFactor,
+    TableRef, TableWithJoins, Type, TypeUnion, Value, Values,
 };
 
 // ---------------------------------------------------------------------------
@@ -181,6 +181,159 @@ fn nested_scopes_derived_inner_table_outer() {
         inner.resolve_expr_reference(&col_ref(1, 0, 0)),
         ResolvedRef::Column(_)
     ));
+}
+
+#[test]
+fn infer_derived_values_columns() {
+    let schema = db_schema();
+    let values = vec![Value::I64(1), Value::String("hello".into())];
+
+    for row in [
+        val_row(values.clone()),
+        Expr::from(Value::record_from_vec(values)),
+    ] {
+        let source = source_with_derived(derived_from_values(vec![row]));
+        let cx = ExprContext::new_with_target(&schema, ExprTarget::Source(&source));
+
+        assert_eq!(cx.infer_expr_reference_ty(&col_ref(0, 0, 0)), Type::I64);
+        assert_eq!(cx.infer_expr_reference_ty(&col_ref(0, 0, 1)), Type::String);
+    }
+}
+
+#[test]
+fn infer_derived_values_columns_uses_all_rows() {
+    let schema = db_schema();
+    let source = source_with_derived(derived_from_values(vec![
+        val_row(vec![Value::Null, Value::I64(1), Value::Bool(true)]),
+        val_row(vec![
+            Value::String("hello".into()),
+            Value::Null,
+            Value::Bool(false),
+        ]),
+    ]));
+    let cx = ExprContext::new_with_target(&schema, ExprTarget::Source(&source));
+    let mut string_ty = TypeUnion::new();
+    string_ty.insert(Type::Null);
+    string_ty.insert(Type::String);
+    let mut int_ty = TypeUnion::new();
+    int_ty.insert(Type::I64);
+    int_ty.insert(Type::Null);
+
+    assert_eq!(
+        cx.infer_expr_reference_ty(&col_ref(0, 0, 0)),
+        string_ty.simplify()
+    );
+    assert_eq!(
+        cx.infer_expr_reference_ty(&col_ref(0, 0, 1)),
+        int_ty.simplify()
+    );
+    assert_eq!(cx.infer_expr_reference_ty(&col_ref(0, 0, 2)), Type::Bool);
+}
+
+#[test]
+fn infer_derived_scalar_values_column() {
+    let schema = db_schema();
+    let source = source_with_derived(derived_from_values(vec![Expr::from("hello")]));
+    let cx = ExprContext::new_with_target(&schema, ExprTarget::Source(&source));
+
+    assert_eq!(cx.infer_expr_reference_ty(&col_ref(0, 0, 0)), Type::String);
+}
+
+#[test]
+fn infer_derived_empty_values_columns() {
+    let schema = db_schema();
+    let source = source_with_derived(derived_from_values(vec![]));
+    let cx = ExprContext::new_with_target(&schema, ExprTarget::Source(&source));
+
+    assert_eq!(cx.infer_expr_reference_ty(&col_ref(0, 0, 0)), Type::Unknown);
+    assert_eq!(cx.infer_expr_reference_ty(&col_ref(0, 0, 1)), Type::Unknown);
+}
+
+#[test]
+fn infer_derived_select_columns() {
+    let schema = db_schema();
+    let mut select = Select::from(schema.tables[0].id);
+    select.returning = Returning::from_project_iter([
+        Expr::from("hello"),
+        Expr::from(col_ref(0, 0, 0)),
+        Expr::list([Expr::from(1_i64)]),
+    ]);
+    let source = source_with_derived(TableDerived {
+        subquery: Box::new(Query::new(select)),
+    });
+    let cx = ExprContext::new_with_target(&schema, ExprTarget::Source(&source));
+
+    assert_eq!(cx.infer_expr_reference_ty(&col_ref(0, 0, 0)), Type::String);
+    assert_eq!(cx.infer_expr_reference_ty(&col_ref(0, 0, 1)), Type::I64);
+    assert_eq!(
+        cx.infer_expr_reference_ty(&col_ref(0, 0, 2)),
+        Type::list(Type::I64)
+    );
+}
+
+#[test]
+fn infer_derived_select_over_derived_values() {
+    let schema = db_schema();
+    let values = source_with_derived(derived_from_values(vec![val_row(vec![
+        Value::I64(1),
+        Value::String("hello".into()),
+    ])]));
+    let mut select = Select::new(Source::Table(values), true);
+    select.returning = Returning::Project(col_ref(0, 0, 1).into());
+    let source = source_with_derived(TableDerived {
+        subquery: Box::new(Query::new(select)),
+    });
+    let cx = ExprContext::new_with_target(&schema, ExprTarget::Source(&source));
+
+    assert_eq!(cx.infer_expr_reference_ty(&col_ref(0, 0, 0)), Type::String);
+}
+
+#[test]
+fn infer_derived_column_with_argument_types() {
+    let schema = db_schema();
+    let values = source_with_derived(derived_from_values(vec![Expr::record([
+        Expr::arg(0),
+        Expr::arg(1),
+    ])]));
+    let mut select = Select::new(Source::Table(values.clone()), true);
+    select.returning = Returning::from_project_iter([Expr::arg(0), Expr::from(col_ref(0, 0, 1))]);
+    let projected = source_with_derived(TableDerived {
+        subquery: Box::new(Query::new(select)),
+    });
+
+    for source in [values, projected] {
+        let cx = ExprContext::new_with_target(&schema, ExprTarget::Source(&source));
+        let args = [Type::String, Type::I64];
+
+        assert_eq!(
+            cx.infer_expr_ty(&col_ref(0, 0, 0).into(), &args),
+            Type::String
+        );
+        assert_eq!(cx.infer_expr_ty(&col_ref(0, 0, 1).into(), &args), Type::I64);
+    }
+}
+
+#[test]
+fn infer_derived_column_from_nested_scope() {
+    let schema = db_schema();
+    let outer_source = source_with_derived(derived_from_values(vec![Expr::from("hello")]));
+    let outer = ExprContext::new_with_target(&schema, ExprTarget::Source(&outer_source));
+
+    // The derived SELECT refers to its own table and the scope outside its owner.
+    let mut select = Select::from(schema.tables[0].id);
+    select.returning = Returning::from_project_iter([col_ref(0, 0, 0), col_ref(2, 0, 0)]);
+    let source = source_with_derived(TableDerived {
+        subquery: Box::new(Query::new(select)),
+    });
+    let owner = outer.scope(ExprTarget::Source(&source));
+    let inner_source = source_with_table(&schema);
+    let inner = owner.scope(ExprTarget::Source(&inner_source));
+
+    assert_eq!(inner.infer_expr_reference_ty(&col_ref(1, 0, 0)), Type::I64);
+    assert_eq!(
+        inner.infer_expr_reference_ty(&col_ref(1, 0, 1)),
+        Type::String
+    );
 }
 
 // ---------------------------------------------------------------------------

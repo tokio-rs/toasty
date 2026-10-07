@@ -119,6 +119,28 @@ fn belongs_to_lifts_fk_constraint_to_direct_eq() {
     assert!(matches!(*rhs, Expr::Value(Value::I64(42))));
 }
 
+#[test]
+fn belongs_to_preserves_limit_and_offset() {
+    let s = UserPostSchema::new();
+    let source: stmt::Source = s.post_model.into();
+    let cx = ExprContext::new(&s.schema);
+    let cx = cx.scope(&source);
+    let mut query = Query::new_select(
+        s.user_model,
+        Expr::eq(Expr::ref_self_field(s.user_id), 42i64),
+    );
+    query.limit = Some(stmt::Limit::Offset(stmt::LimitOffset {
+        limit: 1i64.into(),
+        offset: Some(1i64.into()),
+    }));
+
+    let lifted = lift_in_subquery(&cx, &Expr::ref_self_field(s.post_user), &query).unwrap();
+    let Expr::InSubquery(lifted) = lifted else {
+        panic!("a direct comparison would discard the offset");
+    };
+    assert_eq!(lifted.query.limit, query.limit);
+}
+
 /// `Project(Ref(BelongsTo), [HasIdx])` paired across a shared PK fuses into a
 /// single `outer_fk IN (SELECT inner_fk FROM target WHERE …)` — the
 /// intermediate routing model (`User` here) is skipped.

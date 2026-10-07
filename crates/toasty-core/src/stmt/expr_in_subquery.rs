@@ -27,6 +27,19 @@ pub struct ExprInSubquery {
 
     /// Whether the check is `NOT IN`.
     pub negated: bool,
+
+    /// Whether this compares relation keys rather than application values.
+    ///
+    /// Relation lifting sets this when it rewrites a relation membership into
+    /// a key comparison. A relation key identifies a row only when it is
+    /// present, so an absent key on either side never matches. A value
+    /// membership compares the values themselves.
+    ///
+    /// Temporary: this marks the one membership that needs two-valued results
+    /// before application predicates have their own representation. Remove it
+    /// once <https://github.com/tokio-rs/toasty/pull/1251> lands, since that
+    /// lowers lifted relation memberships as application predicates.
+    pub relation_key: bool,
 }
 
 impl Expr {
@@ -36,6 +49,7 @@ impl Expr {
             expr: Box::new(lhs.into()),
             query: Box::new(rhs.into()),
             negated: false,
+            relation_key: false,
         }
         .into()
     }
@@ -46,6 +60,7 @@ impl Expr {
             expr: Box::new(lhs.into()),
             query: Box::new(rhs.into()),
             negated: true,
+            relation_key: false,
         }
         .into()
     }

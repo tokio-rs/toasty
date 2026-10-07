@@ -13,8 +13,10 @@ impl Exec<'_> {
 
         if let Some(input) = action.input {
             let input = self.collect_input([input]).await?;
-            if let Some(ref mut f) = row_filter {
-                f.substitute(&input);
+            if !self.bind_row_filter(&mut row_filter, &input, action.table) {
+                return Ok(ExecResponse::from_rows(Rows::value_stream(
+                    stmt::ValueStream::default(),
+                )));
             }
         }
 

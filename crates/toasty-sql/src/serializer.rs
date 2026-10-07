@@ -225,7 +225,7 @@ impl<'a> Serializer<'a> {
         match self.dialect {
             // MySQL has no SQLite-style lock-mode keyword; drivers
             // reject non-Default `mode` before reaching the serializer.
-            Dialect::Mysql => {
+            Dialect::Mysql | Dialect::MariaDb => {
                 let mut sql = String::new();
                 if let Some(level) = isolation {
                     sql.push_str("SET TRANSACTION ISOLATION LEVEL ");

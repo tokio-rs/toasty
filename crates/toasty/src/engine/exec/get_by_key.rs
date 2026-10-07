@@ -19,7 +19,7 @@ impl Exec<'_> {
             .await?
             .into_list_unwrap()
             .into_iter()
-            .filter(|k| !k.is_null())
+            .filter(|k| !super::kv::is_absent_key(k))
             .filter(|k| seen.insert(k.clone()))
             .collect();
 

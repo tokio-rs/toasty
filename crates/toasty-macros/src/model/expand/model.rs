@@ -143,7 +143,7 @@ impl Expand<'_> {
                 type Path<__Origin> = #field_struct_ident<__Origin>;
                 type PrimaryKey = #primary_key_ty;
                 type ManyField<__Origin> = #field_list_struct_ident<__Origin>;
-                type OneField<__Origin> = #field_struct_ident<__Origin>;
+                type OneField<__Origin, __Target> = #field_struct_ident<__Origin, __Target>;
 
                 fn id() -> #toasty::core::schema::app::ModelId {
                     static ID: std::sync::OnceLock<#toasty::core::schema::app::ModelId> = std::sync::OnceLock::new();
@@ -212,9 +212,9 @@ impl Expand<'_> {
                     )
                 }
 
-                fn new_one_field<__Origin>(
-                    path: #toasty::Path<__Origin, Self>,
-                ) -> Self::OneField<__Origin> {
+                fn new_one_field<__Origin, __Target>(
+                    path: #toasty::Path<__Origin, __Target>,
+                ) -> Self::OneField<__Origin, __Target> {
                     #field_struct_ident { path }
                 }
             }
@@ -517,8 +517,9 @@ impl Expand<'_> {
                 let ty = match &field.ty {
                     FieldTy::Primitive(ty) => ty,
                     FieldTy::BelongsTo(rel) => {
+                        let ty = &rel.ty;
                         let targets = rel.foreign_key.iter().map(|fk| util::bare_ident_name(&fk.target));
-                        return quote!(#toasty::embedded_relation_expr(&#value, &[ #( #targets ),* ]));
+                        return quote!(#toasty::embedded_relation_value_expr::<#ty, _>(&#value, &[ #( #targets ),* ]));
                     }
                     _ => unreachable!("unsupported embedded field type"),
                 };
