@@ -757,17 +757,11 @@ fn keeps_first_row(limit: &stmt::Limit) -> bool {
         return false;
     };
 
-    let positive = matches!(
-        &limit.limit,
-        stmt::Expr::Value(stmt::Value::I64(n)) | stmt::Expr::Static(stmt::Value::I64(n)) if *n > 0
-    );
-    let no_offset = match &limit.offset {
-        None => true,
-        Some(stmt::Expr::Value(stmt::Value::I64(0)) | stmt::Expr::Static(stmt::Value::I64(0))) => {
-            true
-        }
-        Some(_) => false,
-    };
+    let positive = limit.limit.as_i64_literal().is_some_and(|n| n > 0);
+    let no_offset = limit
+        .offset
+        .as_ref()
+        .is_none_or(|offset| offset.as_i64_literal() == Some(0));
 
     positive && no_offset
 }

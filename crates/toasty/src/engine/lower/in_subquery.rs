@@ -104,7 +104,7 @@ fn present_keys(columns: &[stmt::Expr], nullable: &[bool]) -> Option<stmt::Expr>
 /// included, so a filter added to the returned select applies to the
 /// query's result instead of the rows it scans. Column references inside
 /// the query that escape it are shifted one level further out.
-pub(super) fn derived_table(mut query: stmt::Query) -> stmt::Select {
+fn derived_table(mut query: stmt::Query) -> stmt::Select {
     ShiftOuterReferences { depth: 0 }.visit_stmt_query_mut(&mut query);
 
     let width = query
