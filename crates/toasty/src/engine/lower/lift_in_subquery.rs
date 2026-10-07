@@ -79,18 +79,15 @@ impl<'a> LiftInSubquery<'a> {
         }
     }
 
-    /// Restrict a lifted relation predicate to present keys on both sides.
+    /// Restrict a lifted relation predicate to present host-side keys.
     ///
     /// SQL compares a `NULL` key as unknown, which a surrounding `NOT` keeps
     /// unknown, so a row with an absent foreign key would drop out of both a
     /// membership test and its negation. Guarding the host-side key with
-    /// `IS NOT NULL` makes the predicate plainly false for absent keys, and
-    /// filtering null keys out of the subquery keeps its result from
-    /// poisoning a negated `IN`.
+    /// `IS NOT NULL` makes the predicate plainly false for absent keys.
     ///
-    /// A subquery with `LIMIT`/`OFFSET` must select its candidates before the
-    /// null keys are removed, so lowering applies the exclusion outside the
-    /// limited query instead (see `ExprInSubquery::relation_key`).
+    /// Null keys in the subquery's result are dropped during lowering (see
+    /// `ExprInSubquery::relation_key`).
     fn exclude_nulls(&self, expr: &mut stmt::Expr) {
         if !self.exclude_nulls {
             return;
@@ -99,25 +96,7 @@ impl<'a> LiftInSubquery<'a> {
         let mut guards = vec![];
 
         match expr {
-            stmt::Expr::InSubquery(e) => {
-                self.push_key_guards(&e.expr, &mut guards);
-
-                if e.query.limit.is_none() {
-                    let select = e.query.body.as_select_mut_unwrap();
-                    let target = select.source.model_id_unwrap();
-                    let returning = select.returning.as_project_unwrap().clone();
-
-                    for field in key_fields(&returning) {
-                        let stmt::Expr::Reference(stmt::ExprReference::Field { index, .. }) = field
-                        else {
-                            unreachable!();
-                        };
-                        if self.cx.schema().app.field(target.field(*index)).nullable {
-                            select.add_filter(stmt::Expr::is_not_null(field.clone()));
-                        }
-                    }
-                }
-            }
+            stmt::Expr::InSubquery(e) => self.push_key_guards(&e.expr, &mut guards),
             // Direct foreign-key comparisons produced by the `BelongsTo` lift.
             stmt::Expr::BinaryOp(e) => self.push_key_guards(&e.lhs, &mut guards),
             stmt::Expr::And(e) => {

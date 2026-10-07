@@ -1,15 +1,23 @@
-//! SQL `IN` subqueries with `LIMIT`/`OFFSET`.
+//! Lowered SQL `IN` subqueries.
 //!
 //! Relation-key membership (`ExprInSubquery::relation_key`) compares keys,
-//! and an absent key never matches. An
-//! unlimited subquery drops its null keys with a filter (see
-//! `LiftInSubquery`), but a limited one must not: the filter would change
-//! which rows the `LIMIT` selects. For documents ordered by position where
-//! the first is unlinked, `LIMIT 1` selects that document and so matches no
-//! user; filtering first would select the next, linked document instead.
+//! and an absent key never matches. A `NULL` in the subquery's result would
+//! also make a negated `IN` unknown for every row, so null keys are dropped
+//! from the result. An unlimited subquery drops them with a filter:
 //!
-//! The limited query therefore moves into a derived table and the null keys
-//! are dropped from its result:
+//! ```text
+//! users.id IN (
+//!     SELECT documents.user_id FROM documents
+//!     WHERE documents.group = ? AND documents.user_id IS NOT NULL
+//! )
+//! ```
+//!
+//! A limited one must not: the filter would change which rows the `LIMIT`
+//! selects. For documents ordered by position where the first is unlinked,
+//! `LIMIT 1` selects that document and so matches no user; filtering first
+//! would select the next, linked document instead. The limited query
+//! therefore moves into a derived table and the null keys are dropped from
+//! its result:
 //!
 //! ```text
 //! users.id IN (
@@ -27,43 +35,66 @@
 
 use toasty_core::stmt::{self, VisitMut, visit_mut};
 
-/// Move the lowered subquery of a SQL `IN` into a derived table. For a
-/// relation-key membership, absent keys are dropped after its `LIMIT`
-/// applies. `query` must return a record.
-pub(super) fn wrap_limited_in_subquery(
+/// Finish the lowered subquery of a SQL `IN`: drop absent keys from a
+/// relation-key membership's result, and move a limited query into a
+/// derived table. `query` must return a record.
+pub(super) fn finish_in_subquery(
     cx: &stmt::ExprContext<'_>,
     query: &mut stmt::Query,
     relation_key: bool,
 ) {
-    debug_assert!(query.limit.is_some());
+    let select = query.body.as_select_mut_unwrap();
+    let nullable = if relation_key {
+        nullable_keys(cx, select)
+    } else {
+        vec![]
+    };
+
+    if query.limit.is_none() {
+        let returning = select.returning.as_project_unwrap().as_record_unwrap();
+        if let Some(filter) = present_keys(&returning.fields, &nullable) {
+            select.add_filter(filter);
+        }
+        return;
+    }
 
     let inner = std::mem::replace(query, stmt::Query::unit());
-    let select = inner.body.as_select_unwrap();
-    let inner_cx = cx.scope(select);
-    let nullable: Vec<_> = select
-        .returning
-        .as_project_unwrap()
-        .as_record_unwrap()
-        .fields
-        .iter()
-        .map(|field| relation_key && may_be_null(&inner_cx, field))
-        .collect();
-
     let mut outer = derived_table(inner);
     let columns = &outer
         .returning
         .as_project_unwrap()
         .as_record_unwrap()
         .fields;
-    let filter = columns
-        .iter()
-        .zip(nullable)
-        .filter(|(_, nullable)| *nullable)
-        .map(|(column, _)| stmt::Expr::is_not_null(column.clone()))
-        .collect();
-    outer.filter = stmt::Expr::and_from_vec(filter).into();
+    if let Some(filter) = present_keys(columns, &nullable) {
+        outer.filter = filter.into();
+    }
 
     *query = stmt::Query::new(outer);
+}
+
+/// Which of `select`'s returned keys may be null.
+fn nullable_keys(cx: &stmt::ExprContext<'_>, select: &stmt::Select) -> Vec<bool> {
+    let cx = cx.scope(select);
+    select
+        .returning
+        .as_project_unwrap()
+        .as_record_unwrap()
+        .fields
+        .iter()
+        .map(|field| may_be_null(&cx, field))
+        .collect()
+}
+
+/// An `IS NOT NULL` check on each of `columns` flagged in `nullable`, or
+/// `None` when none is flagged.
+fn present_keys(columns: &[stmt::Expr], nullable: &[bool]) -> Option<stmt::Expr> {
+    let checks: Vec<_> = columns
+        .iter()
+        .zip(nullable)
+        .filter(|(_, nullable)| **nullable)
+        .map(|(column, _)| stmt::Expr::is_not_null(column.clone()))
+        .collect();
+    (!checks.is_empty()).then(|| stmt::Expr::and_from_vec(checks))
 }
 
 /// Move a lowered query into a derived table, returning an unfiltered

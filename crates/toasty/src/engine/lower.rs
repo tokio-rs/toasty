@@ -1,10 +1,10 @@
 mod association;
 mod expr_or;
+mod in_subquery;
 mod include;
 mod insert;
 mod lift_in_subquery;
 mod lift_update_query;
-mod limited_subquery;
 mod paginate;
 mod relation;
 pub(super) mod relation_expr;
@@ -784,13 +784,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         *returning = stmt::Expr::record([returning.take()]);
                     }
 
-                    if e.query.limit.is_some() {
-                        limited_subquery::wrap_limited_in_subquery(
-                            &self.expr_cx,
-                            &mut e.query,
-                            e.relation_key,
-                        );
-                    }
+                    in_subquery::finish_in_subquery(&self.expr_cx, &mut e.query, e.relation_key);
                 } else {
                     self.visit_expr_mut(&mut e.expr);
 
