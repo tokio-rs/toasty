@@ -4,6 +4,7 @@ use crate::{
     engine::{Engine, HirStatement, test_util::test_schema},
     schema::Model,
 };
+use indexmap::IndexMap;
 use std::{cell::Cell, sync::Arc};
 use toasty_core::stmt::{Expr, ExprArg, ExprLet, Type, Value};
 use toasty_core::{
@@ -86,6 +87,7 @@ fn mutation_query_pk_binds_key_and_row_filters_to_their_dependencies() -> Result
         planner: &mut planner,
         stmt_id: root,
         stmt_info: &hir[root],
+        args: (0..hir[root].args.len()).map(StmtArg::Hir).collect(),
         load_data: LoadData {
             inputs,
             select_items: SelectItems::new(),
@@ -164,6 +166,7 @@ fn rewrite(expr: Expr) -> Option<Expr> {
         planner: &mut planner,
         stmt_id: parent,
         stmt_info: &hir[parent],
+        args: (0..hir[parent].args.len()).map(StmtArg::Hir).collect(),
         load_data: LoadData {
             inputs: IndexSet::new(),
             select_items: SelectItems::new(),
@@ -248,7 +251,7 @@ fn local_arguments_do_not_count_as_parent_references() {
 }
 
 #[test]
-fn query_arg_dependencies_preserve_map_and_let_scopes() {
+fn arg_dependencies_preserve_map_and_let_scopes() {
     let engine = Engine::new(test_schema().into(), &Capability::SQLITE);
     let mut hir = HirStatement::new();
     let root = hir.new_statement_info(IndexMap::new());
@@ -299,7 +302,7 @@ fn query_arg_dependencies_preserve_map_and_let_scopes() {
         hir: &hir,
         mir,
     };
-    let predicate = ExprLet {
+    let mut predicate: Expr = ExprLet {
         bindings: vec![Expr::arg(1)],
         body: Box::new(Expr::any(Expr::map(
             Expr::list([9i64, 42]),
@@ -309,12 +312,13 @@ fn query_arg_dependencies_preserve_map_and_let_scopes() {
                 Expr::eq(Expr::arg(0), scoped_arg(2, 2)),
             ]),
         ))),
-    };
-    let mut query = stmt::Query::new_select(toasty_core::schema::app::ModelId(0), predicate);
+    }
+    .into();
     PlanStatement {
         planner: &mut planner,
         stmt_id: root,
         stmt_info: &hir[root],
+        args: (0..hir[root].args.len()).map(StmtArg::Hir).collect(),
         load_data: LoadData {
             inputs,
             select_items: SelectItems::new(),
@@ -322,15 +326,8 @@ fn query_arg_dependencies_preserve_map_and_let_scopes() {
         },
         remaining_deps: vec![],
     }
-    .rewrite_stmt_query_arg_dependencies(&mut query);
+    .rewrite_arg_dependencies(&mut predicate);
 
-    let predicate = query
-        .body
-        .as_select_mut_unwrap()
-        .filter
-        .expr
-        .take()
-        .unwrap();
     let func = eval::Func::from_stmt(predicate, values.iter().map(Value::infer_ty).collect());
     for (value, expected) in [(42i64, true), (9, false), (8, false)] {
         assert_eq!(
