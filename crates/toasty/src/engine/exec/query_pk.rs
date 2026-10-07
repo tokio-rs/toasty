@@ -12,8 +12,8 @@ impl Exec<'_> {
         let mut pk_filter = action.pk_filter.clone();
         let mut row_filter = action.row_filter.clone();
 
-        if let Some(input) = action.input {
-            let input = self.collect_input([input]).await?;
+        if !action.inputs.is_empty() {
+            let input = self.collect_input(action.inputs.iter().copied()).await?;
             pk_filter.substitute(&input);
 
             if !self.bind_row_filter(&mut row_filter, &input, action.table) {
