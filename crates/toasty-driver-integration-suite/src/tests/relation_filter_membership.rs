@@ -124,6 +124,27 @@ pub async fn membership_with_composite_key(t: &mut Test) -> Result<()> {
         .await?;
     assert_struct!(documents, [{ id: "unassociated" }]);
 
+    // A partially null key never matches, so the negated direct comparison
+    // must still return it.
+    toasty::create!(Document {
+        id: "partial",
+        source_id: "source",
+    })
+    .exec(&mut db)
+    .await?;
+
+    let source = Source::filter(
+        Source::fields()
+            .id()
+            .eq("source")
+            .and(Source::fields().revision().eq(2)),
+    );
+    let mut documents = Document::filter(Document::fields().source().in_query(source).not())
+        .exec(&mut db)
+        .await?;
+    documents.sort_by(|a, b| a.id.cmp(&b.id));
+    assert_struct!(documents, [{ id: "partial" }, { id: "unassociated" }]);
+
     Ok(())
 }
 
