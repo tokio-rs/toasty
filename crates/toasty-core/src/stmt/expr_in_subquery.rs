@@ -34,6 +34,11 @@ pub struct ExprInSubquery {
     /// a key comparison. A relation key identifies a row only when it is
     /// present, so an absent key on either side never matches. A value
     /// membership compares the values themselves.
+    ///
+    /// Temporary: this marks the one membership that needs two-valued results
+    /// before application predicates have their own representation. Remove it
+    /// once <https://github.com/tokio-rs/toasty/pull/1251> lands, since that
+    /// lowers lifted relation memberships as application predicates.
     pub relation_key: bool,
 }
 
