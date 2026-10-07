@@ -40,10 +40,7 @@ async fn implicit_transactions_work_on_libsql() {
     let url = std::env::var("TOASTY_TEST_TURSO_LIBSQL_URL").expect("set the libSQL database URL");
     let token =
         std::env::var("TOASTY_TEST_TURSO_LIBSQL_TOKEN").expect("set the libSQL database token");
-    let driver = Turso::new(url)
-        .unwrap()
-        .with_auth_token(token)
-        .with_transaction_mode(TransactionMode::Deferred);
+    let driver = Turso::new(&url).unwrap().with_auth_token(&token);
     let mut db = toasty::Db::builder()
         .models(toasty::models!(Parent, Child, VersionedItem))
         .build(driver)
@@ -89,7 +86,40 @@ async fn implicit_transactions_work_on_libsql() {
     let reloaded = VersionedItem::get_by_id(&mut db, &1).await.unwrap();
     assert_eq!(reloaded.name, "after");
     assert_eq!(reloaded.version, 2);
+    reloaded.delete().exec(&mut db).await.unwrap();
 
     let tx = db.transaction().await.unwrap();
     tx.rollback().await.unwrap();
+
+    let turso_url = url.replacen("libsql://", "turso://", 1);
+    for driver in [
+        Turso::new(&url)
+            .unwrap()
+            .with_auth_token(&token)
+            .concurrent_writes()
+            .with_transaction_mode(TransactionMode::Default),
+        Turso::new(&turso_url)
+            .unwrap()
+            .with_auth_token(&token)
+            .with_transaction_mode(TransactionMode::Deferred),
+    ] {
+        let mut db = toasty::Db::builder()
+            .models(toasty::models!())
+            .build(driver)
+            .await
+            .unwrap();
+        db.transaction().await.unwrap().rollback().await.unwrap();
+    }
+
+    // The same endpoint rejects concurrent transactions, so this also proves
+    // that turso:// keeps its existing default rather than always deferring.
+    let mut turso_default = toasty::Db::builder()
+        .models(toasty::models!())
+        .build(Turso::new(turso_url).unwrap().with_auth_token(token))
+        .await
+        .unwrap();
+    assert!(
+        turso_default.transaction().await.is_err(),
+        "turso:// must retain concurrent transactions without an override"
+    );
 }

@@ -2,20 +2,25 @@
 
 ## Summary
 
-`Turso::with_transaction_mode(TransactionMode)` configures the driver's default
-transaction mode, including transactions Toasty starts implicitly.
+Serverless URL schemes select compatible default transactions automatically.
+`Turso::with_transaction_mode(TransactionMode)` overrides that default,
+including transactions Toasty starts implicitly.
 
 ## Motivation
 
 Turso Cloud hosts both Turso-engine and libSQL databases. The Turso engine
 supports `BEGIN CONCURRENT`; libSQL rejects it. Deleting a model with a
 has-many relation can require several database operations, so Toasty starts a
-transaction even when the caller does not request one. Configuring the driver
-with `Deferred` lets these operations run against libSQL.
+transaction even when the caller does not request one. A `libsql://` URL
+selects deferred transactions so these operations work without an override;
+`turso://` retains concurrent transactions for the Turso engine.
 
 ## User-facing API
 
-Set the mode on the existing driver builder before passing it to `Db::builder`:
+Use `libsql://` for a libSQL Cloud database or `turso://` for a Turso-engine
+Cloud database. No manual transaction setting is required for those defaults.
+For an explicit override, set the mode on the existing driver builder before
+passing it to `Db::builder`:
 
 ```rust
 use toasty_core::driver::operation::TransactionMode;
@@ -32,9 +37,17 @@ let db = toasty::Db::builder()
 
 ## Behavior
 
-With `Default`, the driver keeps its natural default: serverless connections
-and embedded connections configured with `concurrent_writes()` use
-`BEGIN CONCURRENT`; other embedded connections use `BEGIN`.
+With `Default`, the driver selects its natural default from the connection:
+
+| Connection | Default transaction |
+| --- | --- |
+| Serverless `libsql://` | `BEGIN` (deferred) |
+| Serverless `turso://`, `https://`, or `http://` | `BEGIN CONCURRENT` |
+| Embedded with `concurrent_writes()` | `BEGIN CONCURRENT` |
+| Other embedded | `BEGIN` (deferred) |
+
+HTTP URLs preserve their previous default because their scheme does not
+identify the intended engine. Set `Deferred` explicitly for libSQL over HTTP.
 
 With `Deferred`, `Immediate`, or `Exclusive`, default transaction starts use
 `BEGIN DEFERRED`, `BEGIN IMMEDIATE`, or `BEGIN EXCLUSIVE`, respectively. This
@@ -45,7 +58,9 @@ operations. Backend errors retain their existing classification.
 
 An explicit mode on `db.transaction_builder().mode(...)` overrides the
 driver-wide mode. `with_transaction_mode(Default)` restores the natural
-default. The option does not enable or disable the embedded MVCC journal;
+default, including deferred transactions for `libsql://`. On serverless
+connections `concurrent_writes()` does not change the scheme-selected default.
+The option does not enable or disable the embedded MVCC journal;
 `concurrent_writes()` still controls that. Configuration order does not affect
 the precedence between these two options.
 
@@ -58,8 +73,10 @@ Schema pushes and migrations retain their existing transactional batches.
 ## Alternatives considered
 
 Wrapping each operation in an explicit deferred transaction leaves implicit
-transactions unconfigured. Inferring the engine from the URL scheme is
-unreliable because both Cloud engines accept the same connection schemes.
+transactions unconfigured. URL schemes supply a convention for selecting the
+default, rather than detecting the engine through a network request. Both
+Cloud engines accept the same connection schemes; explicit overrides remain
+available for callers using another address form.
 
 ## Out of scope
 
