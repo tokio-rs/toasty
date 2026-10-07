@@ -514,12 +514,7 @@ impl ApplyInsertScope<'_> {
             },
             // A present-key guard on a lifted relation constraint. The
             // equality it accompanies assigns the key.
-            stmt::Expr::IsNull(e)
-                if e.negated
-                    && matches!(
-                        &*e.expr,
-                        stmt::Expr::Reference(stmt::ExprReference::Field { .. })
-                    ) => {}
+            stmt::Expr::IsNull(e) if e.negated && e.expr.is_field() => {}
             // Constants are ignored
             stmt::Expr::Value(_) => {}
             _ => todo!("EXPR = {:#?}", stmt),
