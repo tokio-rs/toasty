@@ -87,6 +87,7 @@ pub mod relation_chain_composite_key;
 pub mod relation_eager;
 pub mod relation_filter_association;
 pub mod relation_filter_inputs;
+pub mod relation_filter_key;
 pub mod relation_filter_membership;
 pub mod relation_filter_ne;
 pub mod relation_has_many_batch_create;

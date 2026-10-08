@@ -83,13 +83,25 @@ pub(crate) fn plan_index_path<'a>(
         apply_result_filter_on_results: false,
     };
 
-    let (index_filter, result_filter) =
+    let (index_filter, mut result_filter) =
         index_match.partition_filter(&mut partition_cx, &remaining_filter);
 
     // Extract literal key values before OR rewrite, while index_filter is still
     // in Expr::Or form. After rewrite it becomes ANY(MAP(...)) and the Or arm
     // in try_extract_key_values would no longer fire.
-    let key_values = try_extract_key_values(&cx, index_match.index, &index_filter);
+    let key_values = match try_extract_key_values(&cx, index_match.index, &index_filter) {
+        Some((keys, residual)) if residual.is_true() => Some(keys),
+        // A complete literal primary key still permits a direct lookup when
+        // another predicate constrains the same key, such as `id = x AND id IN
+        // (subquery)`. The residual becomes a result filter. Mutations keep
+        // using QueryPk, which binds subquery results before collecting keys;
+        // direct mutation operations cannot bind filter args.
+        Some((keys, residual)) if stmt.is_query() && index_match.index.primary_key => {
+            result_filter = stmt::Expr::and(residual, result_filter);
+            Some(keys)
+        }
+        _ => None,
+    };
 
     // For backends that do not support OR in key conditions (e.g. DynamoDB), rewrite
     // any OR in the index filter to canonical ANY(MAP(...)) fan-out form.
@@ -132,6 +144,7 @@ struct PartitionCtx<'a> {
 /// Returns `Some(Expr::Value(Value::List([Value::Record([...]), ...])))` when all key
 /// columns have literal equality or IN predicates. Returns `Some(Expr::Arg(i))` for
 /// `pk IN (arg[i])` batch-load form. Range predicates and `ANY(MAP(...))` return `None`.
+/// The keys come with the residual predicate they do not capture (`true` if none).
 ///
 /// Must be called on the `index_filter` produced by `partition_filter` — before the
 /// OR-rewrite step converts `Expr::Or` into `ANY(MAP(...))`.
@@ -139,7 +152,8 @@ fn try_extract_key_values(
     cx: &stmt::ExprContext<'_>,
     index: &Index,
     index_filter: &stmt::Expr,
-) -> Option<stmt::Expr> {
+) -> Option<(stmt::Expr, stmt::Expr)> {
+    let mut residual = stmt::Expr::from(true);
     match index_filter {
         stmt::Expr::InList(in_list) => match &*in_list.list {
             stmt::Expr::Arg(arg) => Some(stmt::Expr::Arg(*arg)),
@@ -166,69 +180,93 @@ fn try_extract_key_values(
         stmt::Expr::Or(or) => {
             let mut records = vec![];
             for branch in &or.operands {
-                records.push(extract_key_record(cx, index, branch)?);
+                let (record, rest) = extract_key_record(cx, index, branch)?;
+                records.push(rest.is_true().then_some(record)?);
             }
             Some(stmt::Expr::Value(stmt::Value::List(records)))
         }
         single => {
-            let record = extract_key_record(cx, index, single)?;
+            let (record, rest) = extract_key_record(cx, index, single)?;
+            residual = rest;
             Some(stmt::Expr::Value(stmt::Value::List(vec![record])))
         }
     }
+    .map(|keys| (keys, residual))
 }
 
 /// Extract a single `Value::Record` from one equality branch of the index filter.
 ///
 /// - `col = literal` (single-column index) → `Value::Record([literal])`
-/// - `col1 = v1 AND col2 = v2 ...` (all key columns, all equality) → `Value::Record([v1, v2, ...])`
+/// - `col1 = v1 AND col2 = v2 ...` (an equality per key column) → `Value::Record([v1, v2, ...])`
 /// - Anything else → `None`
+///
+/// Also returns the residual: the operands not used as key fields.
 fn extract_key_record(
     cx: &stmt::ExprContext<'_>,
     index: &Index,
     expr: &stmt::Expr,
-) -> Option<stmt::Value> {
+) -> Option<(stmt::Value, stmt::Expr)> {
     match expr {
         stmt::Expr::BinaryOp(b) if b.op.is_eq() && index.columns.len() == 1 => {
             let stmt::Expr::Value(v) = &*b.rhs else {
                 return None;
             };
-            Some(stmt::Value::Record(stmt::ValueRecord::from_vec(vec![
-                v.clone(),
-            ])))
+            let record = stmt::ValueRecord::from_vec(vec![v.clone()]);
+            Some((stmt::Value::Record(record), true.into()))
         }
-        stmt::Expr::And(and) if and.operands.len() == index.columns.len() => {
+        stmt::Expr::And(and) => {
             let mut fields = vec![stmt::Value::Null; index.columns.len()];
+            let mut residual = vec![];
 
             for operand in &and.operands {
-                let stmt::Expr::BinaryOp(b) = operand else {
-                    return None;
-                };
-                if !b.op.is_eq() {
-                    return None;
+                // The first equality on each key column fills that field. Any
+                // other operand, including a repeat equality on a filled
+                // column, stays in the residual.
+                match key_column_eq(cx, index, operand) {
+                    Some((idx, v)) if fields[idx].is_null() => fields[idx] = v.clone(),
+                    _ => residual.push(operand.clone()),
                 }
-                let stmt::Expr::Reference(expr_ref) = &*b.lhs else {
-                    return None;
-                };
-                let column = cx.resolve_expr_reference(expr_ref).as_column_unwrap();
-                let (idx, _) = index
-                    .columns
-                    .iter()
-                    .enumerate()
-                    .find(|(_, c)| c.column == column.id)?;
-                let stmt::Expr::Value(v) = &*b.rhs else {
-                    return None;
-                };
-                fields[idx] = v.clone();
             }
 
             if fields.iter().any(|v| matches!(v, stmt::Value::Null)) {
                 return None;
             }
 
-            Some(stmt::Value::Record(stmt::ValueRecord::from_vec(fields)))
+            let record = stmt::Value::Record(stmt::ValueRecord::from_vec(fields));
+            Some((record, stmt::Expr::and_from_vec(residual)))
         }
         _ => None,
     }
+}
+
+/// Match `key_column = literal` and return the column's position in `index`
+/// with the literal.
+///
+/// `key_column = NULL` does not match: it is never true, so it must stay in
+/// the residual instead of being dropped.
+fn key_column_eq<'a>(
+    cx: &stmt::ExprContext<'_>,
+    index: &Index,
+    expr: &'a stmt::Expr,
+) -> Option<(usize, &'a stmt::Value)> {
+    let stmt::Expr::BinaryOp(b) = expr else {
+        return None;
+    };
+    if !b.op.is_eq() {
+        return None;
+    }
+    let stmt::Expr::Reference(expr_ref) = &*b.lhs else {
+        return None;
+    };
+    let stmt::Expr::Value(value) = &*b.rhs else {
+        return None;
+    };
+    if value.is_null() {
+        return None;
+    }
+    let column = cx.resolve_expr_reference(expr_ref).as_column_unwrap();
+    let idx = index.columns.iter().position(|c| c.column == column.id)?;
+    Some((idx, value))
 }
 
 /// Extract the args-only component of a filter expression.
