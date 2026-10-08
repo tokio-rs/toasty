@@ -219,18 +219,12 @@ fn extract_key_record(
             let mut residual = vec![];
 
             for operand in &and.operands {
-                if let stmt::Expr::BinaryOp(b) = operand
-                    && b.op.is_eq()
-                    && let stmt::Expr::Reference(expr_ref) = &*b.lhs
-                    && let stmt::Expr::Value(v) = &*b.rhs
-                    && !v.is_null()
-                    && let column = cx.resolve_expr_reference(expr_ref).as_column_unwrap()
-                    && let Some(idx) = index.columns.iter().position(|c| c.column == column.id)
-                    && fields[idx].is_null()
-                {
-                    fields[idx] = v.clone();
-                } else {
-                    residual.push(operand.clone());
+                // The first equality on each key column fills that field. Any
+                // other operand, including a repeat equality on a filled
+                // column, stays in the residual.
+                match key_column_eq(cx, index, operand) {
+                    Some((idx, v)) if fields[idx].is_null() => fields[idx] = v.clone(),
+                    _ => residual.push(operand.clone()),
                 }
             }
 
@@ -243,6 +237,36 @@ fn extract_key_record(
         }
         _ => None,
     }
+}
+
+/// Match `key_column = literal` and return the column's position in `index`
+/// with the literal.
+///
+/// `key_column = NULL` does not match: it is never true, so it must stay in
+/// the residual instead of being dropped.
+fn key_column_eq<'a>(
+    cx: &stmt::ExprContext<'_>,
+    index: &Index,
+    expr: &'a stmt::Expr,
+) -> Option<(usize, &'a stmt::Value)> {
+    let stmt::Expr::BinaryOp(b) = expr else {
+        return None;
+    };
+    if !b.op.is_eq() {
+        return None;
+    }
+    let stmt::Expr::Reference(expr_ref) = &*b.lhs else {
+        return None;
+    };
+    let stmt::Expr::Value(value) = &*b.rhs else {
+        return None;
+    };
+    if value.is_null() {
+        return None;
+    }
+    let column = cx.resolve_expr_reference(expr_ref).as_column_unwrap();
+    let idx = index.columns.iter().position(|c| c.column == column.id)?;
+    Some((idx, value))
 }
 
 /// Extract the args-only component of a filter expression.
