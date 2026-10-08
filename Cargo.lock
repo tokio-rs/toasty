@@ -5065,6 +5065,7 @@ name = "toasty-driver-sqlite"
 version = "0.11.0"
 dependencies = [
  "async-trait",
+ "indexmap",
  "rusqlite",
  "serde",
  "toasty-core",

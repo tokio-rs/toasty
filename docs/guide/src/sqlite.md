@@ -61,11 +61,69 @@ The driver recognizes two URL forms:
 | `sqlite::memory:` | An in-memory database. Each connection opens a fresh database — see the section on in-memory databases below. |
 | `sqlite:<path>` | A file-backed database at `<path>`. Relative paths resolve against the process's working directory. |
 
-The driver does not parse query parameters from the URL. To set
-SQLite pragmas (`journal_mode`, `synchronous`, `foreign_keys`, …),
-construct the driver directly and issue the pragmas through your own
-connection-setup code, or open the database with `Sqlite::open` and
-work from there.
+The driver does not parse query parameters from the URL. To configure
+connections, construct the driver with `Sqlite::open` or
+`Sqlite::in_memory`, set [pragmas](#pragmas) on it, then pass it to
+`Db::builder().build()`.
+
+## Pragmas
+
+The `Sqlite` driver has a method for each common connection setting. Every
+connection the driver opens gets them:
+
+```rust,ignore
+use std::time::Duration;
+use toasty_driver_sqlite::{JournalMode, Sqlite, Synchronous};
+
+let driver = Sqlite::open("app.db")
+    .journal_mode(JournalMode::Wal)
+    .synchronous(Synchronous::Normal)
+    .busy_timeout(Duration::from_secs(10));
+
+let db = toasty::Db::builder()
+    .models(toasty::models!(User))
+    .build(driver)
+    .await?;
+```
+
+| Method | Default |
+|---|---|
+| `foreign_keys(bool)` | `true` |
+| `busy_timeout(Duration)` | 5 seconds |
+| `journal_mode(JournalMode)` | not set |
+| `synchronous(Synchronous)` | not set |
+| `locking_mode(LockingMode)` | not set |
+| `auto_vacuum(AutoVacuum)` | not set |
+| `page_size(u32)` | not set |
+
+"Not set" means Toasty sends nothing and SQLite's own default applies.
+Toasty does not set a journal mode by default, because setting one can
+convert an existing database into or out of WAL.
+
+Foreign keys are enforced on every connection. Call `.foreign_keys(false)`
+to turn enforcement off, for example during a bulk load that inserts rows
+out of dependency order.
+
+For any other pragma, call `.pragma(name, value)`. The driver writes
+`PRAGMA {name} = {value}` with both arguments as given, so supply any
+quoting the value needs, and do not pass untrusted input:
+
+```rust,ignore
+let driver = Sqlite::open("app.db")
+    .pragma("cache_size", "-64000")
+    .pragma("temp_store", "MEMORY");
+```
+
+`.pragma()` and the typed methods write to the same settings, so
+`.pragma("journal_mode", "WAL")` and `.journal_mode(JournalMode::Wal)` are
+interchangeable and the last call wins. Prefer the typed method where one
+exists: SQLite silently ignores a value it does not recognize for several
+pragmas.
+
+Pragmas run in a fixed order rather than the order they are set, because
+SQLite constrains it: `page_size`, `locking_mode`, `auto_vacuum`,
+`journal_mode`, `foreign_keys`, `synchronous`, and then every other pragma
+in the order first set.
 
 ## Type mapping
 
