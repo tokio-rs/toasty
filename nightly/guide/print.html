@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5e396fe5.js";
+            window.path_to_searchindex_js = "searchindex-00e20b0e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -9584,11 +9584,62 @@ let db = toasty::Db::builder()
 </tbody>
 </table>
 </div>
-<p>The driver does not parse query parameters from the URL. To set
-SQLite pragmas (<code>journal_mode</code>, <code>synchronous</code>, <code>foreign_keys</code>, …),
-construct the driver directly and issue the pragmas through your own
-connection-setup code, or open the database with <code>Sqlite::open</code> and
-work from there.</p>
+<p>The driver does not parse query parameters from the URL. To configure
+connections, construct the driver with <code>Sqlite::open</code> or
+<code>Sqlite::in_memory</code>, set <a href="#pragmas">pragmas</a> on it, then pass it to
+<code>Db::builder().build()</code>.</p>
+<h2 id="pragmas"><a class="header" href="#pragmas">Pragmas</a></h2>
+<p>The <code>Sqlite</code> driver has a method for each common connection setting. Every
+connection the driver opens gets them:</p>
+<pre><code class="language-rust ignore">use std::time::Duration;
+use toasty_driver_sqlite::{JournalMode, Sqlite, Synchronous};
+
+let driver = Sqlite::open("app.db")
+    .journal_mode(JournalMode::Wal)
+    .synchronous(Synchronous::Normal)
+    .busy_timeout(Duration::from_secs(10));
+
+let db = toasty::Db::builder()
+    .models(toasty::models!(User))
+    .build(driver)
+    .await?;</code></pre>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Default</th></tr>
+</thead>
+<tbody>
+<tr><td><code>foreign_keys(bool)</code></td><td><code>true</code></td></tr>
+<tr><td><code>busy_timeout(Duration)</code></td><td>5 seconds</td></tr>
+<tr><td><code>journal_mode(JournalMode)</code></td><td>not set</td></tr>
+<tr><td><code>synchronous(Synchronous)</code></td><td>not set</td></tr>
+<tr><td><code>locking_mode(LockingMode)</code></td><td>not set</td></tr>
+<tr><td><code>auto_vacuum(AutoVacuum)</code></td><td>not set</td></tr>
+<tr><td><code>page_size(u32)</code></td><td>not set</td></tr>
+</tbody>
+</table>
+</div>
+<p>“Not set” means Toasty sends nothing and SQLite’s own default applies.
+Toasty does not set a journal mode by default, because setting one can
+convert an existing database into or out of WAL.</p>
+<p>Foreign keys are enforced on every connection. Call <code>.foreign_keys(false)</code>
+to turn enforcement off, for example during a bulk load that inserts rows
+out of dependency order.</p>
+<p>For any other pragma, call <code>.pragma(name, value)</code>. The driver writes
+<code>PRAGMA {name} = {value}</code> with both arguments as given, so supply any
+quoting the value needs, and do not pass untrusted input:</p>
+<pre><code class="language-rust ignore">let driver = Sqlite::open("app.db")
+    .pragma("cache_size", "-64000")
+    .pragma("temp_store", "MEMORY");</code></pre>
+<p><code>.pragma()</code> and the typed methods write to the same settings, so
+<code>.pragma("journal_mode", "WAL")</code> and <code>.journal_mode(JournalMode::Wal)</code> are
+interchangeable and the last call wins. Prefer the typed method where one
+exists: SQLite silently ignores a value it does not recognize for several
+pragmas.</p>
+<p>Pragmas run in a fixed order rather than the order they are set, because
+SQLite constrains it: <code>page_size</code>, <code>locking_mode</code>, <code>auto_vacuum</code>,
+<code>journal_mode</code>, <code>foreign_keys</code>, <code>synchronous</code>, and then every other pragma
+in the order first set.</p>
 <h2 id="type-mapping-2"><a class="header" href="#type-mapping-2">Type mapping</a></h2>
 <p>Toasty maps Rust types to SQLite columns as follows. SQLite uses type
 affinity rather than strict types, so several Rust types share an

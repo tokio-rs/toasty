@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Sqlite"],"struct":["Connection"]};
+window.SIDEBAR_ITEMS = {"enum":["AutoVacuum","JournalMode","LockingMode","Synchronous"],"struct":["Connection","Sqlite"]};
