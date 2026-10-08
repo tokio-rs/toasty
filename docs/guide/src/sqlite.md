@@ -121,9 +121,10 @@ exists: SQLite silently ignores a value it does not recognize for several
 pragmas.
 
 Pragmas run in a fixed order rather than the order they are set, because
-SQLite constrains it: `page_size`, `locking_mode`, `auto_vacuum`,
-`journal_mode`, `foreign_keys`, `synchronous`, and then every other pragma
-in the order first set.
+SQLite constrains it: `key` and the other SQLCipher settings come first,
+then `page_size`, `locking_mode`, `auto_vacuum`, `journal_mode`,
+`foreign_keys`, `synchronous`, and then every other pragma in the order
+first set.
 
 ## Type mapping
 

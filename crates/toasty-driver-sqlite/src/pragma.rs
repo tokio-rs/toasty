@@ -3,7 +3,7 @@
 use std::{borrow::Cow, fmt};
 
 use indexmap::IndexMap;
-use rusqlite::Connection as RusqliteConnection;
+use rusqlite::{Connection as RusqliteConnection, ffi};
 use toasty_core::{
     Result,
     driver::{ExecResponse, QueryLogConfig, log::QueryLog},
@@ -133,6 +133,10 @@ impl From<AutoVacuum> for Cow<'static, str> {
     }
 }
 
+/// Pragmas whose value must not reach the query log, error text, or
+/// `Debug` output.
+const SECRET: &[&str] = &["key", "rekey", "hexkey", "hexrekey", "cipher_salt"];
+
 /// The pragmas a driver applies to each connection, in application order.
 ///
 /// The map starts with an empty slot for each pragma whose position
@@ -147,6 +151,17 @@ pub(crate) struct Pragmas {
 impl Default for Pragmas {
     fn default() -> Self {
         let slots = [
+            // SQLCipher requires `key` before any other statement, and the
+            // remaining cipher settings before any read of the database.
+            "key",
+            "cipher_plaintext_header_size",
+            "cipher_salt",
+            "kdf_iter",
+            "cipher_kdf_algorithm",
+            "cipher_use_hmac",
+            "cipher_compatibility",
+            "cipher_page_size",
+            "cipher_hmac_algorithm",
             // Must precede any write to the database file.
             "page_size",
             // `locking_mode` before `journal_mode`: an exclusive lock taken
@@ -208,10 +223,19 @@ impl Pragmas {
     }
 }
 
-/// Lists the pragmas that are set.
+/// Lists the pragmas that are set, withholding secret values.
 impl fmt::Debug for Pragmas {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_map().entries(self.iter()).finish()
+        f.debug_map()
+            .entries(self.iter().map(|(name, value)| {
+                let value = if SECRET.contains(&name) {
+                    "[redacted]"
+                } else {
+                    value
+                };
+                (name, value)
+            }))
+            .finish()
     }
 }
 
@@ -221,11 +245,18 @@ fn exec(
     value: &str,
     query_log: &QueryLogConfig,
 ) -> Result<()> {
+    let secret = SECRET.contains(&name);
     let sql = format!("PRAGMA {name} = {value}");
+
+    let logged = if secret {
+        Cow::Owned(format!("PRAGMA {name} = [redacted]"))
+    } else {
+        Cow::Borrowed(sql.as_str())
+    };
     let log = QueryLog::sql(
         query_log,
         "sqlite",
-        &sql,
+        &logged,
         std::iter::empty::<&stmt::Value>(),
     );
 
@@ -233,11 +264,25 @@ fn exec(
     // new mode `journal_mode` reports.
     let result = conn
         .execute_batch(&sql)
-        .map_err(toasty_core::Error::driver_operation_failed)
+        .map_err(|err| {
+            // SQLite's error message can quote the offending statement, which
+            // contains the secret value.
+            let err = if secret { redact(err) } else { err };
+            toasty_core::Error::driver_operation_failed(err)
+        })
         .map(|()| ExecResponse::count(0));
     log.finish(&result);
 
     result.map(|_| ())
+}
+
+/// Keeps a `rusqlite` error's SQLite result code and drops its message.
+fn redact(err: rusqlite::Error) -> rusqlite::Error {
+    let code = err
+        .sqlite_error()
+        .copied()
+        .unwrap_or_else(|| ffi::Error::new(ffi::SQLITE_ERROR));
+    rusqlite::Error::SqliteFailure(code, None)
 }
 
 #[cfg(test)]
@@ -261,10 +306,12 @@ mod tests {
         pragmas.set("auto_vacuum", "FULL");
         pragmas.set("page_size", "8192");
         pragmas.set("locking_mode", "NORMAL");
+        pragmas.set("key", "'secret'");
 
         assert_eq!(
             order(&pragmas),
             [
+                "key",
                 "page_size",
                 "locking_mode",
                 "auto_vacuum",

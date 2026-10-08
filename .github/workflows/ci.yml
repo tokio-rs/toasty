@@ -159,6 +159,8 @@ jobs:
         run: cargo test --no-default-features --features sqlite
       - name: cargo test -p toasty-driver-sqlite
         run: cargo test -p toasty-driver-sqlite
+      - name: cargo test (sqlcipher)
+        run: cargo test -p tests --features sqlite-sqlcipher --test sqlite_pragma
       - name: doc-tests
         run: cargo test -p tests --doc
 
