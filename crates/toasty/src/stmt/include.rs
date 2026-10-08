@@ -41,6 +41,18 @@ impl<Origin, T> Include<Origin, T> {
         self
     }
 
+    /// Limits the number of related rows loaded by this include, per parent
+    /// record. Combine with [`order_by`](Include::order_by) to select which
+    /// rows are kept.
+    pub fn limit(mut self, n: usize) -> Self {
+        let n = i64::try_from(n).expect("limit exceeds i64::MAX");
+        self.query_mut().limit = Some(stmt::Limit::Offset(stmt::LimitOffset {
+            limit: stmt::Value::from(n).into(),
+            offset: None,
+        }));
+        self
+    }
+
     fn query_mut(&mut self) -> &mut stmt::Query {
         self.untyped
             .query
