@@ -398,6 +398,40 @@ fn composite_pk_full_equality_sets_key_values() -> Result<()> {
 }
 
 #[test]
+fn pk_extra_equalities_stay_in_result_filter() -> Result<()> {
+    let cx = sqlite_test_cx();
+    let pk_eq = |value: stmt::Value| {
+        stmt::Expr::eq(
+            stmt::Expr::Reference(stmt::ExprReference::column(0, 0)),
+            stmt::Expr::Value(value),
+        )
+    };
+
+    // A second equality on the key, or a `= NULL` that never matches, is not
+    // part of the key; it must still filter the fetched row.
+    let one = || pk_eq(1i64.into());
+    for (filter, extra) in [
+        (
+            stmt::Expr::and(one(), pk_eq(2i64.into())),
+            pk_eq(2i64.into()),
+        ),
+        (
+            stmt::Expr::and(pk_eq(stmt::Value::Null), one()),
+            pk_eq(stmt::Value::Null),
+        ),
+    ] {
+        let plan = cx.plan_basic_query_with_filter(filter)?;
+
+        let expected = stmt::Value::List(vec![stmt::Value::Record(stmt::ValueRecord::from_vec(
+            vec![stmt::Value::from(1i64)],
+        ))]);
+        assert_eq!(plan.key_values, Some(stmt::Expr::Value(expected)));
+        assert_eq!(plan.result_filter, Some(extra));
+    }
+    Ok(())
+}
+
+#[test]
 fn composite_pk_partition_key_only_does_not_set_key_values() -> Result<()> {
     // Schema: Todo { user_id (pk partition), status (pk sort) }
     // Only the partition key is specified — cannot form a full key record.
