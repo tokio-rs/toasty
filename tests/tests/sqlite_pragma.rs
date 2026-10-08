@@ -104,3 +104,62 @@ async fn a_pragma_sqlite_rejects_fails_the_connection() {
         .await
         .expect_err("an invalid pragma value should fail the connection");
 }
+
+#[test]
+fn debug_output_withholds_secret_pragma_values() {
+    let driver = Sqlite::in_memory()
+        .pragma("key", "'a passphrase'")
+        .journal_mode(JournalMode::Wal);
+
+    let debug = format!("{driver:?}");
+    assert!(
+        !debug.contains("a passphrase"),
+        "passphrase leaked: {debug}"
+    );
+    assert!(debug.contains("[redacted]"), "unexpected debug: {debug}");
+    // Non-secret pragmas stay legible.
+    assert!(debug.contains("WAL"), "unexpected debug: {debug}");
+}
+
+#[cfg(feature = "sqlite-sqlcipher")]
+#[tokio::test]
+async fn an_encrypted_database_round_trips() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("app.db");
+    // The quote checks that `key` escapes the passphrase.
+    let keyed = || Sqlite::open(&path).key("it's a passphrase");
+
+    let mut db = build(keyed()).await.unwrap();
+    db.push_schema().await.unwrap();
+    toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await
+        .unwrap();
+    drop(db);
+
+    // Without the right key, connecting runs nothing that reads the file, so
+    // the failure surfaces at the first query.
+    for driver in [Sqlite::open(&path), Sqlite::open(&path).key("wrong")] {
+        let mut db = build(driver).await.unwrap();
+        User::get_by_id(&mut db, &1)
+            .await
+            .expect_err("an encrypted database should not be readable without its key");
+    }
+
+    let mut db = build(keyed()).await.unwrap();
+    let user = User::get_by_id(&mut db, &1).await.unwrap();
+    assert_eq!(user.name, "Alice");
+}
+
+#[cfg(feature = "sqlite-sqlcipher")]
+#[tokio::test]
+async fn a_failing_secret_pragma_does_not_leak_its_value() {
+    // An unterminated literal is a syntax error, and SQLite's message would
+    // otherwise quote the statement.
+    let err = build(Sqlite::in_memory().pragma("key", "'a passphrase"))
+        .await
+        .expect_err("a malformed key should fail the connection")
+        .to_string();
+
+    assert!(!err.contains("a passphrase"), "passphrase leaked: {err}");
+}

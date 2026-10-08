@@ -196,6 +196,30 @@ impl Sqlite {
         self
     }
 
+    /// Set the [SQLCipher](https://www.zetetic.net/sqlcipher/sqlcipher-api/#key)
+    /// passphrase that encrypts the database.
+    ///
+    /// The passphrase is quoted for you, applied before every other pragma,
+    /// and kept out of query logs, error messages, and `Debug` output.
+    /// SQLCipher checks it only when the database is first read, so a wrong
+    /// passphrase fails at the first query rather than on connect.
+    ///
+    /// Available with this crate's `sqlcipher` feature.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_driver_sqlite::Sqlite;
+    ///
+    /// let driver = Sqlite::open("app.db").key("a passphrase");
+    /// ```
+    #[cfg(feature = "sqlcipher")]
+    pub fn key(mut self, passphrase: impl AsRef<str>) -> Self {
+        let quoted = format!("'{}'", passphrase.as_ref().replace('\'', "''"));
+        self.pragmas.set("key", quoted);
+        self
+    }
+
     /// Set a `PRAGMA` applied to every connection this driver opens.
     ///
     /// Use this for pragmas without a dedicated method. The driver writes
@@ -204,7 +228,8 @@ impl Sqlite {
     /// the value is SQL text.
     ///
     /// Pragmas run in a fixed order rather than the order they are set,
-    /// because SQLite constrains it: `page_size`, `locking_mode`,
+    /// because SQLite and SQLCipher constrain it: `key` and the other
+    /// SQLCipher settings come first, then `page_size`, `locking_mode`,
     /// `auto_vacuum`, `journal_mode`, `foreign_keys`, `synchronous`, and
     /// then every other pragma in the order first set. Setting the same
     /// pragma twice keeps the last value. Names match exactly.
@@ -218,6 +243,9 @@ impl Sqlite {
     ///     .pragma("cache_size", "-64000")
     ///     .pragma("temp_store", "MEMORY");
     /// ```
+    ///
+    /// Values of `key` and other secret SQLCipher pragmas are kept out of
+    /// query logs, error messages, and `Debug` output.
     pub fn pragma<K, V>(mut self, key: K, value: V) -> Self
     where
         K: Into<Cow<'static, str>>,
