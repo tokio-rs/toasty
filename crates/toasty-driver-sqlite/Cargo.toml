@@ -21,6 +21,7 @@ net = ["toasty-core/net", "toasty-sql/net"]
 
 [dependencies]
 async-trait.workspace = true
+indexmap.workspace = true
 toasty-core.workspace = true
 toasty-sql.workspace = true
 rusqlite.workspace = true

@@ -17,6 +17,10 @@
 //! let driver = Sqlite::open("path/to/db.sqlite3");
 //! ```
 
+mod pragma;
+use pragma::Pragmas;
+pub use pragma::{AutoVacuum, JournalMode, LockingMode, Synchronous};
+
 mod value;
 pub(crate) use value::Value;
 
@@ -26,6 +30,7 @@ use std::{
     borrow::Cow,
     path::{Path, PathBuf},
     sync::Arc,
+    time::Duration,
 };
 use toasty_core::{
     Result, Schema,
@@ -58,7 +63,15 @@ enum SqlReturn {
 /// let driver = Sqlite::in_memory();
 /// ```
 #[derive(Debug)]
-pub enum Sqlite {
+pub struct Sqlite {
+    source: Source,
+    busy_timeout: Duration,
+    pragmas: Pragmas,
+}
+
+/// Where a [`Sqlite`] driver's database lives.
+#[derive(Debug)]
+enum Source {
     /// A database stored at a filesystem path.
     File(PathBuf),
     /// An ephemeral in-memory database.
@@ -66,6 +79,14 @@ pub enum Sqlite {
 }
 
 impl Sqlite {
+    fn from_source(source: Source) -> Self {
+        Self {
+            source,
+            busy_timeout: Duration::from_secs(5),
+            pragmas: Pragmas::default(),
+        }
+    }
+
     /// Create a new SQLite driver with an arbitrary connection URL
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
@@ -79,29 +100,140 @@ impl Sqlite {
 
         let path = url.file_path()?;
         if path == Path::new(":memory:") {
-            return Ok(Self::InMemory);
+            return Ok(Self::in_memory());
         }
 
-        Ok(Self::File(path))
+        Ok(Self::open(path))
     }
 
     /// Create an in-memory SQLite database
     pub fn in_memory() -> Self {
-        Self::InMemory
+        Self::from_source(Source::InMemory)
     }
 
     /// Open a SQLite database at the specified file path
     pub fn open<P: AsRef<Path>>(path: P) -> Self {
-        Self::File(path.as_ref().to_path_buf())
+        Self::from_source(Source::File(path.as_ref().to_path_buf()))
+    }
+
+    /// Set the enforcement of
+    /// [foreign key constraints](https://www.sqlite.org/pragma.html#pragma_foreign_keys).
+    ///
+    /// Enabled by default.
+    pub fn foreign_keys(mut self, on: bool) -> Self {
+        self.pragmas
+            .set("foreign_keys", if on { "ON" } else { "OFF" });
+        self
+    }
+
+    /// Set how long a connection waits for a lock held by another
+    /// connection before failing with `database is locked`.
+    ///
+    /// Set through `sqlite3_busy_timeout` as soon as each connection opens,
+    /// before any pragma runs. The default is 5 seconds.
+    pub fn busy_timeout(mut self, timeout: Duration) -> Self {
+        self.busy_timeout = timeout;
+        self
+    }
+
+    /// Set the [journal mode](https://www.sqlite.org/pragma.html#pragma_journal_mode).
+    ///
+    /// Journal modes are per connection, except for
+    /// [WAL](https://www.sqlite.org/wal.html), which the database file
+    /// keeps. Opening a WAL database with a different journal mode takes an
+    /// exclusive lock and converts the file.
+    ///
+    /// Not set by default, so an existing database keeps its mode.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_driver_sqlite::{JournalMode, Sqlite};
+    ///
+    /// let driver = Sqlite::open("app.db").journal_mode(JournalMode::Wal);
+    /// ```
+    pub fn journal_mode(mut self, mode: JournalMode) -> Self {
+        self.pragmas.set("journal_mode", mode);
+        self
+    }
+
+    /// Set the [synchronous](https://www.sqlite.org/pragma.html#pragma_synchronous)
+    /// setting.
+    ///
+    /// Not set by default; SQLite's default is `FULL`. `NORMAL` is usually
+    /// enough in WAL mode.
+    pub fn synchronous(mut self, synchronous: Synchronous) -> Self {
+        self.pragmas.set("synchronous", synchronous);
+        self
+    }
+
+    /// Set the [locking mode](https://www.sqlite.org/pragma.html#pragma_locking_mode).
+    ///
+    /// Not set by default; SQLite's default is `NORMAL`.
+    pub fn locking_mode(mut self, mode: LockingMode) -> Self {
+        self.pragmas.set("locking_mode", mode);
+        self
+    }
+
+    /// Set the [auto-vacuum](https://www.sqlite.org/pragma.html#pragma_auto_vacuum)
+    /// setting.
+    ///
+    /// Not set by default; SQLite's default is `NONE`. On an existing
+    /// database the change takes effect only after a `VACUUM`.
+    pub fn auto_vacuum(mut self, auto_vacuum: AutoVacuum) -> Self {
+        self.pragmas.set("auto_vacuum", auto_vacuum);
+        self
+    }
+
+    /// Set the [page size](https://www.sqlite.org/pragma.html#pragma_page_size)
+    /// in bytes.
+    ///
+    /// Not set by default; SQLite's default is 4096. On an existing
+    /// database the change takes effect only after a `VACUUM`, and never in
+    /// WAL mode.
+    pub fn page_size(mut self, page_size: u32) -> Self {
+        self.pragmas.set("page_size", page_size.to_string());
+        self
+    }
+
+    /// Set a `PRAGMA` applied to every connection this driver opens.
+    ///
+    /// Use this for pragmas without a dedicated method. The driver writes
+    /// `PRAGMA {key} = {value}` with both arguments as given, so the caller
+    /// supplies any quoting the value needs. Do not pass untrusted input:
+    /// the value is SQL text.
+    ///
+    /// Pragmas run in a fixed order rather than the order they are set,
+    /// because SQLite constrains it: `page_size`, `locking_mode`,
+    /// `auto_vacuum`, `journal_mode`, `foreign_keys`, `synchronous`, and
+    /// then every other pragma in the order first set. Setting the same
+    /// pragma twice keeps the last value. Names match exactly.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_driver_sqlite::Sqlite;
+    ///
+    /// let driver = Sqlite::open("app.db")
+    ///     .pragma("cache_size", "-64000")
+    ///     .pragma("temp_store", "MEMORY");
+    /// ```
+    pub fn pragma<K, V>(mut self, key: K, value: V) -> Self
+    where
+        K: Into<Cow<'static, str>>,
+        V: Into<Cow<'static, str>>,
+    {
+        self.pragmas.set(key, value);
+        self
     }
 }
 
 #[async_trait]
 impl Driver for Sqlite {
     fn url(&self) -> Cow<'_, str> {
-        match self {
-            Sqlite::InMemory => Cow::Borrowed("sqlite::memory:"),
-            Sqlite::File(path) => Cow::Owned(format!("sqlite:{}", path.display())),
+        match &self.source {
+            Source::InMemory => Cow::Borrowed("sqlite::memory:"),
+            Source::File(path) => Cow::Owned(format!("sqlite:{}", path.display())),
         }
     }
 
@@ -113,16 +245,21 @@ impl Driver for Sqlite {
         &self,
         cx: &ConnectContext,
     ) -> toasty_core::Result<Box<dyn toasty_core::Connection>> {
-        let mut connection = match self {
-            Sqlite::File(path) => Connection::open(path)?,
-            Sqlite::InMemory => Connection::in_memory(),
+        let mut connection = match &self.source {
+            Source::File(path) => Connection::open(path)?,
+            Source::InMemory => Connection::in_memory(),
         };
         connection.query_log = cx.query_log;
+        connection
+            .connection
+            .busy_timeout(self.busy_timeout)
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+        self.pragmas.apply(&connection.connection, &cx.query_log)?;
         Ok(Box::new(connection))
     }
 
     fn max_connections(&self) -> Option<usize> {
-        matches!(self, Self::InMemory).then_some(1)
+        matches!(self.source, Source::InMemory).then_some(1)
     }
 
     fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
@@ -137,15 +274,15 @@ impl Driver for Sqlite {
     }
 
     async fn reset_db(&self) -> toasty_core::Result<()> {
-        match self {
-            Sqlite::File(path) => {
+        match &self.source {
+            Source::File(path) => {
                 // Delete the file and recreate it
                 if path.exists() {
                     std::fs::remove_file(path)
                         .map_err(toasty_core::Error::driver_operation_failed)?;
                 }
             }
-            Sqlite::InMemory => {
+            Source::InMemory => {
                 // Nothing to do — each connect() creates a fresh in-memory database
             }
         }
