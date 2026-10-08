@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-00e20b0e.js";
+            window.path_to_searchindex_js = "searchindex-6bedf422.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -9637,9 +9637,10 @@ interchangeable and the last call wins. Prefer the typed method where one
 exists: SQLite silently ignores a value it does not recognize for several
 pragmas.</p>
 <p>Pragmas run in a fixed order rather than the order they are set, because
-SQLite constrains it: <code>page_size</code>, <code>locking_mode</code>, <code>auto_vacuum</code>,
-<code>journal_mode</code>, <code>foreign_keys</code>, <code>synchronous</code>, and then every other pragma
-in the order first set.</p>
+SQLite constrains it: <code>key</code> and the other SQLCipher settings come first,
+then <code>page_size</code>, <code>locking_mode</code>, <code>auto_vacuum</code>, <code>journal_mode</code>,
+<code>foreign_keys</code>, <code>synchronous</code>, and then every other pragma in the order
+first set.</p>
 <h2 id="type-mapping-2"><a class="header" href="#type-mapping-2">Type mapping</a></h2>
 <p>Toasty maps Rust types to SQLite columns as follows. SQLite uses type
 affinity rather than strict types, so several Rust types share an
