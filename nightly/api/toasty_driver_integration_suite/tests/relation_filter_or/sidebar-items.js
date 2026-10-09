@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["combined_membership_mutation_requires_index","combined_membership_query"]};
