@@ -114,6 +114,16 @@ pub async fn has_one_presence(t: &mut Test) -> Result<()> {
         .await?;
     assert_struct!(sources, [{ id: == present.id }]);
 
+    let sources = Source::filter(Source::fields().document().is_some().not())
+        .exec(&mut db)
+        .await?;
+    assert_struct!(sources, [{ id: == missing.id }]);
+
+    let sources = Source::filter(Source::fields().document().is_none().not())
+        .exec(&mut db)
+        .await?;
+    assert_struct!(sources, [{ id: == present.id }]);
+
     let sources = Source::filter(
         Source::fields()
             .document()
@@ -151,6 +161,18 @@ pub async fn belongs_to_presence(t: &mut Test) -> Result<()> {
     assert_struct!(profiles, [{ bio: "unassociated" }]);
 
     let profiles = Profile::filter(Profile::fields().user().is_some())
+        .exec(&mut db)
+        .await?;
+    assert_struct!(profiles, [{ bio: "associated" }]);
+
+    // The unassociated profile's null `user_id` must land on exactly one side
+    // of each negation.
+    let profiles = Profile::filter(Profile::fields().user().is_some().not())
+        .exec(&mut db)
+        .await?;
+    assert_struct!(profiles, [{ bio: "unassociated" }]);
+
+    let profiles = Profile::filter(Profile::fields().user().is_none().not())
         .exec(&mut db)
         .await?;
     assert_struct!(profiles, [{ bio: "associated" }]);
