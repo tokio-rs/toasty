@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.11.0...toasty-driver-integration-suite-v0.12.0) - 2026-10-09
+
+### Fixed
+
+- *(engine)* Handle unsupported OR index filters without panicking ([#1288])
+- *(engine)* Retain key lookups with additional key predicates ([#1284])
+- *(engine)* Bind subquery inputs in key-value filters ([#1282])
+- *(engine)* Exclude absent keys from relation membership ([#1271])
+
+[#1271]: https://github.com/tokio-rs/toasty/pull/1271
+[#1282]: https://github.com/tokio-rs/toasty/pull/1282
+[#1284]: https://github.com/tokio-rs/toasty/pull/1284
+[#1288]: https://github.com/tokio-rs/toasty/pull/1288
+
 ## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.10.0...toasty-driver-integration-suite-v0.11.0) - 2026-09-24
 
 ### Added
