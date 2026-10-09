@@ -292,7 +292,7 @@ fn is_extractable_scalar(value: &stmt::Value) -> bool {
 ///   refined by synthesize/check when a column context is available.
 /// - Anything we can't classify (`Null`, `Record`, `F32`/`F64`, `Zoned`,
 ///   `BigDecimal`, `SparseRecord`) becomes `Ty::Unknown`.
-fn infer_ty(value: &stmt::Value) -> Ty {
+pub(super) fn infer_ty(value: &stmt::Value) -> Ty {
     use stmt::Value;
     match value {
         Value::Bool(_) => Ty::Inferred(db::Type::Boolean),
