@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-sqlite-v0.11.0...toasty-driver-sqlite-v0.12.0) - 2026-10-09
+
+### Added
+
+- Add SQLCipher support ([#1286])
+- Add connection pragma configuration ([#1285])
+
+[#1285]: https://github.com/tokio-rs/toasty/pull/1285
+[#1286]: https://github.com/tokio-rs/toasty/pull/1286
+
 ## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-sqlite-v0.10.0...toasty-driver-sqlite-v0.11.0) - 2026-09-24
 
 ### Fixed

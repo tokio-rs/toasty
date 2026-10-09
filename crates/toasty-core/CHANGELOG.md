@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.11.0...toasty-core-v0.12.0) - 2026-10-09
+
+### Fixed
+
+- Fixed incorrect relation membership checks that included absent keys ([#1271])
+
+[#1271]: https://github.com/tokio-rs/toasty/pull/1271
+
 ## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.10.0...toasty-core-v0.11.0) - 2026-09-24
 
 ### Added
