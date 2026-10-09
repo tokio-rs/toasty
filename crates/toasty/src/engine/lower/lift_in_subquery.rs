@@ -115,17 +115,23 @@ impl<'a> LiftInSubquery<'a> {
         }
     }
 
-    /// Push an `IS NOT NULL` guard for each nullable field of the host-side
-    /// key expression `lhs`.
+    /// Push an `IS NOT NULL` guard for each field of the host-side key
+    /// expression `lhs` that may be null. Only a direct reference to a
+    /// non-nullable field is known to be present; a key projected out of an
+    /// enum variant is guarded too.
     fn push_key_guards(&self, lhs: &stmt::Expr, guards: &mut Vec<stmt::Expr>) {
         for field in key_fields(lhs) {
-            if let stmt::Expr::Reference(expr_reference @ stmt::ExprReference::Field { .. }) = field
-                && self
-                    .cx
-                    .resolve_expr_reference(expr_reference)
-                    .as_field_unwrap()
-                    .nullable
-            {
+            let nullable = match field {
+                stmt::Expr::Reference(expr_reference @ stmt::ExprReference::Field { .. }) => {
+                    self.cx
+                        .resolve_expr_reference(expr_reference)
+                        .as_field_unwrap()
+                        .nullable
+                }
+                _ => true,
+            };
+
+            if nullable {
                 guards.push(stmt::Expr::is_not_null(field.clone()));
             }
         }
