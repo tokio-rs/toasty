@@ -170,8 +170,9 @@ let users = User::filter(User::fields().bio().is_some())
 # }
 ```
 
-These methods are only available on paths to `Option<T>` fields. Calling
-`.is_none()` on a non-optional field is a compile error.
+These methods are available on optional scalar and embedded fields.
+Optional single-record relations also provide them to
+[test whether a related record exists](#checking-whether-a-related-record-exists).
 
 ## Combining with AND
 
@@ -540,6 +541,50 @@ let users = User::filter(User::fields().profile().score().gt(50))
 # Ok(())
 # }
 ```
+
+### Checking whether a related record exists
+
+On optional `#[has_one]` and `#[belongs_to]` relation accessors, `.is_none()`
+matches records with no associated record, and `.is_some()` matches records
+with an associated record. Both `Option<Model>` and `Deferred<Option<Model>>`
+provide these methods, including through type aliases and on relations
+declared inside embedded types. Calling either method on a required relation
+is a compile error.
+
+```rust
+# #[derive(Debug, toasty::Model)]
+# struct Source {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     #[has_one]
+#     document: toasty::Deferred<Option<Document>>,
+# }
+# #[derive(Debug, toasty::Model)]
+# struct Document {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     #[unique]
+#     source_id: u64,
+#     #[belongs_to(key = source_id, references = id)]
+#     source: toasty::Deferred<Source>,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+let unprocessed = Source::filter(Source::fields().document().is_none())
+    .exec(&mut db)
+    .await?;
+
+let processed = Source::filter(Source::fields().document().is_some())
+    .exec(&mut db)
+    .await?;
+# Ok(())
+# }
+```
+
+The predicates generate relation subqueries. Unassociated child rows whose
+foreign keys are null do not count as related records. For relations declared
+in an embedded enum variant, both methods restrict results to that variant.
 
 ### `any` — at least one match
 
