@@ -11,6 +11,7 @@ fn make_id_field(model_id: ModelId) -> Field {
             app: Some("id".to_string()),
             storage: None,
         },
+        comment: None,
         ty: FieldTy::Primitive(FieldPrimitive {
             ty: stmt::Type::String,
             storage_ty: None,
@@ -33,6 +34,7 @@ fn make_root_model(id: ModelId, name: &str, extra_fields: Vec<Field>) -> Model {
     Model::Root(ModelRoot {
         id,
         name: Name::new(name),
+        comment: None,
         fields,
         primary_key: PrimaryKey {
             fields: vec![id.field(0)],
@@ -54,6 +56,7 @@ fn make_relation_field(model_id: ModelId, index: usize, name: &str, ty: FieldTy)
             app: Some(name.to_string()),
             storage: None,
         },
+        comment: None,
         ty,
         nullable: false,
         primary_key: false,

@@ -49,6 +49,12 @@ pub use pragma::Pragma;
 mod rename_type;
 pub use rename_type::RenameType;
 
+mod set_column_comment;
+pub use set_column_comment::SetColumnComment;
+
+mod set_table_comment;
+pub use set_table_comment::SetTableComment;
+
 mod table_name;
 pub use table_name::TableName;
 
@@ -83,6 +89,10 @@ pub enum Statement {
     Pragma(Pragma),
     /// Rename a type.
     RenameType(RenameType),
+    /// Set or remove a column comment.
+    SetColumnComment(SetColumnComment),
+    /// Set or remove a table comment.
+    SetTableComment(SetTableComment),
     /// A DELETE statement.
     Delete(Delete),
     /// An INSERT statement.

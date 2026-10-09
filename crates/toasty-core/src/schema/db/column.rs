@@ -36,6 +36,13 @@ pub struct Column {
     /// The name of the column in the database.
     pub name: String,
 
+    /// Optional native database comment for this column.
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Option::is_none")
+    )]
+    pub comment: Option<String>,
+
     /// The column type, from Toasty's point of view.
     pub ty: stmt::Type,
 
@@ -133,6 +140,7 @@ mod serde_tests {
                 index: 0,
             },
             name: "test".to_string(),
+            comment: None,
             ty: stmt::Type::String,
             storage_ty: Type::Text,
             nullable: false,
