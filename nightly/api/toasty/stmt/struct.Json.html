@@ -8,7 +8,7 @@ insert and update, and decoded on read.</p>
 <p>Every <code>Json&lt;T&gt;</code> field must select its database column type with
 <code>#[column(type = ...)]</code>. Use <code>text</code> or <code>varchar(...)</code> for text-backed JSON,
 <code>json</code> for PostgreSQL or MySQL native JSON, and <code>jsonb</code> for PostgreSQL JSONB.
-A field whose Rust type is already <a href="https://docs.rs/serde_json/1.0.151/serde_json/value/enum.Value.html" title="enum serde_json::value::Value"><code>serde_json::Value</code></a> does not need the
+A field whose Rust type is already <a href="https://docs.rs/serde_json/1.0.154/serde_json/value/enum.Value.html" title="enum serde_json::value::Value"><code>serde_json::Value</code></a> does not need the
 <code>Json&lt;T&gt;</code> wrapper and supports the same column types.</p>
 <h2 id="two-nullable-variants"><a class="doc-anchor" href="#two-nullable-variants">§</a>Two nullable variants</h2>
 <p><code>Json&lt;T&gt;</code> composes with <code>Option</code> in two distinct, both-useful ways:</p>
