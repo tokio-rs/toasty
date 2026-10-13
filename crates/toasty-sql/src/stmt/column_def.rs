@@ -19,6 +19,8 @@ pub struct ColumnDef {
     pub auto_increment: bool,
     /// Optional CHECK constraint on this column.
     pub check: Option<CheckConstraint>,
+    /// Comment to include when a dialect restates the full column definition.
+    pub comment: Option<String>,
 }
 
 impl ColumnDef {
@@ -50,6 +52,7 @@ impl ColumnDef {
                         ),
                     )),
                 }),
+                comment: None,
             };
         }
 
@@ -59,6 +62,7 @@ impl ColumnDef {
             not_null: !column.nullable,
             auto_increment: column.auto_increment,
             check: None,
+            comment: None,
         }
     }
 }

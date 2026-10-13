@@ -1,3 +1,5 @@
+use super::validate_comment;
+
 use quote::quote;
 use syn::parenthesized;
 
@@ -32,6 +34,7 @@ pub(crate) struct Column {
     pub(crate) ty: Option<ColumnType>,
     pub(crate) variant: Option<VariantValue>,
     pub(crate) rename_all: Option<RenameRule>,
+    pub(crate) comment: Option<syn::LitStr>,
 }
 
 /// A case-conversion rule applied to enum variant identifiers to derive their
@@ -96,6 +99,14 @@ impl Column {
     pub(super) fn from_ast(attr: &syn::Attribute) -> syn::Result<Column> {
         attr.parse_args()
     }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.name.is_none()
+            && self.ty.is_none()
+            && self.variant.is_none()
+            && self.rename_all.is_none()
+            && self.comment.is_none()
+    }
 }
 
 impl syn::parse::Parse for Column {
@@ -105,6 +116,7 @@ impl syn::parse::Parse for Column {
             ty: None,
             variant: None,
             rename_all: None,
+            comment: None,
         };
 
         // Loop through the list of comma separated arguments to fill in the result one by one.
@@ -115,6 +127,7 @@ impl syn::parse::Parse for Column {
         // #[column(type = <type>)]
         // #[column("name", type = <type>)]
         // #[column(type = <type>, "name")]
+        // #[column(comment = "text")]
         // #[column(rename_all = "<rule>")]
         loop {
             let lookahead = input.lookahead1();
@@ -132,6 +145,14 @@ impl syn::parse::Parse for Column {
                 let _eq_token: syn::Token![=] = input.parse()?;
                 let lit: syn::LitStr = input.parse()?;
                 result.rename_all = Some(RenameRule::from_lit(&lit)?);
+            } else if lookahead.peek(kw::comment) {
+                if result.comment.is_some() {
+                    return Err(syn::Error::new(input.span(), "duplicate column comment"));
+                }
+                let _comment_token: kw::comment = input.parse()?;
+                let _eq_token: syn::Token![=] = input.parse()?;
+                let lit: syn::LitStr = input.parse()?;
+                result.comment = Some(validate_comment(lit)?);
             } else if lookahead.peek(kw::variant) {
                 if result.variant.is_some() {
                     return Err(syn::Error::new(
@@ -183,6 +204,7 @@ impl syn::parse::Parse for Column {
 mod kw {
     syn::custom_keyword!(variant);
     syn::custom_keyword!(rename_all);
+    syn::custom_keyword!(comment);
     syn::custom_keyword!(boolean);
 
     syn::custom_keyword!(int);

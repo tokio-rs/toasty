@@ -74,12 +74,12 @@ impl RenameHints {
     }
 
     /// Returns the new [`TableId`] if a rename hint exists for `from`.
-    pub(super) fn get_table(&self, from: TableId) -> Option<TableId> {
+    pub fn get_table(&self, from: TableId) -> Option<TableId> {
         self.tables.get(&from).copied()
     }
 
     /// Returns the new [`ColumnId`] if a rename hint exists for `from`.
-    pub(super) fn get_column(&self, from: ColumnId) -> Option<ColumnId> {
+    pub fn get_column(&self, from: ColumnId) -> Option<ColumnId> {
         self.columns.get(&from).copied()
     }
 
