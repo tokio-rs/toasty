@@ -278,7 +278,7 @@ pub struct Capability {
     /// writes without wrapping them in a transaction, so they are not
     /// atomic. User transactions reach the driver, which rejects them with
     /// [`Error::unsupported_feature`](crate::Error::unsupported_feature).
-    /// DynamoDB sets this to `false`.
+    /// Cloudflare D1 and DynamoDB set this to `false`.
     pub streamed_transactions: bool,
 
     /// Whether the backend can walk a paginated query in reverse from a
@@ -932,6 +932,18 @@ impl Capability {
     pub const TURSO: Self = Self {
         driver_name: "Turso",
         test_connection_pool: true,
+        ..Self::SQLITE
+    };
+
+    /// Cloudflare D1 capabilities.
+    ///
+    /// D1 speaks SQLite's SQL but rejects `BEGIN`, `COMMIT`, and
+    /// `SAVEPOINT`, so the engine runs multi-statement plans without a
+    /// transaction.
+    pub const D1: Self = Self {
+        driver_name: "Cloudflare D1",
+        transaction_lock_mode: false,
+        streamed_transactions: false,
         ..Self::SQLITE
     };
 

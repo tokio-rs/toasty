@@ -28,8 +28,8 @@ cargo test --features dynamodb --no-default-features -- --test-threads=1
 # DynamoDB + SQLite
 cargo test --features dynamodb -- --test-threads=1
 
-# Check the WASM build (backend-agnostic crates only; no driver builds for wasm)
-cargo check --target wasm32-unknown-unknown -p toasty -p toasty-core -p toasty-sql
+# Check the WASM build (backend-agnostic crates and the D1 driver)
+cargo check --target wasm32-unknown-unknown -p toasty -p toasty-core -p toasty-sql -p toasty-driver-d1
 
 # Lint
 cargo clippy
@@ -68,7 +68,7 @@ Toasty is a Rust ORM supporting SQL (SQLite, PostgreSQL, MySQL) and NoSQL (Dynam
 | `toasty-core` | Shared types: schema representations, statement AST, driver interface |
 | `toasty-macros` | Proc-macro entry points and code generation (`#[derive(Model)]`, `#[derive(Embed)]`) |
 | `toasty-sql` | SQL serialization (statement AST → SQL string), used by SQL drivers |
-| `toasty-driver-sqlite/postgresql/mysql/dynamodb` | Database driver implementations |
+| `toasty-driver-sqlite/turso/d1/postgresql/mysql/dynamodb` | Database driver implementations |
 | `toasty-driver-integration-suite` | Shared integration test suite run against all drivers |
 | `toasty-driver-integration-suite-macros` | Proc-macros for the test suite (`#[driver_test]`, `generate_driver_tests!`) |
 | `tests` | Workspace-level integration tests (invokes the suite per driver) |

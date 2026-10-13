@@ -8,6 +8,7 @@ members = [
     "crates/toasty-sql",
 
     # Driver implementations
+    "crates/toasty-driver-d1",
     "crates/toasty-driver-dynamodb",
     "crates/toasty-driver-mysql",
     "crates/toasty-driver-postgresql",
@@ -80,6 +81,7 @@ toasty-core = { version = "0.11.0", path = "crates/toasty-core" }
 toasty-macros = { version = "0.11.0", path = "crates/toasty-macros" }
 toasty-sql = { version = "0.11.0", path = "crates/toasty-sql" }
 # Driver implementations
+toasty-driver-d1 = { version = "0.11.0", path = "crates/toasty-driver-d1" }
 toasty-driver-dynamodb = { version = "0.11.0", path = "crates/toasty-driver-dynamodb" }
 toasty-driver-mysql = { version = "0.11.0", path = "crates/toasty-driver-mysql", default-features = false }
 toasty-driver-postgresql = { version = "0.11.0", path = "crates/toasty-driver-postgresql" }
@@ -165,6 +167,7 @@ trybuild = { version = "1.0.116", features = ["diff"] }
 url = "2.5.8"
 uuid = { version = "1.23.0", features = ["v4", "v7", "fast-rng", "js"] }
 wasm-bindgen-futures = "0.4.79"
+worker = { version = "0.8.7", features = ["d1"] }
 
 [profile.dev]
 debug = "line-tables-only"
