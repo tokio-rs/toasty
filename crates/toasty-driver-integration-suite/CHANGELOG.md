@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.11.0...toasty-driver-integration-suite-v0.12.0) - 2026-10-13
+
+### Added
+
+- Support &Vec<U> with IntoExpr<List<T>> ([#1290])
+
+### Fixed
+
+- Prevent panics when worker channel errors occur; return connection_lost instead ([#1244])
+- Prevent panics on unsupported OR index filters ([#1288])
+- Fix key lookups with additional key predicates ([#1284])
+- Fix subquery input binding in key-value filters ([#1282])
+- Fix relation membership to exclude absent keys ([#1271])
+
+[#1244]: https://github.com/tokio-rs/toasty/pull/1244
+[#1271]: https://github.com/tokio-rs/toasty/pull/1271
+[#1282]: https://github.com/tokio-rs/toasty/pull/1282
+[#1284]: https://github.com/tokio-rs/toasty/pull/1284
+[#1288]: https://github.com/tokio-rs/toasty/pull/1288
+[#1290]: https://github.com/tokio-rs/toasty/pull/1290
+
 ## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.10.0...toasty-driver-integration-suite-v0.11.0) - 2026-09-24
 
 ### Added

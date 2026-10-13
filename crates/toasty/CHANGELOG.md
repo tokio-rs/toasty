@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.11.0...toasty-v0.12.0) - 2026-10-13
+
+### Fixed
+
+- Support vector references in list expression contexts ([#1290])
+- Worker connection errors properly returned instead of panicking ([#1244])
+- Prevent panics on unsupported OR index filter combinations ([#1288])
+- Correctly handle key lookups with additional key predicates ([#1284])
+- Properly bind subquery inputs in key-value filters ([#1282])
+- Exclude absent keys from relation membership checks ([#1271])
+- Reject mismatched key types in embedded enum `belongs_to` declarations ([#1277])
+
+[#1244]: https://github.com/tokio-rs/toasty/pull/1244
+[#1271]: https://github.com/tokio-rs/toasty/pull/1271
+[#1277]: https://github.com/tokio-rs/toasty/pull/1277
+[#1282]: https://github.com/tokio-rs/toasty/pull/1282
+[#1284]: https://github.com/tokio-rs/toasty/pull/1284
+[#1288]: https://github.com/tokio-rs/toasty/pull/1288
+[#1290]: https://github.com/tokio-rs/toasty/pull/1290
+
 ## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.10.0...toasty-v0.11.0) - 2026-09-24
 
 ### Added
