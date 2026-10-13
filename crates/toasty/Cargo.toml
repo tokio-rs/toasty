@@ -91,6 +91,11 @@ toml = { workspace = true, optional = true }
 toml_edit = { workspace = true, features = ["serde"], optional = true }
 tracing.workspace = true
 
+# Browser-style wasm has no tokio runtime; connection tasks run on the host's
+# event loop instead.
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+wasm-bindgen-futures.workspace = true
+
 [dev-dependencies]
 assert-struct.workspace = true
 proptest.workspace = true

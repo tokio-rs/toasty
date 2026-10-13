@@ -118,7 +118,15 @@ impl Pool {
             toasty_core::Error::connection_pool(e)
         })?;
 
-        let sweep_task = config.health_check_interval.map(|interval| {
+        // The sweep runs on tokio's timer, which browser-style wasm hosts
+        // (such as Cloudflare Workers) do not provide.
+        let health_check_interval = if cfg!(all(target_arch = "wasm32", target_os = "unknown")) {
+            None
+        } else {
+            config.health_check_interval
+        };
+
+        let sweep_task = health_check_interval.map(|interval| {
             let task = SweepTask {
                 pool: inner.clone(),
                 waker: sweep_waker,

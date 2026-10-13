@@ -15,10 +15,7 @@ use toasty_core::driver::{Connection, Rows};
 #[cfg(feature = "migration")]
 use toasty_core::schema::db::{AppliedMigration, Migration};
 use toasty_core::stmt::Value;
-use tokio::{
-    sync::{mpsc, oneshot},
-    task::JoinHandle,
-};
+use tokio::sync::{mpsc, oneshot};
 use tracing::Instrument;
 
 use super::pool::SweepWaker;
@@ -86,7 +83,8 @@ pub(crate) enum ConnectionOperation {
 /// finish processing remaining messages and exit gracefully.
 pub(crate) struct ConnectionHandle {
     pub(crate) in_tx: mpsc::UnboundedSender<ConnectionOperation>,
-    join_handle: JoinHandle<()>,
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    join_handle: tokio::task::JoinHandle<()>,
 }
 
 impl ConnectionHandle {
@@ -107,14 +105,31 @@ impl ConnectionHandle {
             in_rx,
             sweep_waker,
         };
+        #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
         let join_handle = tokio::spawn(task.run());
-        Self { in_tx, join_handle }
+        // There is no tokio runtime here; run the task on the host's event
+        // loop (for example, a Cloudflare Worker's).
+        #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+        wasm_bindgen_futures::spawn_local(task.run());
+        Self {
+            in_tx,
+            #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+            join_handle,
+        }
     }
 
     /// Returns true once the worker task has exited. Used by the pool's
     /// `recycle` to detect dead slots.
     pub(crate) fn is_finished(&self) -> bool {
-        self.join_handle.is_finished()
+        #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+        {
+            self.join_handle.is_finished()
+        }
+        // The task owns the receiver, so the channel closes when it exits.
+        #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+        {
+            self.in_tx.is_closed()
+        }
     }
 }
 
@@ -122,7 +137,7 @@ impl std::fmt::Debug for ConnectionHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ConnectionHandle")
             .field("channel_closed", &self.in_tx.is_closed())
-            .field("task_finished", &self.join_handle.is_finished())
+            .field("task_finished", &self.is_finished())
             .finish()
     }
 }

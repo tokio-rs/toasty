@@ -4920,6 +4920,7 @@ dependencies = [
  "toml_edit",
  "tracing",
  "uuid",
+ "wasm-bindgen-futures",
 ]
 
 [[package]]

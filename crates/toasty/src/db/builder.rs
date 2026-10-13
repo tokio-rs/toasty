@@ -128,7 +128,8 @@ impl Builder {
     /// than one per pooled connection.
     ///
     /// Defaults to `Some(60s)`. Pass `None` to disable the sweep and
-    /// rely on passive error-driven recovery only.
+    /// rely on passive error-driven recovery only. Ignored on
+    /// `wasm32-unknown-unknown`, which has no timer to drive the sweep.
     pub fn pool_health_check_interval(&mut self, interval: Option<Duration>) -> &mut Self {
         self.pool.health_check_interval = interval;
         self
