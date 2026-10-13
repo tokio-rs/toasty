@@ -395,6 +395,58 @@ pub async fn data_variant_with_uuid_field(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Tests that a `Vec<scalar>` field inside a data-carrying enum variant
+/// round-trips correctly.
+#[driver_test(requires(vec_scalar))]
+pub async fn data_variant_with_vec_scalar_field(test: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum HighlightMedia {
+        #[column(variant = 1)]
+        Image { image_urls: Vec<String> },
+        #[column(variant = 2)]
+        Video { video_id: String },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Highlight {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        media: HighlightMedia,
+    }
+
+    let mut db = test.setup_db(models!(Highlight)).await;
+
+    let image_urls = vec!["a.png".to_string(), "b.png".to_string()];
+
+    let h1 = Highlight::create()
+        .media(HighlightMedia::Image {
+            image_urls: image_urls.clone(),
+        })
+        .exec(&mut db)
+        .await?;
+
+    let h2 = Highlight::create()
+        .media(HighlightMedia::Video {
+            video_id: "vid-1".to_string(),
+        })
+        .exec(&mut db)
+        .await?;
+
+    let found_h1 = Highlight::get_by_id(&mut db, &h1.id).await?;
+    assert_eq!(found_h1.media, HighlightMedia::Image { image_urls });
+
+    let found_h2 = Highlight::get_by_id(&mut db, &h2.id).await?;
+    assert_eq!(
+        found_h2.media,
+        HighlightMedia::Video {
+            video_id: "vid-1".to_string()
+        }
+    );
+
+    Ok(())
+}
+
 /// Tests that jiff::Timestamp fields inside data-carrying enum variants round-trip correctly.
 /// Also covers a mixed enum (one unit variant, one data variant) to verify null handling.
 #[driver_test]
