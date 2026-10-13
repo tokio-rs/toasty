@@ -30,7 +30,8 @@
 [discord-badge]: https://img.shields.io/discord/500028886025895936.svg?logo=discord&style=flat-square
 [discord-url]: https://discord.gg/tokio
 
-Toasty supports SQL databases (SQLite/Turso, PostgreSQL, MySQL) and DynamoDB.
+Toasty supports SQL databases (SQLite/Turso, Cloudflare D1, PostgreSQL, MySQL) and
+DynamoDB.
 It does not hide database capabilities — it exposes features based on the
 target database.
 
@@ -100,7 +101,7 @@ for todo in &todos {
 ## SQL and NoSQL
 
 Toasty supports both SQL and NoSQL databases. Current drivers are SQLite,
-Turso, PostgreSQL, MySQL, and DynamoDB. However, it does not aim to abstract
+Turso, Cloudflare D1, PostgreSQL, MySQL, and DynamoDB. However, it does not aim to abstract
 the database. Instead, Toasty leans into the target database's capabilities
 and aims to help the user avoid issuing inefficient queries for that database.
 

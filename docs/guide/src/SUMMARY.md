@@ -55,4 +55,5 @@
 - [MySQL](./mysql.md)
 - [SQLite](./sqlite.md)
 - [Turso](./turso.md)
+- [Cloudflare D1](./d1.md)
 - [DynamoDB](./dynamodb.md)
