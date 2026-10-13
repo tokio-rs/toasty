@@ -268,10 +268,62 @@ fn into_raw_sql(
 
 impl Param {
     fn into_typed(self, capability: &Capability) -> Result<TypedValue> {
-        match self {
-            Param::Infer(value) => infer_typed_value(value, capability),
-            Param::Typed(value) => Ok(value),
-        }
+        let typed = match self {
+            Param::Infer(value) => infer_typed_value(value, capability)?,
+            Param::Typed(value) => value,
+        };
+
+        lower_typed_value(typed)
+    }
+}
+
+/// Convert a bound value to the representation its database type is stored
+/// in.
+///
+/// Drivers only accept values in storage form. Statements built by the query
+/// engine are lowered before they reach the driver; raw SQL parameters skip
+/// the engine, so the same conversion happens here. For example, SQLite
+/// stores a UUID as a blob, so a bound `Value::Uuid` becomes `Value::Bytes`.
+///
+/// Only values that have a driver-specific storage type are converted.
+/// Primitive values are passed through unchanged.
+fn lower_typed_value(typed: TypedValue) -> Result<TypedValue> {
+    let TypedValue { value, ty } = typed;
+
+    if !has_storage_bridge(&value) {
+        return Ok(TypedValue { value, ty });
+    }
+
+    let value_ty = value.infer_ty();
+    let bridge_ty = ty.bridge_type(&value_ty);
+
+    let value = if bridge_ty == value_ty {
+        value
+    } else {
+        bridge_ty.cast(&(), value)?
+    };
+
+    Ok(TypedValue { value, ty })
+}
+
+/// Returns `true` for values whose storage representation depends on the
+/// driver (see [`StorageTypes`](toasty_core::driver::StorageTypes)).
+fn has_storage_bridge(value: &Value) -> bool {
+    match value {
+        Value::Uuid(_) => true,
+        #[cfg(feature = "rust_decimal")]
+        Value::Decimal(_) => true,
+        #[cfg(feature = "bigdecimal")]
+        Value::BigDecimal(_) => true,
+        #[cfg(feature = "jiff")]
+        Value::Timestamp(_)
+        | Value::Zoned(_)
+        | Value::Date(_)
+        | Value::Time(_)
+        | Value::DateTime(_) => true,
+        #[cfg(feature = "net")]
+        Value::Cidr(_) | Value::Inet(_) | Value::MacAddr(_) | Value::MacAddr8(_) => true,
+        _ => false,
     }
 }
 
