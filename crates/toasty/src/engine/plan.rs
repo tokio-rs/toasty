@@ -48,7 +48,7 @@ impl Engine {
         let (steps, needs_transaction) = ExecPlanner {
             logical_plan: &logical_plan,
             steps: vec![],
-            use_transactions: self.capability().sql(),
+            use_transactions: self.capability().streamed_transactions,
         }
         .plan_execution();
 

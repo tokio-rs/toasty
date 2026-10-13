@@ -17,6 +17,12 @@ impl Exec<'_> {
     ) -> Result<ExecResponse> {
         assert!(action.inputs.is_empty(), "TODO");
 
+        // Without streamed transactions the probe and the write run
+        // back to back with no isolation between them.
+        if !self.engine.capability().streamed_transactions {
+            return Ok(ExecResponse::from_rows(self.rmw_exec(action).await?));
+        }
+
         // When nested inside an outer transaction use savepoints so the outer
         // transaction can still commit or roll back as a whole. When standalone,
         // start our own transaction (MySQL requires an active BEGIN before

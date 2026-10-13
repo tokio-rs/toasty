@@ -271,6 +271,16 @@ pub struct Capability {
     /// [`Error::unsupported_feature`](crate::Error::unsupported_feature).
     pub transaction_lock_mode: bool,
 
+    /// Whether the driver takes writes one at a time under
+    /// engine-controlled `BEGIN`/`COMMIT` (and savepoints).
+    ///
+    /// When `false`, the engine runs multi-statement plans and conditional
+    /// writes without wrapping them in a transaction, so they are not
+    /// atomic. User transactions reach the driver, which rejects them with
+    /// [`Error::unsupported_feature`](crate::Error::unsupported_feature).
+    /// DynamoDB sets this to `false`.
+    pub streamed_transactions: bool,
+
     /// Whether the backend can walk a paginated query in reverse from a
     /// cursor.
     ///
@@ -723,6 +733,7 @@ impl Capability {
         // SQLite exposes `BEGIN DEFERRED|IMMEDIATE|EXCLUSIVE` for
         // lock-acquisition policy.
         transaction_lock_mode: true,
+        streamed_transactions: true,
 
         backward_pagination: true,
         sql_nulls_first_on_asc: true,
@@ -984,6 +995,7 @@ impl Capability {
 
         // DynamoDB rejects `Operation::Transaction` wholesale.
         transaction_lock_mode: false,
+        streamed_transactions: false,
 
         backward_pagination: false,
         sql_nulls_first_on_asc: false,
