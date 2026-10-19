@@ -40,27 +40,21 @@ pub struct SchemaDump {
     pub schema: db::Schema,
 }
 
-/// Maps a flavor name (as passed in [`DUMP_SCHEMA_ENV`]) to the capability
-/// used to lower the schema.
-pub fn capability_for_flavor(flavor: &str) -> Option<&'static Capability> {
-    match flavor {
-        "sqlite" => Some(&Capability::SQLITE),
-        "postgresql" | "postgres" => Some(&Capability::POSTGRESQL),
-        "mysql" => Some(&Capability::MYSQL),
-        "mariadb" => Some(&Capability::MARIADB),
-        "turso" => Some(&Capability::TURSO),
-        _ => None,
-    }
-}
-
-/// Flavor names accepted by [`capability_for_flavor`], for error messages.
-pub const FLAVOR_NAMES: &[&str] = &["sqlite", "postgresql", "mysql", "mariadb", "turso"];
-
 #[cfg(debug_assertions)]
 mod dump {
     use super::*;
     use crate::schema::DiscoverItem;
     use toasty_core::schema::app::ModelSet;
+
+    /// Flavor names accepted in [`DUMP_SCHEMA_ENV`], each with the capability
+    /// used to lower the schema. The names match the CLI's `Flavor::as_str`.
+    const FLAVORS: &[(&str, &Capability)] = &[
+        ("sqlite", &Capability::SQLITE),
+        ("postgresql", &Capability::POSTGRESQL),
+        ("mysql", &Capability::MYSQL),
+        ("mariadb", &Capability::MARIADB),
+        ("turso", &Capability::TURSO),
+    ];
 
     #[linktime::ctor(unsafe)]
     fn __toasty_maybe_dump_schema() {
@@ -83,12 +77,13 @@ mod dump {
     }
 
     fn dump_schema(flavor: &str) -> Result<String, String> {
-        let capability = capability_for_flavor(flavor).ok_or_else(|| {
-            format!(
+        let Some(&(_, capability)) = FLAVORS.iter().find(|(name, _)| *name == flavor) else {
+            let names: Vec<_> = FLAVORS.iter().map(|(name, _)| *name).collect();
+            return Err(format!(
                 "`{DUMP_SCHEMA_ENV}={flavor}` names an unknown flavor; expected one of: {}",
-                FLAVOR_NAMES.join(", ")
-            )
-        })?;
+                names.join(", ")
+            ));
+        };
 
         // Collect every model registered by `#[derive(Model)]`, regardless of
         // which crate it came from. Sort by name so the resulting schema (and

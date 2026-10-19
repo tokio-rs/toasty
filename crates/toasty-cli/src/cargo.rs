@@ -162,42 +162,45 @@ impl Metadata {
             return true;
         };
 
+        let Some(toasty) = self
+            .inner
+            .packages
+            .iter()
+            .find(|pkg| pkg.name.as_str() == "toasty")
+        else {
+            return false;
+        };
+
         let nodes: HashMap<_, _> = resolve.nodes.iter().map(|node| (&node.id, node)).collect();
 
         let mut seen = HashSet::new();
         let mut queue = vec![&package.0.id];
 
         while let Some(id) = queue.pop() {
+            if *id == toasty.id {
+                return true;
+            }
+
             if !seen.insert(id) {
                 continue;
             }
 
             let Some(node) = nodes.get(id) else { continue };
 
-            for dep in &node.deps {
-                // Dev- and build-dependencies are not linked into the
-                // artifact being run.
-                let normal = dep.dep_kinds.is_empty()
-                    || dep
-                        .dep_kinds
-                        .iter()
-                        .any(|kind| kind.kind == DependencyKind::Normal);
-
-                if !normal {
-                    continue;
-                }
-
-                if self
-                    .inner
-                    .packages
+            // Dev- and build-dependencies are not linked into the artifact
+            // being run.
+            queue.extend(
+                node.deps
                     .iter()
-                    .any(|pkg| pkg.id == dep.pkg && pkg.name.as_str() == "toasty")
-                {
-                    return true;
-                }
-
-                queue.push(&dep.pkg);
-            }
+                    .filter(|dep| {
+                        dep.dep_kinds.is_empty()
+                            || dep
+                                .dep_kinds
+                                .iter()
+                                .any(|kind| kind.kind == DependencyKind::Normal)
+                    })
+                    .map(|dep| &dep.pkg),
+            );
         }
 
         false
@@ -222,23 +225,14 @@ impl Package<'_> {
             .unwrap_or_default()
     }
 
-    /// Returns `true` if the package lists `toasty` as a normal dependency.
-    ///
-    /// Dev- and build-dependencies do not count: neither is linked into the
-    /// artifact the schema is extracted from. A `false` here is only a hint,
-    /// though — the constructor also fires when `toasty` is reached
-    /// transitively, which is the usual shape of a `models` crate paired with
-    /// a `server` binary.
-    pub fn depends_on_toasty(&self) -> bool {
-        self.0
-            .dependencies
-            .iter()
-            .any(|dep| dep.name == "toasty" && dep.kind == DependencyKind::Normal)
-    }
-
     /// Names of the package's `[[bin]]` targets.
-    pub fn bin_names(&self) -> Vec<&str> {
-        self.targets_with_kind(&[TargetKind::Bin])
+    pub fn bin_names(&self) -> Vec<String> {
+        self.0
+            .targets
+            .iter()
+            .filter(|target| target.is_kind(TargetKind::Bin))
+            .map(|target| target.name.clone())
+            .collect()
     }
 
     /// Returns `true` if the package has a lib target that can be rebuilt as
@@ -249,24 +243,18 @@ impl Package<'_> {
     /// built as a `staticlib` (or already as a `cdylib`) works just as well as
     /// the default `rlib`.
     pub fn has_lib(&self) -> bool {
-        !self
-            .targets_with_kind(&[
-                TargetKind::Lib,
-                TargetKind::RLib,
-                TargetKind::DyLib,
-                TargetKind::CDyLib,
-                TargetKind::StaticLib,
-            ])
-            .is_empty()
-    }
-
-    fn targets_with_kind(&self, kinds: &[TargetKind]) -> Vec<&str> {
-        self.0
-            .targets
-            .iter()
-            .filter(|target| kinds.iter().any(|kind| target.is_kind(kind.clone())))
-            .map(|target| target.name.as_str())
-            .collect()
+        self.0.targets.iter().any(|target| {
+            target.kind.iter().any(|kind| {
+                matches!(
+                    kind,
+                    TargetKind::Lib
+                        | TargetKind::RLib
+                        | TargetKind::DyLib
+                        | TargetKind::CDyLib
+                        | TargetKind::StaticLib
+                )
+            })
+        })
     }
 }
 

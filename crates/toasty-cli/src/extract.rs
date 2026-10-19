@@ -55,7 +55,7 @@ pub fn extract_schema(project: &Project, flavor: Flavor, bin: Option<&str>) -> R
 
     let prefix = project.config.migration.table_name_prefix.as_deref();
     let output = run_dumper(&artifact, &target, flavor, prefix)?;
-    let schema = parse_dump(&output, &project.package_name, project.depends_on_toasty)?;
+    let schema = parse_dump(&output, &project.package_name)?;
 
     check_not_empty(&schema, project, &target)?;
 
@@ -129,7 +129,7 @@ fn run_dumper(
 /// A version mismatch is only reported once no line decoded, so the check
 /// still fires for a genuinely newer envelope whose payload this CLI cannot
 /// read.
-fn parse_dump(output: &[u8], package: &str, direct_dependency: bool) -> Result<db::Schema> {
+fn parse_dump(output: &[u8], package: &str) -> Result<db::Schema> {
     let text = String::from_utf8_lossy(output);
     let mut mismatched_version = None;
     let mut decode_error = None;
@@ -174,7 +174,13 @@ fn parse_dump(output: &[u8], package: &str, direct_dependency: bool) -> Result<d
         );
     }
 
-    bail!("{}", no_dump_help(package, direct_dependency))
+    // Reachability in the dependency graph is not linkage: rustc only links
+    // a crate the target actually references, so a bin that declares a
+    // `toasty`-dependent crate but never names it has no constructor.
+    bail!(
+        "the schema dumper produced no schema; check that `{package}` references the crate \
+         holding the models, and that its `dev` profile does not strip link-time constructors"
+    )
 }
 
 /// Rejects a schema with no tables in it.
@@ -207,26 +213,6 @@ fn check_not_empty(schema: &db::Schema, project: &Project, target: &BuildTarget)
     )
 }
 
-/// Explains why no schema came back, tailored to how `toasty` is reached.
-///
-/// A transitive `toasty` still carries the constructor — a `models` crate
-/// paired with a `server` binary extracts fine — so a missing direct
-/// dependency is reported as the most likely cause rather than as a fact.
-fn no_dump_help(package: &str, direct_dependency: bool) -> String {
-    if direct_dependency {
-        format!(
-            "the schema dumper produced no schema; check that the `dev` profile of `{package}` \
-             does not strip link-time constructors"
-        )
-    } else {
-        format!(
-            "the schema dumper produced no schema; `{package}` does not list `toasty` as a \
-             direct dependency, so either add it, or select the package that does with \
-             `-p <package>`"
-        )
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -238,7 +224,7 @@ mod tests {
         // report, leaving the user with a misleading dependency error.
         let output = br#"{"version":999,"schema":{"shaped":"differently"}}"#;
 
-        let err = parse_dump(output, "app", true).unwrap_err();
+        let err = parse_dump(output, "app").unwrap_err();
 
         let message = format!("{err:#}");
         assert!(message.contains("version 999"), "{message}");
@@ -246,19 +232,11 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_dump_names_the_missing_dependency() {
-        let err = parse_dump(b"not a dump\n", "app", false).unwrap_err();
+    fn a_missing_dump_is_reported() {
+        let err = parse_dump(b"not a dump\n", "app").unwrap_err();
 
         let message = format!("{err:#}");
-        assert!(message.contains("direct dependency"), "{message}");
-    }
-
-    #[test]
-    fn a_missing_dump_from_a_direct_dependent_points_at_the_build() {
-        let err = parse_dump(b"", "app", true).unwrap_err();
-
-        let message = format!("{err:#}");
-        assert!(message.contains("link-time constructors"), "{message}");
+        assert!(message.contains("produced no schema"), "{message}");
     }
 
     #[test]
@@ -272,7 +250,7 @@ mod tests {
         .unwrap();
         let output = format!("{{\"version\":\"1.0\",\"schema\":\"public\"}}\n{dump}\n");
 
-        assert!(parse_dump(output.as_bytes(), "app", true).is_ok());
+        assert!(parse_dump(output.as_bytes(), "app").is_ok());
     }
 
     #[test]
@@ -284,6 +262,6 @@ mod tests {
         .unwrap();
         let output = format!("another ctor said hello\n{{\"unrelated\":true}}\n{dump}\n");
 
-        assert!(parse_dump(output.as_bytes(), "app", true).is_ok());
+        assert!(parse_dump(output.as_bytes(), "app").is_ok());
     }
 }

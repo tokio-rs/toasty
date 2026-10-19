@@ -13,7 +13,6 @@ pub enum Flavor {
     Sqlite,
 
     /// PostgreSQL
-    #[value(alias = "postgres")]
     Postgresql,
 
     /// MySQL
@@ -45,8 +44,13 @@ impl Flavor {
 
     /// The capability describing the target database.
     pub fn capability(&self) -> &'static Capability {
-        toasty::schema_dump::capability_for_flavor(self.as_str())
-            .expect("every Flavor variant maps to a capability")
+        match self {
+            Flavor::Sqlite => &Capability::SQLITE,
+            Flavor::Postgresql => &Capability::POSTGRESQL,
+            Flavor::Mysql => &Capability::MYSQL,
+            Flavor::MariaDb => &Capability::MARIADB,
+            Flavor::Turso => &Capability::TURSO,
+        }
     }
 }
 

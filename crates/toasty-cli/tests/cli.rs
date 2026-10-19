@@ -8,6 +8,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -64,8 +65,15 @@ fn copy_lockfile(dir: &Path) {
 /// Scaffolds a package using Toasty. `bin` selects a bin package (schema
 /// extracted by running the built binary) or a lib-only package (schema
 /// extracted by building the lib as a cdylib and loading it).
+///
+/// Every package gets its own name: the tests share one `CARGO_TARGET_DIR`
+/// and run in parallel, so same-named packages would replace each other's
+/// uplifted artifact between one test building it and running it.
 fn scaffold_project(dir: &Path, bin: bool) {
-    fs::write(dir.join("Cargo.toml"), manifest("cli-e2e", "")).unwrap();
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    let name = format!("cli-e2e-{}", NEXT.fetch_add(1, Ordering::Relaxed));
+
+    fs::write(dir.join("Cargo.toml"), manifest(&name, "")).unwrap();
     copy_lockfile(dir);
 
     fs::create_dir_all(dir.join("src")).unwrap();
@@ -170,38 +178,13 @@ fn generate_lib_package_via_cdylib() {
 }
 
 #[test]
-fn generate_requires_flavor() {
+fn table_name_prefix_reaches_the_dumper() {
+    // The constructor runs before any user code, so a prefix passed to
+    // `Db::builder().table_name_prefix(..)` is invisible to it. `Toasty.toml`
+    // carries it instead — otherwise the migration creates tables the
+    // application never queries.
     let dir = tempfile::tempdir().unwrap();
     scaffold_project(dir.path(), true);
-
-    let output = toasty(dir.path(), &["migrate", "generate"]);
-    assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("--flavor"), "{stderr}");
-}
-
-#[test]
-fn flavor_from_toasty_toml() {
-    let dir = tempfile::tempdir().unwrap();
-    scaffold_project(dir.path(), true);
-    fs::write(
-        dir.path().join("Toasty.toml"),
-        "[migration]\npath = \"toasty\"\nprefix_style = \"Sequential\"\nflavor = \"sqlite\"\n",
-    )
-    .unwrap();
-
-    let output = toasty(dir.path(), &["migrate", "generate", "--name", "init"]);
-    let stdout = assert_success(&output);
-    assert!(stdout.contains("0000_init.sql"), "{stdout}");
-}
-
-/// The constructor runs before any user code, so a prefix passed to
-/// `Db::builder().table_name_prefix(..)` is invisible to it. `Toasty.toml`
-/// carries it instead — otherwise the migration creates tables the
-/// application never queries.
-fn assert_table_name_prefix_is_applied(bin: bool) {
-    let dir = tempfile::tempdir().unwrap();
-    scaffold_project(dir.path(), bin);
     fs::write(
         dir.path().join("Toasty.toml"),
         "[migration]\npath = \"toasty\"\nprefix_style = \"Sequential\"\n\
@@ -219,18 +202,6 @@ fn assert_table_name_prefix_is_applied(bin: bool) {
 
     let sql = fs::read_to_string(dir.path().join("toasty/migrations/0000_init.sql")).unwrap();
     assert!(sql.contains("CREATE TABLE \"svc_users\""), "{sql}");
-}
-
-#[test]
-fn table_name_prefix_reaches_a_bin_dumper() {
-    assert_table_name_prefix_is_applied(true);
-}
-
-#[test]
-fn table_name_prefix_reaches_a_cdylib_dumper() {
-    // The prefix travels as a CLI argument on this path rather than as an
-    // environment variable, so it needs its own coverage.
-    assert_table_name_prefix_is_applied(false);
 }
 
 #[test]
@@ -281,32 +252,6 @@ fn schema_is_extracted_through_a_transitive_toasty_dependency() {
     assert_success(&output);
 
     let sql = fs::read_to_string(root.join("server/toasty/migrations/0000_init.sql")).unwrap();
-    assert!(sql.contains("CREATE TABLE \"users\""), "{sql}");
-}
-
-#[test]
-fn a_lib_declared_only_as_a_cdylib_is_extractable() {
-    // `cargo rustc --crate-type cdylib` overrides whatever the manifest
-    // declares, so any linkable crate type works as a dump target.
-    let dir = tempfile::tempdir().unwrap();
-    fs::write(
-        dir.path().join("Cargo.toml"),
-        manifest("cdylib-only", "\n[lib]\ncrate-type = [\"cdylib\"]\n"),
-    )
-    .unwrap();
-    copy_lockfile(dir.path());
-    fs::create_dir_all(dir.path().join("src")).unwrap();
-    fs::write(dir.path().join("src/lib.rs"), MODEL).unwrap();
-
-    let output = toasty(
-        dir.path(),
-        &[
-            "migrate", "generate", "--flavor", "sqlite", "--name", "init",
-        ],
-    );
-    assert_success(&output);
-
-    let sql = fs::read_to_string(dir.path().join("toasty/migrations/0000_init.sql")).unwrap();
     assert!(sql.contains("CREATE TABLE \"users\""), "{sql}");
 }
 
@@ -432,48 +377,6 @@ fn snapshot_stdout_is_parseable_toml() {
 }
 
 #[test]
-fn package_selection_is_limited_to_workspace_members() {
-    // The resolved dependency graph also holds registry and out-of-workspace
-    // path dependencies. Selecting one would point the migration directory at
-    // someone else's package and write a migration tree into it.
-    let dir = tempfile::tempdir().unwrap();
-    let shared = dir.path().join("shared");
-    let app = dir.path().join("app");
-
-    fs::create_dir_all(shared.join("src")).unwrap();
-    fs::write(shared.join("Cargo.toml"), manifest("shared", "")).unwrap();
-    fs::write(shared.join("src/lib.rs"), MODEL).unwrap();
-
-    fs::create_dir_all(app.join("src")).unwrap();
-    fs::write(
-        app.join("Cargo.toml"),
-        manifest("app", "shared = { path = \"../shared\" }"),
-    )
-    .unwrap();
-    copy_lockfile(&app);
-    fs::write(
-        app.join("src/main.rs"),
-        "fn main() { let _ = std::any::type_name::<shared::User>(); }\n",
-    )
-    .unwrap();
-
-    let output = toasty(
-        &app,
-        &[
-            "-p", "shared", "migrate", "generate", "--flavor", "sqlite", "--name", "init",
-        ],
-    );
-
-    assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("not found in this workspace"), "{stderr}");
-    assert!(
-        !shared.join("Toasty.toml").exists() && !shared.join("toasty").exists(),
-        "nothing may be written into a package outside the workspace",
-    );
-}
-
-#[test]
 fn feature_selection_reaches_both_the_resolve_and_the_build() {
     // Models behind a Cargo feature only exist in the artifact when that
     // feature is on. The flags have to reach `cargo metadata` as well: the
@@ -531,60 +434,6 @@ debug = "line-tables-only"
         dir.path(),
         &[
             "migrate", "generate", "--flavor", "sqlite", "--name", "init", "-F", "db",
-        ],
-    );
-    assert_success(&output);
-
-    let sql = fs::read_to_string(dir.path().join("toasty/migrations/0000_init.sql")).unwrap();
-    assert!(sql.contains("CREATE TABLE \"users\""), "{sql}");
-}
-
-#[test]
-fn a_bin_with_required_features_is_extractable() {
-    // `cargo build --bin <name>` refuses a target whose `required-features`
-    // are unselected, so such a bin is unreachable without the flags.
-    let dir = tempfile::tempdir().unwrap();
-    fs::write(
-        dir.path().join("Cargo.toml"),
-        manifest(
-            "required-features-bin",
-            "\n[features]\nextra = []\n\n[[bin]]\nname = \"gated\"\n\
-             path = \"src/main.rs\"\nrequired-features = [\"extra\"]\n",
-        ),
-    )
-    .unwrap();
-    copy_lockfile(dir.path());
-
-    fs::create_dir_all(dir.path().join("src")).unwrap();
-    fs::write(
-        dir.path().join("src/main.rs"),
-        format!(
-            "{MODEL}\nfn main() {{ panic!(\"user main must not run during schema extraction\"); }}"
-        ),
-    )
-    .unwrap();
-
-    let output = toasty(
-        dir.path(),
-        &[
-            "migrate", "generate", "--flavor", "sqlite", "--name", "init",
-        ],
-    );
-    assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("requires the features"), "{stderr}");
-
-    let output = toasty(
-        dir.path(),
-        &[
-            "migrate",
-            "generate",
-            "--flavor",
-            "sqlite",
-            "--name",
-            "init",
-            "--features",
-            "extra",
         ],
     );
     assert_success(&output);

@@ -88,7 +88,6 @@ struct Cli {
 #[derive(Parser, Debug)]
 enum Command {
     /// Database migration commands
-    #[command(alias = "migration")]
     Migrate(migrate::MigrateCommand),
 
     /// Internal: load a cdylib so its schema-dump constructor runs.

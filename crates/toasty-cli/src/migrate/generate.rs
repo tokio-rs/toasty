@@ -39,197 +39,181 @@ pub struct GenerateCommand {
     bin: Option<String>,
 }
 
+/// A rename the user confirmed, to be added to the hints.
+enum Rename {
+    Table(TableId, TableId),
+    Column(ColumnId, ColumnId),
+    Index(IndexId, IndexId),
+}
+
+/// Drops the user has already confirmed, so they are not asked about again.
+#[derive(Default)]
+struct ConfirmedDrops {
+    tables: HashSet<TableId>,
+    columns: HashMap<TableId, HashSet<ColumnId>>,
+    indices: HashMap<TableId, HashSet<IndexId>>,
+}
+
 /// Collects rename hints by interactively asking the user about potential renames
 fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<diff::RenameHints> {
     let mut hints = diff::RenameHints::default();
-    let mut ignored_tables = HashSet::<TableId>::new();
-    let mut ignored_columns = HashMap::<TableId, HashSet<ColumnId>>::new();
-    let mut ignored_indices = HashMap::<TableId, HashSet<IndexId>>::new();
+    let mut confirmed = ConfirmedDrops::default();
 
-    'main: loop {
+    // Every confirmed rename changes the diff, so it is regenerated and the
+    // remaining questions asked against the new one.
+    loop {
         let diff = diff::Schema::from(previous_schema, schema, &hints);
+        let Some(rename) = ask_next_rename(&diff, &mut confirmed)? else {
+            break;
+        };
+        drop(diff);
 
-        // Check for table renames
-        let dropped_tables: Vec<_> = diff
-            .tables()
-            .iter()
-            .filter_map(|item| match item {
-                diff::Table::Drop(table) if !ignored_tables.contains(&table.id) => Some(*table),
-                _ => None,
-            })
-            .collect();
-
-        let added_tables: Vec<_> = diff
-            .tables()
-            .iter()
-            .filter_map(|item| match item {
-                diff::Table::Create(table) => Some(*table),
-                _ => None,
-            })
-            .collect();
-
-        // If there are both dropped and added tables, ask about potential renames
-        if !dropped_tables.is_empty() && !added_tables.is_empty() {
-            for dropped_table in &dropped_tables {
-                let mut options = vec![format!("  Drop \"{}\" ✖", dropped_table.name)];
-                for added_table in &added_tables {
-                    options.push(format!(
-                        "  Rename \"{}\" → \"{}\"",
-                        dropped_table.name, added_table.name
-                    ));
-                }
-
-                let selection = Select::with_theme(&dialoguer_theme())
-                    .with_prompt(format!("  Table \"{}\" is missing", dropped_table.name))
-                    .items(&options)
-                    .default(0)
-                    .interact()?;
-
-                if selection == 0 {
-                    // User confirmed it was dropped
-                    ignored_tables.insert(dropped_table.id);
-                } else {
-                    // User indicated a rename (selection - 1 maps to added_tables index)
-                    let to_table = added_tables[selection - 1];
-                    drop(diff);
-                    hints.add_table_hint(dropped_table.id, to_table.id);
-                    continue 'main; // Regenerate diff with new hint
-                }
-            }
+        match rename {
+            Rename::Table(from, to) => hints.add_table_hint(from, to),
+            Rename::Column(from, to) => hints.add_column_hint(from, to),
+            Rename::Index(from, to) => hints.add_index_hint(from, to),
         }
-
-        // Check for column and index renames within altered tables
-        for item in diff.tables().iter() {
-            if let diff::Table::Alter {
-                previous,
-                next: _,
-                columns,
-                indices,
-            } = item
-            {
-                // Handle column renames
-                let dropped_columns: Vec<_> = columns
-                    .iter()
-                    .filter_map(|item| match item {
-                        diff::Column::Drop(column)
-                            if !ignored_columns
-                                .get(&previous.id)
-                                .is_some_and(|set| set.contains(&column.id)) =>
-                        {
-                            Some(*column)
-                        }
-                        _ => None,
-                    })
-                    .collect();
-
-                let added_columns: Vec<_> = columns
-                    .iter()
-                    .filter_map(|item| match item {
-                        diff::Column::Add(column) => Some(*column),
-                        _ => None,
-                    })
-                    .collect();
-
-                if !dropped_columns.is_empty() && !added_columns.is_empty() {
-                    for dropped_column in &dropped_columns {
-                        let mut options = vec![format!("  Drop \"{}\" ✖", dropped_column.name)];
-                        for added_column in &added_columns {
-                            options.push(format!(
-                                "  Rename \"{}\" → \"{}\"",
-                                dropped_column.name, added_column.name
-                            ));
-                        }
-
-                        let selection = Select::with_theme(&dialoguer_theme())
-                            .with_prompt(format!(
-                                "  Column \"{}\".\"{}\" is missing",
-                                previous.name, dropped_column.name
-                            ))
-                            .items(&options)
-                            .default(0)
-                            .interact()?;
-
-                        if selection == 0 {
-                            // User confirmed it was dropped
-                            ignored_columns
-                                .entry(previous.id)
-                                .or_default()
-                                .insert(dropped_column.id);
-                        } else {
-                            // User indicated a rename
-                            let next_column = added_columns[selection - 1];
-                            drop(diff);
-                            hints.add_column_hint(dropped_column.id, next_column.id);
-                            continue 'main; // Regenerate diff with new hint
-                        }
-                    }
-                }
-
-                // Handle index renames
-                let dropped_indices: Vec<_> = indices
-                    .iter()
-                    .filter_map(|item| match item {
-                        diff::Index::Drop(index)
-                            if !ignored_indices
-                                .get(&previous.id)
-                                .is_some_and(|set| set.contains(&index.id)) =>
-                        {
-                            Some(*index)
-                        }
-                        _ => None,
-                    })
-                    .collect();
-
-                let added_indices: Vec<_> = indices
-                    .iter()
-                    .filter_map(|item| match item {
-                        diff::Index::Create(index) => Some(*index),
-                        _ => None,
-                    })
-                    .collect();
-
-                if !dropped_indices.is_empty() && !added_indices.is_empty() {
-                    for dropped_index in &dropped_indices {
-                        let mut options = vec![format!("  Drop \"{}\" ✖", dropped_index.name)];
-                        for added_index in &added_indices {
-                            options.push(format!(
-                                "  Rename \"{}\" → \"{}\"",
-                                dropped_index.name, added_index.name
-                            ));
-                        }
-
-                        let selection = Select::with_theme(&dialoguer_theme())
-                            .with_prompt(format!(
-                                "  Index \"{}\".\"{}\" is missing",
-                                previous.name, dropped_index.name
-                            ))
-                            .items(&options)
-                            .default(0)
-                            .interact()?;
-
-                        if selection == 0 {
-                            // User confirmed it was dropped
-                            ignored_indices
-                                .entry(previous.id)
-                                .or_default()
-                                .insert(dropped_index.id);
-                        } else {
-                            // User indicated a rename
-                            let to_index = added_indices[selection - 1];
-                            drop(diff);
-                            hints.add_index_hint(dropped_index.id, to_index.id);
-                            continue 'main; // Regenerate diff with new hint
-                        }
-                    }
-                }
-            }
-        }
-
-        // No more potential renames to ask about
-        break;
     }
 
     Ok(hints)
+}
+
+/// Walks the diff asking about each dropped table, column, and index that has
+/// an added counterpart, until the user picks a rename. Returns `None` once
+/// every drop has been confirmed.
+fn ask_next_rename(
+    diff: &diff::Schema<'_>,
+    confirmed: &mut ConfirmedDrops,
+) -> Result<Option<Rename>> {
+    let added_tables: Vec<_> = diff
+        .tables()
+        .iter()
+        .filter_map(|item| match item {
+            diff::Table::Create(table) => Some(*table),
+            _ => None,
+        })
+        .collect();
+
+    if !added_tables.is_empty() {
+        for item in diff.tables() {
+            let diff::Table::Drop(dropped) = item else {
+                continue;
+            };
+            if confirmed.tables.contains(&dropped.id) {
+                continue;
+            }
+
+            let prompt = format!("  Table \"{}\" is missing", dropped.name);
+            let names: Vec<_> = added_tables.iter().map(|t| t.name.as_str()).collect();
+            match ask_rename(prompt, &dropped.name, &names)? {
+                Some(to) => return Ok(Some(Rename::Table(dropped.id, added_tables[to].id))),
+                None => {
+                    confirmed.tables.insert(dropped.id);
+                }
+            }
+        }
+    }
+
+    for item in diff.tables() {
+        let diff::Table::Alter {
+            previous,
+            columns,
+            indices,
+            ..
+        } = item
+        else {
+            continue;
+        };
+
+        let added_columns: Vec<_> = columns
+            .iter()
+            .filter_map(|item| match item {
+                diff::Column::Add(column) => Some(*column),
+                _ => None,
+            })
+            .collect();
+
+        if !added_columns.is_empty() {
+            let confirmed = confirmed.columns.entry(previous.id).or_default();
+            for item in columns {
+                let diff::Column::Drop(dropped) = item else {
+                    continue;
+                };
+                if confirmed.contains(&dropped.id) {
+                    continue;
+                }
+
+                let prompt = format!(
+                    "  Column \"{}\".\"{}\" is missing",
+                    previous.name, dropped.name
+                );
+                let names: Vec<_> = added_columns.iter().map(|c| c.name.as_str()).collect();
+                match ask_rename(prompt, &dropped.name, &names)? {
+                    Some(to) => {
+                        return Ok(Some(Rename::Column(dropped.id, added_columns[to].id)));
+                    }
+                    None => {
+                        confirmed.insert(dropped.id);
+                    }
+                }
+            }
+        }
+
+        let added_indices: Vec<_> = indices
+            .iter()
+            .filter_map(|item| match item {
+                diff::Index::Create(index) => Some(*index),
+                _ => None,
+            })
+            .collect();
+
+        if !added_indices.is_empty() {
+            let confirmed = confirmed.indices.entry(previous.id).or_default();
+            for item in indices {
+                let diff::Index::Drop(dropped) = item else {
+                    continue;
+                };
+                if confirmed.contains(&dropped.id) {
+                    continue;
+                }
+
+                let prompt = format!(
+                    "  Index \"{}\".\"{}\" is missing",
+                    previous.name, dropped.name
+                );
+                let names: Vec<_> = added_indices.iter().map(|i| i.name.as_str()).collect();
+                match ask_rename(prompt, &dropped.name, &names)? {
+                    Some(to) => return Ok(Some(Rename::Index(dropped.id, added_indices[to].id))),
+                    None => {
+                        confirmed.insert(dropped.id);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(None)
+}
+
+/// Asks whether `dropped` was really dropped or renamed to one of `added`.
+///
+/// Returns the index into `added` of the chosen rename, or `None` when the
+/// user confirmed the drop.
+fn ask_rename(prompt: String, dropped: &str, added: &[&str]) -> Result<Option<usize>> {
+    let mut options = vec![format!("  Drop \"{dropped}\" ✖")];
+    options.extend(
+        added
+            .iter()
+            .map(|name| format!("  Rename \"{dropped}\" → \"{name}\"")),
+    );
+
+    let selection = Select::with_theme(&dialoguer_theme())
+        .with_prompt(prompt)
+        .items(&options)
+        .default(0)
+        .interact()?;
+
+    Ok(selection.checked_sub(1))
 }
 
 impl GenerateCommand {

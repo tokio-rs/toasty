@@ -69,15 +69,7 @@ pub fn generate_migration(schema_diff: &diff::Schema<'_>, capability: &Capabilit
 
     let sql_strings: Vec<String> = statements
         .iter()
-        .map(|stmt| {
-            let serializer = match dialect {
-                Dialect::Sqlite => Serializer::sqlite(stmt.schema()),
-                Dialect::Postgresql => Serializer::postgresql(stmt.schema()),
-                Dialect::Mysql => Serializer::mysql(stmt.schema()),
-                Dialect::MariaDb => Serializer::mariadb(stmt.schema()),
-            };
-            serializer.serialize(stmt.statement())
-        })
+        .map(|stmt| Serializer::new(dialect, stmt.schema()).serialize(stmt.statement()))
         .collect();
 
     match dialect {

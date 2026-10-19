@@ -1,5 +1,5 @@
 use crate::cargo::{BuildTarget, Features, Metadata};
-use crate::config::Config;
+use crate::{Config, Flavor};
 
 use anyhow::{Context, Result, bail};
 use std::path::PathBuf;
@@ -17,9 +17,6 @@ pub struct Project {
 
     /// The workspace root directory.
     pub workspace_root: PathBuf,
-
-    /// Whether the package declares a direct dependency on `toasty`.
-    pub depends_on_toasty: bool,
 
     /// Whether `toasty` is reachable from the package at all, directly or
     /// transitively. Extraction runs the built artifact, so this gates it.
@@ -56,9 +53,8 @@ impl Project {
             package_name: pkg.name().to_string(),
             package_root,
             workspace_root: metadata.workspace_root().to_path_buf(),
-            depends_on_toasty: pkg.depends_on_toasty(),
             links_toasty: metadata.links_toasty(&pkg),
-            bin_names: pkg.bin_names().iter().map(|s| s.to_string()).collect(),
+            bin_names: pkg.bin_names(),
             has_lib: pkg.has_lib(),
             config,
             features,
@@ -116,7 +112,7 @@ impl Project {
 
     /// The flavor to use: the command-line flag when given, otherwise the
     /// `migration.flavor` entry in `Toasty.toml`.
-    pub fn flavor(&self, flag: Option<crate::Flavor>) -> Result<crate::Flavor> {
+    pub fn flavor(&self, flag: Option<Flavor>) -> Result<Flavor> {
         flag.or(self.config.migration.flavor).context(
             "no flavor selected; pass `--flavor <sqlite|postgresql|mysql|mariadb|turso>` or \
              set `migration.flavor` in Toasty.toml",
