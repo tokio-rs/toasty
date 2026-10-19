@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.11.0...toasty-v0.12.0) - 2026-10-19
+
+### Fixed
+
+- Tuple projections now support up to 16 fields in select ([#1296])
+- Use `&Vec<U>` as `List<T>` expressions ([#1290])
+- Worker channel closure errors no longer panic ([#1244])
+- Unsupported OR index filters no longer panic ([#1288])
+- Key lookups with additional predicates now work correctly ([#1284])
+- Subquery inputs in key-value filters are now properly bound ([#1282])
+- Absent keys are now excluded from relation membership checks ([#1271])
+- Mismatched `belongs_to` key types in embedded enums are now rejected ([#1277])
+
+[#1244]: https://github.com/tokio-rs/toasty/pull/1244
+[#1271]: https://github.com/tokio-rs/toasty/pull/1271
+[#1277]: https://github.com/tokio-rs/toasty/pull/1277
+[#1282]: https://github.com/tokio-rs/toasty/pull/1282
+[#1284]: https://github.com/tokio-rs/toasty/pull/1284
+[#1288]: https://github.com/tokio-rs/toasty/pull/1288
+[#1290]: https://github.com/tokio-rs/toasty/pull/1290
+[#1296]: https://github.com/tokio-rs/toasty/pull/1296
+
 ## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.10.0...toasty-v0.11.0) - 2026-09-24
 
 ### Added
