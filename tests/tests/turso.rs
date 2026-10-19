@@ -447,3 +447,39 @@ fn url_scheme_parsing() {
     Turso::new("sqlite::memory:").expect_err("non-turso scheme must be rejected");
     Turso::new("not a url at all").expect_err("malformed URL must be rejected");
 }
+
+/// `reset_db` clears the schema in place instead of unlinking the database
+/// file. Deleting the file fails on Windows while the pool holds an idle
+/// connection open (`ERROR_SHARING_VIOLATION`).
+#[tokio::test]
+async fn reset_db_works_with_an_idle_pooled_connection() {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: i64,
+
+        name: String,
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("reset.db");
+
+    let mut db = toasty::Db::builder()
+        .models(toasty::models!(Item))
+        .build(Turso::file(&path))
+        .await
+        .unwrap();
+    db.push_schema().await.unwrap();
+    toasty::create!(Item { name: "Alice" })
+        .exec(&mut db)
+        .await
+        .unwrap();
+
+    db.reset_db().await.unwrap();
+
+    Item::all()
+        .exec(&mut db)
+        .await
+        .expect_err("reset_db should drop every table");
+}
