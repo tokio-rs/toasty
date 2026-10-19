@@ -15,7 +15,7 @@ these examples for runnable versions of what it describes.
 | [cms-article-fields](cms-article-fields) | Field options: create and update defaults, auto timestamps, `Json<T>`, a queryable `Vec<scalar>`, deferred columns, and custom table/column names. |
 | [crm-embedded](crm-embedded) | Embedded value types: flattened structs, tagged-union enums, newtype keys, and partial embed updates with `stmt::patch`. |
 | [store-operations](store-operations) | Writes: interactive transactions, savepoints, batch inserts, query-based update and delete, and raw SQL. |
-| [service-ops](service-ops) | Project layout: shared models in a library, an application binary, and a migration CLI built from `toasty-cli`. |
+| [service-ops](service-ops) | Project layout: shared models in a library, an application binary, and migrations managed with the standalone `toasty` CLI. |
 
 ## Running an example
 
@@ -42,18 +42,15 @@ TOASTY_CONNECTION_URL=postgresql://user:pass@localhost/mydb \
 
 ### service-ops
 
-`service-ops` has two binaries. `cargo run -p example-service-ops` runs the
-`server` binary (the default). The migration CLI is a separate binary; run it
-from the example's directory so it finds `Toasty.toml`:
+`cargo run -p example-service-ops` runs the `server` binary. Schema changes
+are managed with the standalone `toasty` CLI (`cargo install toasty-cli`):
 
 ```sh
-cd examples/service-ops
-
 # Generate a migration after editing the models in src/lib.rs:
-cargo run --bin migrate -- migration generate --name <name>
+toasty -p example-service-ops migrate generate --name <name>
 
 # Apply pending migrations to a persistent database:
-TOASTY_CONNECTION_URL=sqlite:./service.db cargo run --bin migrate -- migration apply
+toasty -p example-service-ops migrate apply --url sqlite:./service.db
 ```
 
 Each example's `src/main.rs` (or `src/lib.rs`) opens with a comment describing
