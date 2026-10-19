@@ -488,6 +488,12 @@ impl_into_expr_for_tuple! {
     7 T7 E7
     8 T8 E8
     9 T9 E9
+    10 T10 E10
+    11 T11 E11
+    12 T12 E12
+    13 T13 E13
+    14 T14 E14
+    15 T15 E15
 }
 
 #[test]
