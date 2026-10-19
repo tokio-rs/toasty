@@ -49,17 +49,13 @@ fn is_named_enum_type_only_change(
     )
 }
 
-/// Generates the SQL [`Migration`] for a schema diff.
-///
-/// Produces the DDL statements for the diff via
-/// [`MigrationStatement::from_diff`] and serializes each one in the dialect
-/// named by `capability.sql`. On PostgreSQL the statements form a single
-/// batch; other dialects separate them with breakpoint markers so drivers
-/// that execute one statement at a time can split them back apart.
+/// Generates the SQL [`Migration`] for a schema diff in the dialect named by
+/// `capability.sql`. PostgreSQL gets one batch; other dialects get breakpoint
+/// markers so drivers can execute one statement at a time.
 ///
 /// # Panics
 ///
-/// Panics if `capability` does not speak SQL (`capability.sql` is `None`).
+/// Panics if `capability.sql` is `None`.
 pub fn generate_migration(schema_diff: &diff::Schema<'_>, capability: &Capability) -> Migration {
     let dialect = capability
         .sql

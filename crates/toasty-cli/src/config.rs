@@ -60,12 +60,9 @@ impl Config {
         Ok(config)
     }
 
-    /// Load configuration from `<project_root>/Toasty.toml`, falling back to
-    /// the defaults when the file does not exist.
-    ///
-    /// This does not create the file. Every subcommand loads the config, but
-    /// only `migrate generate` writes to the source tree — so `migrate apply`
-    /// and `migrate drop` keep working against a read-only checkout.
+    /// Load configuration from `<project_root>/Toasty.toml`, or the defaults
+    /// when the file does not exist. Never creates the file: read-only
+    /// commands must work against a read-only checkout.
     pub fn load_or_default(project_root: &Path) -> Result<Self> {
         let path = project_root.join("Toasty.toml");
         if path.exists() {
@@ -76,9 +73,6 @@ impl Config {
     }
 
     /// Writes a default `Toasty.toml` into `project_root` if none is there.
-    ///
-    /// Called by the subcommands that already write to the source tree, so
-    /// that a project picks up a config file on its first `migrate generate`.
     pub fn create_if_missing(project_root: &Path) -> Result<()> {
         let path = project_root.join("Toasty.toml");
 

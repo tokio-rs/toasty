@@ -1,14 +1,12 @@
 //! The standalone `toasty` command-line tool.
 //!
 //! Installed with `cargo install toasty-cli` and run from any Cargo package
-//! that uses Toasty. The CLI extracts the package's resolved schema by
-//! building the package's existing bin target (or its lib as a `cdylib`) and
-//! running the artifact with `TOASTY_DUMP_SCHEMA` set, which triggers a
-//! constructor inside `toasty` that dumps the schema and exits. See
-//! `docs/dev/design/standalone-cli.md` in the Toasty repository.
+//! that uses Toasty. Schema-bound commands build the package's bin (or its
+//! lib as a `cdylib`) and run it with `TOASTY_DUMP_SCHEMA` set, which makes a
+//! constructor inside `toasty` dump the schema and exit. See
+//! `docs/dev/design/standalone-cli.md`.
 //!
-//! This crate is a binary; the library exists for the binary and the crate's
-//! integration tests. Its API is not stable.
+//! The library exists for the binary and its tests; its API is not stable.
 
 mod cargo;
 mod config;
@@ -46,9 +44,8 @@ where
 
 fn run_parsed(cli: Cli) -> Result<()> {
     match cli.command {
-        // Dispatched before the async runtime is built: the subcommand sets
-        // `TOASTY_DUMP_SCHEMA` in its own environment, which is only sound
-        // while the process is still single-threaded.
+        // Runs before the async runtime exists: the subcommand mutates its
+        // environment, which is only sound while single-threaded.
         Command::LoadCdylib(cmd) => cmd.run(),
         Command::Migrate(cmd) => {
             let project = Project::locate(cli.package.as_deref(), cli.features)?;
@@ -57,11 +54,8 @@ fn run_parsed(cli: Cli) -> Result<()> {
     }
 }
 
-/// Builds the Tokio runtime used by the subcommands that talk to a database.
-///
-/// Spawning worker threads is deferred to here rather than wrapping `main` in
-/// `#[tokio::main]` so that `__load-cdylib` can mutate its own environment
-/// while the process is single-threaded.
+/// Built here rather than with `#[tokio::main]` so `__load-cdylib` runs
+/// before any worker thread exists.
 fn runtime() -> Result<tokio::runtime::Runtime> {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -90,10 +84,8 @@ enum Command {
     /// Database migration commands
     Migrate(migrate::MigrateCommand),
 
-    /// Internal: load a cdylib so its schema-dump constructor runs.
-    ///
-    /// Only invoked by `toasty` itself while extracting a schema from a
-    /// lib-only package.
+    /// Internal: load a cdylib so its schema-dump constructor runs. Only
+    /// invoked by `toasty` itself.
     #[command(name = "__load-cdylib", hide = true)]
     LoadCdylib(load_cdylib::LoadCdylibCommand),
 }

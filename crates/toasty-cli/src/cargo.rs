@@ -1,10 +1,6 @@
-//! Cargo interaction: workspace metadata, artifact builds, and JSON message
-//! parsing.
-//!
-//! Cargo is driven through subprocesses so that the environment can be
-//! scrubbed (see [`scrubbed_command`]); its JSON output is then handed to
-//! [`cargo_metadata`] for typed parsing. `cargo`'s stderr is inherited so the
-//! user sees ordinary build progress and compiler diagnostics.
+//! Cargo interaction: `cargo metadata`, artifact builds, and JSON message
+//! parsing. Cargo runs as a subprocess with its injected environment scrubbed
+//! (see [`is_injected`]); stderr is inherited so the user sees build progress.
 
 use anyhow::{Context, Result, bail};
 use cargo_metadata::{CrateType, DependencyKind, Message, Target, TargetKind};
@@ -12,18 +8,11 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-/// Cargo's feature-selection flags, forwarded to every cargo invocation the
-/// CLI makes.
+/// Cargo's feature-selection flags, forwarded to every cargo invocation.
 ///
-/// Models behind a Cargo feature only exist in the artifact when that feature
-/// is on, so a schema extracted without the flag is missing their tables and
-/// diffs into a drop migration. A bin with `required-features` cannot be built
-/// at all without them.
-///
-/// The flags reach `cargo metadata` too, not just the build: the resolved
-/// graph is feature-dependent, so an optional `toasty` dependency is invisible
-/// there — and [`Metadata::links_toasty`] refuses extraction — until the
-/// feature enabling it is selected.
+/// A model behind a feature only exists in the artifact when the feature is
+/// on, so the flags must reach the build — and `cargo metadata`, whose
+/// resolved graph is feature-dependent as well.
 #[derive(clap::Args, Debug, Default, Clone)]
 pub struct Features {
     /// Space or comma separated list of features to activate
@@ -40,11 +29,7 @@ pub struct Features {
 }
 
 impl Features {
-    /// Appends the flags to a cargo invocation.
-    ///
-    /// Values are forwarded verbatim rather than parsed: cargo already splits
-    /// comma- and space-separated lists, and accepts both `feat` and
-    /// `pkg/feat`.
+    /// Appends the flags verbatim; cargo splits the lists itself.
     fn apply_to(&self, cmd: &mut Command) {
         for features in &self.features {
             cmd.args(["--features", features]);
@@ -66,16 +51,10 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    /// Runs `cargo metadata` in the current directory.
-    ///
-    /// The dependency graph is resolved — not `--no-deps` — because schema
-    /// extraction runs the built artifact, and running it is only safe once
-    /// `toasty` is known to be somewhere in the graph. See
-    /// [`Metadata::links_toasty`].
+    /// Runs `cargo metadata` in the current directory, with the dependency
+    /// graph resolved (see [`Metadata::links_toasty`]).
     pub fn load(features: &Features) -> Result<Self> {
-        // `MetadataCommand` would spawn cargo itself, but the environment has
-        // to be scrubbed first, so the command is run here and only its output
-        // handed over for parsing.
+        // `MetadataCommand` would spawn cargo itself, bypassing the scrubbing.
         let mut cmd = scrubbed_command("cargo");
         cmd.args(["metadata", "--format-version=1"]);
         features.apply_to(&mut cmd);
@@ -104,13 +83,11 @@ impl Metadata {
         self.inner.workspace_root.as_std_path()
     }
 
-    /// Selects the target package: the named one when `-p` was given,
-    /// otherwise the workspace root package.
+    /// Selects the target package: `-p <name>`, or the workspace root package.
     ///
-    /// `-p` only matches workspace members. The resolved graph also contains
-    /// registry and out-of-workspace path dependencies, and selecting one of
-    /// those would point the migration directory at someone else's package —
-    /// `~/.cargo/registry/src/…` or a sibling checkout.
+    /// Only workspace members qualify: selecting a registry or out-of-workspace
+    /// path dependency would write the migration tree into someone else's
+    /// package.
     pub fn select_package(&self, name: Option<&str>) -> Result<Package<'_>> {
         if let Some(name) = name {
             return self
@@ -145,20 +122,13 @@ impl Metadata {
     }
 
     /// Returns `true` if `toasty` is reachable from `package` through normal
-    /// dependencies.
+    /// dependencies, directly or transitively.
     ///
-    /// Schema extraction runs the built artifact. When `toasty` is linked the
-    /// constructor dumps and exits before `main`; when it is not, the artifact
-    /// is just the user's program, and running it executes whatever `main`
-    /// does. So this gates extraction rather than merely shaping an error.
-    ///
-    /// The whole graph is walked, not just direct dependencies: a `models`
-    /// crate paired with a `server` binary reaches `toasty` transitively, and
-    /// the constructor is linked into the binary all the same.
+    /// Extraction runs the built artifact. Without `toasty` linked there is no
+    /// dump constructor, and running the artifact would run the user's `main`.
     pub fn links_toasty(&self, package: &Package<'_>) -> bool {
         let Some(resolve) = &self.inner.resolve else {
-            // Without a resolved graph there is nothing to check against;
-            // treat it as reachable rather than blocking extraction outright.
+            // Nothing to check against; don't block extraction.
             return true;
         };
 
@@ -187,8 +157,7 @@ impl Metadata {
 
             let Some(node) = nodes.get(id) else { continue };
 
-            // Dev- and build-dependencies are not linked into the artifact
-            // being run.
+            // Dev- and build-dependencies are not linked into the artifact.
             queue.extend(
                 node.deps
                     .iter()
@@ -235,13 +204,8 @@ impl Package<'_> {
             .collect()
     }
 
-    /// Returns `true` if the package has a lib target that can be rebuilt as
-    /// a `cdylib`.
-    ///
-    /// Every linkable crate type qualifies: `cargo rustc --crate-type cdylib`
-    /// overrides whatever the manifest declares, so a lib that is normally
-    /// built as a `staticlib` (or already as a `cdylib`) works just as well as
-    /// the default `rlib`.
+    /// Returns `true` if the package has a lib target. Any linkable crate type
+    /// counts: `cargo rustc --crate-type cdylib` overrides the manifest.
     pub fn has_lib(&self) -> bool {
         self.0.targets.iter().any(|target| {
             target.kind.iter().any(|kind| {
@@ -324,10 +288,8 @@ fn find_artifact(messages: &[u8], target: &BuildTarget) -> Option<PathBuf> {
                 }
             }
             BuildTarget::Cdylib => {
-                // Only the requested package is built as a cdylib;
-                // dependencies compile as rlibs, so a cdylib artifact is
-                // unambiguous. Cargo lists both the `deps/` output and the
-                // final uplifted copy; prefer the uplifted one.
+                // Only the requested package is built as a cdylib. Cargo lists
+                // both the `deps/` copy and the uplifted one; prefer the latter.
                 if !is_cdylib(&artifact.target) {
                     continue;
                 }
@@ -379,26 +341,15 @@ fn scrubbed_command(program: &str) -> Command {
     cmd
 }
 
-/// Whether an environment variable was put there by cargo or rustup, rather
-/// than by the user.
+/// Whether an environment variable was injected by cargo or rustup rather
+/// than set by the user.
 ///
-/// Injected variables are scrubbed so builds spawned by the CLI have the same
-/// fingerprint as builds the user runs directly; without this, running the CLI
-/// itself under `cargo run` would cache-bust the user's builds.
-/// `RUSTUP_TOOLCHAIN` counts as injected — rustup's proxy sets it, and keeping
-/// it would pin the build to whichever toolchain launched the CLI instead of
-/// the one the target project's `rust-toolchain.toml` asks for.
-///
-/// `CARGO_HOME` and `CARGO_TARGET_DIR` are exceptions: the user's own shell
-/// would apply them too.
-///
-/// Everything else is the user's to set. Cargo does not set `RUSTFLAGS`,
-/// `RUSTC`, or the compiler wrappers, so a value in one of those came from the
-/// caller, and dropping it would build the project differently than they build
-/// it themselves — silently losing `--cfg`-gated models, or bypassing a
-/// toolchain or wrapper the project requires. `RUSTFLAGS` is part of cargo's
-/// fingerprint besides, so scrubbing it forces exactly the rebuild this
-/// scrubbing exists to avoid.
+/// Scrubbing them keeps builds spawned by the CLI fingerprint-identical to the
+/// user's own (running the CLI under `cargo run` would otherwise cache-bust
+/// them) and stops `RUSTUP_TOOLCHAIN` pinning the build to the CLI's
+/// toolchain. `CARGO_HOME` and `CARGO_TARGET_DIR` stay: the user's shell
+/// applies them too. `RUSTFLAGS`, `RUSTC`, and the wrappers are never set by
+/// cargo, so a value there is the user's build configuration and must survive.
 fn is_injected(key: &str) -> bool {
     key.starts_with("CARGO") && !matches!(key, "CARGO_HOME" | "CARGO_TARGET_DIR")
         || key == "RUSTUP_TOOLCHAIN"
@@ -450,12 +401,10 @@ mod tests {
         }
         assert!(is_injected("RUSTUP_TOOLCHAIN"));
 
-        // The user's own shell would apply these to a direct build too.
         assert!(!is_injected("CARGO_HOME"));
         assert!(!is_injected("CARGO_TARGET_DIR"));
 
-        // Cargo never sets these, so a value is the caller's. Scrubbing
-        // `RUSTFLAGS` would drop `--cfg`-gated models from the dump.
+        // Never set by cargo, so a value is the caller's.
         for key in [
             "RUSTFLAGS",
             "RUSTC",

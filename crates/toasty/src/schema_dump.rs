@@ -1,15 +1,10 @@
 //! Schema extraction support for the standalone `toasty` CLI.
 //!
-//! `toasty migrate generate` compiles the user's package and runs the
-//! resulting artifact with `TOASTY_DUMP_SCHEMA=<flavor>` set. The
-//! constructor in this module fires before the user's `main` (or during
-//! `dlopen` for lib-only packages built as a `cdylib`), collects every model
-//! registered by `#[derive(Model)]`, lowers the schema for the requested
-//! flavor, writes it to stdout as JSON, and exits. When the environment
-//! variable is not set, the constructor returns immediately.
-//!
-//! The constructor only exists in builds with `debug_assertions` enabled;
-//! release artifacts carry no schema-dump machinery.
+//! The CLI builds the user's package and runs the artifact with
+//! `TOASTY_DUMP_SCHEMA=<flavor>` set. The constructor below then fires before
+//! `main` (or during `dlopen` for a cdylib), collects every model registered
+//! by `#[derive(Model)]`, lowers the schema for that flavor, writes it to
+//! stdout as JSON, and exits. It only exists in `debug_assertions` builds.
 
 use toasty_core::{driver::Capability, schema::db};
 
@@ -18,12 +13,10 @@ use toasty_core::{driver::Capability, schema::db};
 pub const DUMP_SCHEMA_ENV: &str = "TOASTY_DUMP_SCHEMA";
 
 /// Environment variable carrying the table name prefix to lower the schema
-/// with, mirroring [`Builder::table_name_prefix`](crate::db::Builder::table_name_prefix).
-///
-/// The constructor runs before any user code, so a prefix set on the builder
-/// at runtime is invisible to it. The CLI reads `migration.table_name_prefix`
-/// from `Toasty.toml` and passes it through here, so that the extracted schema
-/// names tables the same way the running application does.
+/// with. The constructor runs before any user code, so the prefix set on
+/// [`Builder::table_name_prefix`](crate::db::Builder::table_name_prefix) is
+/// invisible to it; the CLI passes `migration.table_name_prefix` from
+/// `Toasty.toml` through here instead.
 pub const DUMP_TABLE_NAME_PREFIX_ENV: &str = "TOASTY_DUMP_TABLE_NAME_PREFIX";
 
 /// Version of the JSON envelope written by the dump constructor.
@@ -46,8 +39,8 @@ mod dump {
     use crate::schema::DiscoverItem;
     use toasty_core::schema::app::ModelSet;
 
-    /// Flavor names accepted in [`DUMP_SCHEMA_ENV`], each with the capability
-    /// used to lower the schema. The names match the CLI's `Flavor::as_str`.
+    /// Flavor names accepted in [`DUMP_SCHEMA_ENV`]; the CLI's `Flavor::as_str`
+    /// must match.
     const FLAVORS: &[(&str, &Capability)] = &[
         ("sqlite", &Capability::SQLITE),
         ("postgresql", &Capability::POSTGRESQL),
@@ -62,8 +55,7 @@ mod dump {
             return;
         };
 
-        // Once the variable is set, never fall through to the user's `main`:
-        // the process exists only to dump the schema.
+        // Never fall through to the user's `main`.
         match dump_schema(&flavor.to_string_lossy()) {
             Ok(json) => {
                 println!("{json}");
@@ -85,10 +77,8 @@ mod dump {
             ));
         };
 
-        // Collect every model registered by `#[derive(Model)]`, regardless of
-        // which crate it came from. Sort by name so the resulting schema (and
-        // the snapshot files derived from it) is stable across rebuilds;
-        // `inventory` iteration order depends on link order.
+        // Sort by name so the schema is stable across rebuilds; `inventory`
+        // iteration order depends on link order.
         let mut model_set = ModelSet::new();
         for item in crate::schema::inventory::iter::<DiscoverItem> {
             item.add_to(&mut model_set);

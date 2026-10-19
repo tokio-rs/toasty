@@ -4,12 +4,8 @@ use std::path::PathBuf;
 use toasty::schema_dump::{DUMP_SCHEMA_ENV, DUMP_TABLE_NAME_PREFIX_ENV};
 
 /// Hidden subcommand: loads a cdylib so the schema-dump constructor inside
-/// `toasty` runs.
-///
-/// The constructor dumps the schema to stdout and exits this process during
-/// `Library::new`, so on success the code after the load is never reached.
-/// The parent `toasty` process captures stdout exactly as it would for a bin
-/// artifact.
+/// `toasty` runs. On success the constructor dumps and exits this process
+/// during `Library::new`; the parent captures stdout as it would for a bin.
 #[derive(Parser, Debug)]
 pub struct LoadCdylibCommand {
     /// Path of the cdylib to load
@@ -26,40 +22,34 @@ pub struct LoadCdylibCommand {
 
 impl LoadCdylibCommand {
     pub(crate) fn run(self) -> Result<()> {
-        // The variable is set here rather than by the parent so that a debug
-        // build of the CLI (which links `toasty` and therefore carries the
-        // dump constructor itself) does not dump its own — empty — schema at
-        // startup before reaching this subcommand.
+        // Set here rather than by the parent so a debug build of the CLI,
+        // which links `toasty` and carries the constructor itself, does not
+        // dump its own empty schema at startup.
         //
-        // SAFETY: the process is single-threaded at this point. `main` runs
-        // this subcommand before building the async runtime precisely so that
-        // no other thread can be reading the environment concurrently.
+        // SAFETY: `main` runs this before building the async runtime, so the
+        // process is still single-threaded.
         #[allow(unsafe_code)]
         unsafe {
             std::env::set_var(DUMP_SCHEMA_ENV, &self.flavor);
 
-            // This process inherited the parent's environment, so an ambient
-            // prefix would silently rename every table. `Toasty.toml`, passed
-            // through as an argument, is the only source for it.
+            // Don't let an inherited prefix through; the argument is the only
+            // source for it.
             match &self.table_name_prefix {
                 Some(prefix) => std::env::set_var(DUMP_TABLE_NAME_PREFIX_ENV, prefix),
                 None => std::env::remove_var(DUMP_TABLE_NAME_PREFIX_ENV),
             }
         }
 
-        // SAFETY: loading a library runs its initialization code, which for a
-        // Toasty cdylib is exactly the point: the dump constructor prints the
-        // schema and exits the process. The library is a dev-profile artifact
-        // the parent process just built from the user's own package.
+        // SAFETY: loading runs the library's constructors, which is the point:
+        // the dump constructor prints the schema and exits. The library was
+        // just built by the parent from the user's own package.
         #[allow(unsafe_code)]
         let library = unsafe { libloading::Library::new(&self.path) };
 
         library.with_context(|| format!("failed to load `{}`", self.path.display()))?;
 
-        // Reached only if the constructor did not fire — e.g. the library does
-        // not actually link `toasty`. Exit cleanly with no dump on stdout: the
-        // parent knows which package it selected and how `toasty` is reached
-        // from it, so it words the diagnosis far better than this can.
+        // No constructor fired (the library does not link `toasty`). Exit
+        // cleanly; the parent diagnoses the missing dump.
         Ok(())
     }
 }

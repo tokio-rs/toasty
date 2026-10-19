@@ -1,11 +1,8 @@
 use serde::{Deserialize, Serialize};
 use toasty::db::Capability;
 
-/// The database flavor a migration targets.
-///
-/// Selects the capability used to lower the schema and the SQL dialect used
-/// to render migration statements. Passed to the schema dumper through the
-/// `TOASTY_DUMP_SCHEMA` environment variable.
+/// The database flavor a migration targets: selects the capability the schema
+/// is lowered with and the SQL dialect it is rendered in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum Flavor {
@@ -20,9 +17,8 @@ pub enum Flavor {
 
     /// MariaDB
     ///
-    /// Distinct from [`Flavor::Mysql`]: MariaDB stores UUIDs in a native
-    /// `UUID` column and renders its own dialect, so lowering a MariaDB
-    /// schema as MySQL would emit `VARCHAR(36)` key columns instead.
+    /// Distinct from [`Flavor::Mysql`]: MariaDB has its own dialect and a
+    /// native `UUID` column type.
     #[value(name = "mariadb")]
     MariaDb,
 

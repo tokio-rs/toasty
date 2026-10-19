@@ -18,8 +18,8 @@ pub struct Project {
     /// The workspace root directory.
     pub workspace_root: PathBuf,
 
-    /// Whether `toasty` is reachable from the package at all, directly or
-    /// transitively. Extraction runs the built artifact, so this gates it.
+    /// Whether `toasty` is reachable from the package, directly or
+    /// transitively; gates schema extraction.
     pub links_toasty: bool,
 
     /// Bin target names declared by the package.
@@ -37,11 +37,8 @@ pub struct Project {
 
 impl Project {
     /// Locates the target package via `cargo metadata` and loads its
-    /// configuration.
-    ///
-    /// `features` shapes the resolved dependency graph as well as the later
-    /// build, so an optional `toasty` dependency is only seen — and
-    /// extraction only permitted — when the feature enabling it is selected.
+    /// configuration. `features` shapes the resolved graph too, so an optional
+    /// `toasty` is only seen once its feature is selected.
     pub fn locate(package: Option<&str>, features: Features) -> Result<Self> {
         let metadata = Metadata::load(&features)?;
         let pkg = metadata.select_package(package)?;

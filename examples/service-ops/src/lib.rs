@@ -37,14 +37,12 @@ pub struct ApiKey {
     pub token: String,
 }
 
-/// Build the shared `Db`. Centralizing connection and pool configuration here keeps the two
-/// binaries in sync.
+/// Build the shared `Db`.
 ///
 /// The URL comes from `TOASTY_CONNECTION_URL`, defaulting to an in-memory database so the
 /// `server` demo runs cold and is re-runnable (it calls `push_schema`, which builds the
-/// schema fresh each time). For the migration workflow, point it at a *persistent* database
-/// so applied migrations survive between CLI invocations, e.g.:
-///   `TOASTY_CONNECTION_URL=sqlite:./service.db cargo run --bin migrate -- migration apply`
+/// schema fresh each time). For the migration workflow, point both the server and
+/// `toasty migrate apply --url ...` at the same persistent database, e.g. `sqlite:./service.db`.
 pub async fn build_db() -> toasty::Result<toasty::Db> {
     let url =
         std::env::var("TOASTY_CONNECTION_URL").unwrap_or_else(|_| "sqlite::memory:".to_string());

@@ -11,10 +11,7 @@ use crate::Project;
 use anyhow::Result;
 use clap::Parser;
 
-/// Top-level `migrate` subcommand.
-///
-/// Groups all migration-related subcommands: generate, apply, reset, drop,
-/// and snapshot. This struct is used by clap to parse `toasty migrate <sub>`.
+/// The `toasty migrate <subcommand>` group.
 #[derive(Parser, Debug)]
 pub struct MigrateCommand {
     #[command(subcommand)]

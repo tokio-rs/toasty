@@ -1,11 +1,7 @@
 //! Schema extraction: build the user's package and read the schema back out
-//! of the built artifact.
-//!
-//! The dump constructor lives inside `toasty` (see `toasty::schema_dump`) and
-//! fires when `TOASTY_DUMP_SCHEMA=<flavor>` is set: before `main` for a bin
-//! artifact, or during `dlopen` for a lib built as a `cdylib`. Either way the
-//! process writes a JSON [`SchemaDump`] to stdout and exits, and the user's
-//! own code never runs.
+//! of the artifact. The dump constructor in `toasty::schema_dump` fires when
+//! `TOASTY_DUMP_SCHEMA` is set — before `main` for a bin, during `dlopen` for
+//! a cdylib — writes a JSON [`SchemaDump`] to stdout, and exits.
 
 use crate::cargo::{self, BuildTarget};
 use crate::{Flavor, Project};
@@ -22,12 +18,9 @@ use toasty_core::schema::db;
 /// Builds the selected target of `project` and extracts its schema, lowered
 /// for `flavor`.
 pub fn extract_schema(project: &Project, flavor: Flavor, bin: Option<&str>) -> Result<db::Schema> {
-    // Extraction runs the built artifact. That is only safe when `toasty` is
-    // linked into it: the constructor then dumps and exits before `main`.
-    // Without it there is no constructor, the environment variable is inert,
-    // and running the artifact would execute the user's program — starting a
-    // server, writing files, whatever `main` does. Refuse a package that
-    // cannot reach `toasty` at all before building anything.
+    // Running the artifact is only safe when `toasty` is linked: its
+    // constructor dumps and exits before `main`. Without it the environment
+    // variable is inert and the user's program would run.
     if !project.links_toasty {
         bail!(
             "`{}` does not depend on `toasty`, directly or transitively, so it has no schema \
@@ -38,8 +31,7 @@ pub fn extract_schema(project: &Project, flavor: Flavor, bin: Option<&str>) -> R
 
     let target = project.build_target(bin)?;
 
-    // Progress goes to stderr so that `migrate snapshot` can be redirected to
-    // a file without the decoration landing in it.
+    // Progress goes to stderr so `migrate snapshot` stdout stays parseable.
     eprintln!(
         "  {} Compiling {}...",
         style("→").cyan(),
@@ -72,12 +64,9 @@ fn run_dumper(
 ) -> Result<Vec<u8>> {
     let mut cmd = match target {
         BuildTarget::Bin(_) => {
-            // The constructor runs before `main`, dumps, and exits; the
-            // user's `main` never executes.
             let mut cmd = Command::new(artifact);
             cmd.env(DUMP_SCHEMA_ENV, flavor.as_str());
-            // The child inherits this process's environment, so an ambient
-            // prefix would silently rename every table. `Toasty.toml` is the
+            // Don't let an inherited prefix through; `Toasty.toml` is the
             // only source for it.
             match table_name_prefix {
                 Some(prefix) => cmd.env(DUMP_TABLE_NAME_PREFIX_ENV, prefix),
@@ -87,11 +76,10 @@ fn run_dumper(
         }
         BuildTarget::Cdylib => {
             // A cdylib has no entry point, and its constructor exits the
-            // process that loads it, so the `dlopen` happens in a child:
-            // the CLI re-execs itself with a hidden subcommand. The
-            // environment variable is set by the subcommand just before
-            // loading — not here — so a debug build of the CLI does not
-            // trigger its own dump constructor at startup.
+            // process that loads it, so the CLI re-execs itself to `dlopen`
+            // it in a child. The subcommand sets the environment variable
+            // itself: set here, a debug build of the CLI (which links
+            // `toasty`) would dump its own empty schema at startup.
             let current_exe =
                 std::env::current_exe().context("failed to locate the `toasty` executable")?;
             let mut cmd = Command::new(current_exe);
@@ -120,15 +108,10 @@ fn run_dumper(
 
 /// Parses the dumper's stdout into a schema.
 ///
-/// The dump is a single JSON line, but other link-time constructors in the
-/// user's dependency graph may also write to stdout, so each line is tried.
-///
-/// Every candidate line is tried rather than just the first one carrying the
-/// envelope's keys: an unrelated constructor may print JSON that happens to
-/// have a `version` field, and that must not mask the real dump further down.
-/// A version mismatch is only reported once no line decoded, so the check
-/// still fires for a genuinely newer envelope whose payload this CLI cannot
-/// read.
+/// Other constructors in the user's dependency graph may also write to
+/// stdout, so every line is tried and unrelated JSON with a `version` field
+/// must not mask the real dump. A version mismatch is reported only once no
+/// line decoded.
 fn parse_dump(output: &[u8], package: &str) -> Result<db::Schema> {
     let text = String::from_utf8_lossy(output);
     let mut mismatched_version = None;
@@ -174,22 +157,17 @@ fn parse_dump(output: &[u8], package: &str) -> Result<db::Schema> {
         );
     }
 
-    // Reachability in the dependency graph is not linkage: rustc only links
-    // a crate the target actually references, so a bin that declares a
-    // `toasty`-dependent crate but never names it has no constructor.
+    // Reachability is not linkage: rustc only links crates the target
+    // actually references, so this bin may carry no constructor at all.
     bail!(
         "the schema dumper produced no schema; check that `{package}` references the crate \
          holding the models, and that its `dev` profile does not strip link-time constructors"
     )
 }
 
-/// Rejects a schema with no tables in it.
-///
-/// A dump of zero models is indistinguishable from "this project has no
-/// models", and generating from it writes a `DROP TABLE` for every table in
-/// the previous snapshot. The usual cause is a bin target that links `toasty`
-/// but never references the crate holding the models, so the constructor runs
-/// with an empty registry.
+/// Rejects a schema with no tables: generating from it would `DROP TABLE`
+/// everything in the previous snapshot. The usual cause is a bin that links
+/// `toasty` but never references the crate holding the models.
 fn check_not_empty(schema: &db::Schema, project: &Project, target: &BuildTarget) -> Result<()> {
     if !schema.tables.is_empty() {
         return Ok(());
@@ -219,9 +197,8 @@ mod tests {
 
     #[test]
     fn version_is_checked_before_the_payload_is_decoded() {
-        // A future envelope may lay `schema` out differently. Decoding first
-        // would fail on exactly the mismatch the version field exists to
-        // report, leaving the user with a misleading dependency error.
+        // A newer envelope may lay `schema` out differently; decoding it first
+        // would turn the version mismatch into a misleading decode error.
         let output = br#"{"version":999,"schema":{"shaped":"differently"}}"#;
 
         let err = parse_dump(output, "app").unwrap_err();
@@ -241,8 +218,6 @@ mod tests {
 
     #[test]
     fn a_foreign_json_line_does_not_mask_the_real_dump() {
-        // Another constructor printing an object with a `version` field must
-        // not abort extraction before the real dump is reached.
         let dump = serde_json::to_string(&SchemaDump {
             version: SCHEMA_DUMP_VERSION,
             schema: db::Schema::default(),

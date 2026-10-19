@@ -45,13 +45,9 @@ pub struct MigrationConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub flavor: Option<Flavor>,
 
-    /// Prefix applied to every table name when the schema is extracted.
-    ///
-    /// Must match the prefix the application passes to
-    /// `Db::builder().table_name_prefix(..)`. The schema is extracted by a
-    /// constructor that runs before any user code, so a prefix set on the
-    /// builder cannot be observed — without this key the generated migration
-    /// would create unprefixed tables the application never queries.
+    /// Prefix applied to every table name when the schema is extracted. Must
+    /// match `Db::builder().table_name_prefix(..)`, which the extraction
+    /// constructor runs too early to observe.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub table_name_prefix: Option<String>,
 }

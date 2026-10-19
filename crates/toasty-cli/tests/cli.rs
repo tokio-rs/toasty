@@ -1,9 +1,7 @@
-//! End-to-end tests for the standalone `toasty` binary.
-//!
-//! Each test scaffolds a Cargo package in a temp directory that path-depends
-//! on the workspace's `toasty`, then runs the `toasty` binary against it.
-//! `CARGO_TARGET_DIR` points at the workspace target directory so dependency
-//! builds are shared with the workspace's own cache.
+//! End-to-end tests for the `toasty` binary. Each test scaffolds a package
+//! that path-depends on the workspace's `toasty` and runs the binary against
+//! it; `CARGO_TARGET_DIR` is shared with the workspace so dependency builds
+//! are cached.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -31,10 +29,8 @@ pub struct User {
 }
 "#;
 
-/// Renders a manifest for a package depending on the workspace's `toasty`.
-///
-/// `extra` is spliced in after that dependency, so it can add further
-/// dependencies or open a new table such as `[lib]`.
+/// Manifest for a package depending on the workspace's `toasty`; `extra` is
+/// spliced in after that dependency.
 fn manifest(name: &str, extra: &str) -> String {
     format!(
         r#"[package]
@@ -56,19 +52,14 @@ debug = "line-tables-only"
     )
 }
 
-/// Pins dependency versions to the workspace lockfile when there is one;
-/// extra entries are pruned by cargo.
+/// Pins dependency versions to the workspace lockfile.
 fn copy_lockfile(dir: &Path) {
     let _ = fs::copy(workspace_root().join("Cargo.lock"), dir.join("Cargo.lock"));
 }
 
-/// Scaffolds a package using Toasty. `bin` selects a bin package (schema
-/// extracted by running the built binary) or a lib-only package (schema
-/// extracted by building the lib as a cdylib and loading it).
-///
-/// Every package gets its own name: the tests share one `CARGO_TARGET_DIR`
-/// and run in parallel, so same-named packages would replace each other's
-/// uplifted artifact between one test building it and running it.
+/// Scaffolds a bin or lib-only package using Toasty. Each gets a unique name:
+/// tests run in parallel in one `CARGO_TARGET_DIR`, so same-named packages
+/// would replace each other's artifact between building and running it.
 fn scaffold_project(dir: &Path, bin: bool) {
     static NEXT: AtomicUsize = AtomicUsize::new(0);
     let name = format!("cli-e2e-{}", NEXT.fetch_add(1, Ordering::Relaxed));
@@ -179,10 +170,8 @@ fn generate_lib_package_via_cdylib() {
 
 #[test]
 fn table_name_prefix_reaches_the_dumper() {
-    // The constructor runs before any user code, so a prefix passed to
-    // `Db::builder().table_name_prefix(..)` is invisible to it. `Toasty.toml`
-    // carries it instead — otherwise the migration creates tables the
-    // application never queries.
+    // The constructor cannot see `Db::builder().table_name_prefix(..)`, so
+    // `Toasty.toml` carries the prefix.
     let dir = tempfile::tempdir().unwrap();
     scaffold_project(dir.path(), true);
     fs::write(
@@ -206,9 +195,8 @@ fn table_name_prefix_reaches_the_dumper() {
 
 #[test]
 fn schema_is_extracted_through_a_transitive_toasty_dependency() {
-    // The `models` crate paired with a `server` binary is the layout the guide
-    // recommends: `server` reaches `toasty` only through `models`, but the
-    // constructor is linked into the binary all the same.
+    // `server` reaches `toasty` only through `models`; the constructor is
+    // linked into the binary all the same.
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
 
@@ -257,8 +245,7 @@ fn schema_is_extracted_through_a_transitive_toasty_dependency() {
 
 #[test]
 fn read_only_commands_do_not_write_to_the_source_tree() {
-    // `migrate apply` reads saved migration files and talks to a database; it
-    // has no business creating `Toasty.toml`, which would fail outright in a
+    // `migrate apply` must not create `Toasty.toml`; that would fail in a
     // read-only checkout.
     let dir = tempfile::tempdir().unwrap();
     scaffold_project(dir.path(), true);
@@ -285,8 +272,7 @@ fn read_only_commands_do_not_write_to_the_source_tree() {
 #[test]
 fn a_package_without_toasty_is_never_executed() {
     // Without `toasty` there is no dump constructor, so running the artifact
-    // would run the user's `main` — starting a server, writing files, whatever
-    // it does. The CLI must refuse before building.
+    // would run the user's `main`. The CLI must refuse before building.
     let dir = tempfile::tempdir().unwrap();
     let marker = dir.path().join("main-ran");
 
@@ -366,8 +352,6 @@ fn snapshot_stdout_is_parseable_toml() {
     let output = toasty(dir.path(), &["migrate", "snapshot", "--flavor", "sqlite"]);
     let stdout = assert_success(&output);
 
-    // Headers and build progress belong on stderr so that redirecting stdout
-    // to a file yields a usable snapshot.
     let snapshot: toml::Value = toml::from_str(&stdout)
         .unwrap_or_else(|err| panic!("stdout is not valid TOML: {err}\n---\n{stdout}"));
 
@@ -378,10 +362,8 @@ fn snapshot_stdout_is_parseable_toml() {
 
 #[test]
 fn feature_selection_reaches_both_the_resolve_and_the_build() {
-    // Models behind a Cargo feature only exist in the artifact when that
-    // feature is on. The flags have to reach `cargo metadata` as well: the
-    // resolved graph is feature-dependent, so an optional `toasty` is
-    // invisible there and extraction refuses to run before it ever builds.
+    // The flags must reach `cargo metadata` as well as the build: with the
+    // feature off, the optional `toasty` is not in the resolved graph.
     let dir = tempfile::tempdir().unwrap();
     fs::write(
         dir.path().join("Cargo.toml"),
@@ -418,7 +400,6 @@ debug = "line-tables-only"
     )
     .unwrap();
 
-    // Without the feature, `toasty` is not in the resolved graph at all.
     let output = toasty(
         dir.path(),
         &[
@@ -429,7 +410,6 @@ debug = "line-tables-only"
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("does not depend on `toasty`"), "{stderr}");
 
-    // With it, the gated model is discovered and lands in the migration.
     let output = toasty(
         dir.path(),
         &[
