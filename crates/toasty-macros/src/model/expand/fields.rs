@@ -14,6 +14,8 @@ const FIELD_STRUCT_RESERVED_METHODS: &[&str] = &[
     "create",
 ];
 
+const ROOT_ONLY_FIELD_STRUCT_RESERVED_METHODS: &[&str] = &["is_none", "is_some"];
+
 const FIELD_LIST_STRUCT_RESERVED_METHODS: &[&str] = &["any", "all", "filter", "order_by", "create"];
 
 impl Expand<'_> {
@@ -22,6 +24,7 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_struct_ident = self.field_struct_ident();
         let model_ident = &self.model.ident;
+        let is_root = matches!(self.model.kind, ModelKind::Root(_));
         let schema_trait = self.schema_trait();
         let (struct_generics, generics, target_ty) =
             if matches!(self.model.kind, ModelKind::Root(_)) {
@@ -58,6 +61,10 @@ impl Expand<'_> {
                 let ident = &field.name.ident;
 
                 if util::ident_is_reserved(ident, FIELD_STRUCT_RESERVED_METHODS) {
+                    return false;
+                }
+
+                if is_root && util::ident_is_reserved(ident, ROOT_ONLY_FIELD_STRUCT_RESERVED_METHODS) {
                     return false;
                 }
 
@@ -156,9 +163,39 @@ impl Expand<'_> {
 
         let include_modifier_methods = self.expand_include_modifier_methods(target_ty.clone());
         let comparison_methods = self.expand_field_struct_comparison_methods(&target_ty);
+        let presence_impl = if is_root {
+            // Keep `is_none` negation inside the membership predicate so
+            // normalization applies enum-variant guards to the whole predicate.
+            quote! {
+                #[allow(dead_code)]
+                impl<__Origin> #field_struct_ident<__Origin, Option<#model_ident>> {
+                    /// Tests whether the optional relation has no associated record.
+                    #vis fn is_none(self) -> #toasty::stmt::Expr<bool> {
+                        #toasty::stmt::Expr::from_untyped(
+                            #toasty::core::stmt::Expr::not_in_subquery(
+                                #toasty::core::stmt::Path::from(self.path).into_stmt(),
+                                #toasty::core::stmt::Query::new_select(
+                                    <#model_ident as #toasty::Model>::id(),
+                                    #toasty::core::stmt::Expr::from(true),
+                                ),
+                            ),
+                        )
+                    }
+
+                    /// Tests whether the optional relation has an associated record.
+                    #vis fn is_some(self) -> #toasty::stmt::Expr<bool> {
+                        self.in_query(#toasty::stmt::Query::<#toasty::List<#model_ident>>::all())
+                    }
+                }
+            }
+        } else {
+            TokenStream::new()
+        };
 
         quote!(
             #struct_def
+
+            #presence_impl
 
             #[allow(dead_code)]
             impl<#generics> #field_struct_ident<#generics> {
