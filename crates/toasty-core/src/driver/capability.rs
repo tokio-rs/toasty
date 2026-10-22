@@ -271,6 +271,26 @@ pub struct Capability {
     /// [`Error::unsupported_feature`](crate::Error::unsupported_feature).
     pub transaction_lock_mode: bool,
 
+    /// Whether the backend can hold a transaction open across calls.
+    ///
+    /// A plan of several database operations is wrapped in `BEGIN`/`COMMIT`
+    /// when it writes, or when the driver has transactions to give its reads a
+    /// snapshot with. A driver that reports `false` gets its read-only plans
+    /// run unwrapped: the transaction an eager load takes is there for the
+    /// snapshot, not for atomicity, so running it unwrapped returns the right
+    /// rows and gives up only that they cannot straddle a concurrent write.
+    ///
+    /// This does not relax writes. A plan that writes still asks for a
+    /// transaction and a driver without one still refuses it; delivering those
+    /// writes atomically is `transaction_delivery`'s subject, in
+    /// `docs/dev/design/atomic-batches.md`.
+    ///
+    /// Set it `false` only when the backend genuinely cannot open a
+    /// transaction. Setting it on a backend that can would quietly weaken
+    /// reads that users expect to be consistent. See
+    /// `docs/dev/design/transaction-less-backends.md`.
+    pub interactive_transactions: bool,
+
     /// Whether the backend can walk a paginated query in reverse from a
     /// cursor.
     ///
@@ -723,6 +743,7 @@ impl Capability {
         // SQLite exposes `BEGIN DEFERRED|IMMEDIATE|EXCLUSIVE` for
         // lock-acquisition policy.
         transaction_lock_mode: true,
+        interactive_transactions: true,
 
         backward_pagination: true,
         sql_nulls_first_on_asc: true,
@@ -984,6 +1005,7 @@ impl Capability {
 
         // DynamoDB rejects `Operation::Transaction` wholesale.
         transaction_lock_mode: false,
+        interactive_transactions: false,
 
         backward_pagination: false,
         sql_nulls_first_on_asc: false,
