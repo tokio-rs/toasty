@@ -28,6 +28,7 @@ struct ExecPlanner<'a> {
     logical_plan: &'a LogicalPlan,
     steps: Vec<Step>,
     use_transactions: bool,
+    interactive_transactions: bool,
 }
 
 impl Engine {
@@ -49,6 +50,7 @@ impl Engine {
             logical_plan: &logical_plan,
             steps: vec![],
             use_transactions: self.capability().sql(),
+            interactive_transactions: self.capability().interactive_transactions,
         }
         .plan_execution();
 

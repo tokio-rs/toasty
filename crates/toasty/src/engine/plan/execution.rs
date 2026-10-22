@@ -60,14 +60,24 @@ impl ExecPlanner<'_> {
         self.steps.push(step);
     }
 
+    /// Whether the plan has to run inside `BEGIN`/`COMMIT`.
+    ///
+    /// A plan of several database operations takes a transaction for one of
+    /// two reasons: so its writes commit together, or so its reads see one
+    /// snapshot. Only the second is optional. A driver whose backend cannot
+    /// hold a transaction open still needs its reads to run, whereas letting
+    /// its writes proceed unwrapped would drop atomicity silently — so a
+    /// writing plan asks for a transaction regardless, and such a driver
+    /// refuses it as before.
     fn needs_transaction(&self) -> bool {
-        self.use_transactions
-            && self
-                .steps
-                .iter()
-                .map(|step| step.db_op_count(self.logical_plan))
-                .sum::<usize>()
-                > 1
+        let db_ops = self
+            .steps
+            .iter()
+            .map(|step| step.db_op_count(self.logical_plan))
+            .sum::<usize>();
+        let writes = self.steps.iter().any(|step| step.writes(self.logical_plan));
+
+        self.use_transactions && db_ops > 1 && (writes || self.interactive_transactions)
     }
 
     /// Wraps a run of same-guard nodes in an `If`, deriving the skip
