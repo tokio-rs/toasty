@@ -2,6 +2,60 @@ use super::test_schema_with;
 use crate::engine::simplify::Simplify;
 use toasty_core::stmt::{Expr, ExprCast, ExprReference, Type, Value, ValueObject};
 
+#[test]
+fn model_value_preserves_only_primary_and_referenced_fields() {
+    use crate as toasty;
+    use crate::schema::Model;
+    use toasty_core::stmt::VisitMut;
+
+    #[derive(toasty::Model)]
+    struct Target {
+        #[key]
+        id: String,
+        serial: String,
+        #[unique]
+        unused: String,
+        #[index]
+        label: String,
+    }
+
+    #[allow(dead_code)]
+    #[derive(toasty::Model)]
+    struct Source {
+        #[key]
+        id: String,
+        serial: String,
+        #[belongs_to(key = serial, references = serial)]
+        target: toasty::Deferred<Target>,
+    }
+
+    let value = Target {
+        id: "pk".into(),
+        serial: "fk".into(),
+        unused: "unique".into(),
+        label: "indexed".into(),
+    };
+    let expr = Expr::from(crate::stmt::IntoExpr::<Target>::into_expr(value));
+
+    for (models, serial) in [
+        (vec![Target::schema(), Source::schema()], Value::from("fk")),
+        (vec![Target::schema()], Value::Null),
+    ] {
+        let schema = test_schema_with(&models);
+        let mut actual = expr.clone();
+        Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE)
+            .visit_expr_mut(&mut actual);
+
+        assert_eq!(
+            actual,
+            Expr::cast(
+                Value::record_from_vec(vec![Value::from("pk"), serial, Value::Null, Value::Null]),
+                Type::Model(Target::id()),
+            )
+        );
+    }
+}
+
 /// Schema fixture for the document-cast tests: a model with a `#[document]`
 /// embed, returning the schema and the embed's model-level type
 /// (`Type::Model`).

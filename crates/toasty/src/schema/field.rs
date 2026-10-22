@@ -71,6 +71,11 @@ pub trait Field: Load<Output = Self> {
     /// Whether this field is omitted from default loads.
     const DEFERRED: bool = false;
 
+    /// Whether model expressions can capture this field as a relation key.
+    /// Composite embeds override this to avoid reading unrelated nested fields.
+    #[doc(hidden)]
+    const CAN_BE_RELATION_KEY: bool = !Self::DEFERRED;
+
     /// Build a field path from a raw path of the field's
     /// [`Self::ExprTarget`].
     ///
@@ -403,6 +408,7 @@ impl_scalar!(stmt::IpCidr, stmt::IpInet, stmt::MacAddr6, stmt::MacAddr8);
 
 impl<T: Field> Field for Option<T> {
     const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = T::REQUIRES_EXPLICIT_COLUMN_TYPE;
+    const CAN_BE_RELATION_KEY: bool = T::CAN_BE_RELATION_KEY;
 
     type ExprTarget = Self;
     type Path<Origin> = stmt::Path<Origin, Self>;
@@ -451,6 +457,7 @@ impl<T: Field> Field for Option<T> {
 
 impl<T: Field> Field for std::sync::Arc<T> {
     const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = T::REQUIRES_EXPLICIT_COLUMN_TYPE;
+    const CAN_BE_RELATION_KEY: bool = T::CAN_BE_RELATION_KEY;
 
     type ExprTarget = Self;
     type Path<Origin> = stmt::Path<Origin, Self>;
@@ -491,6 +498,7 @@ impl<T: Field> Field for std::sync::Arc<T> {
 
 impl<T: Field> Field for std::rc::Rc<T> {
     const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = T::REQUIRES_EXPLICIT_COLUMN_TYPE;
+    const CAN_BE_RELATION_KEY: bool = T::CAN_BE_RELATION_KEY;
 
     type ExprTarget = Self;
     type Path<Origin> = stmt::Path<Origin, Self>;
@@ -531,6 +539,7 @@ impl<T: Field> Field for std::rc::Rc<T> {
 
 impl<T: Field> Field for Box<T> {
     const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = T::REQUIRES_EXPLICIT_COLUMN_TYPE;
+    const CAN_BE_RELATION_KEY: bool = T::CAN_BE_RELATION_KEY;
 
     type ExprTarget = Self;
     type Path<Origin> = stmt::Path<Origin, Self>;
