@@ -63,24 +63,31 @@ impl OidCache {
         // schema's OID.
         let rows = client
             .query(
-                "SELECT t.typname, t.oid, t.typarray, n.nspname, \
+                "SELECT name, t.typname, t.oid, t.typarray, n.nspname, \
                         array_agg(e.enumlabel ORDER BY e.enumsortorder) \
                  FROM unnest($1::text[]) AS name \
-                 JOIN pg_type t ON t.oid = to_regtype(quote_ident(name))::oid \
+                 JOIN pg_type t ON t.oid = to_regtype( \
+                     CASE \
+                         WHEN name !~ '[\".]' \
+                             THEN quote_ident(name) \
+                         ELSE name \
+                     END \
+                 )::oid \
                  JOIN pg_namespace n ON n.oid = t.typnamespace \
                  JOIN pg_enum e ON e.enumtypid = t.oid \
-                 GROUP BY t.typname, t.oid, t.typarray, n.nspname",
+                 GROUP BY name, t.typname, t.oid, t.typarray, n.nspname",
                 &[&uncached],
             )
             .await
             .map_err(toasty_core::Error::driver_operation_failed)?;
 
         for row in &rows {
-            let name: String = row.get(0);
-            let oid: u32 = row.get(1);
-            let array_oid: u32 = row.get(2);
-            let schema: String = row.get(3);
-            let variants: Vec<String> = row.get(4);
+            let qualified_name: String = row.get(0);
+            let name: String = row.get(1);
+            let oid: u32 = row.get(2);
+            let array_oid: u32 = row.get(3);
+            let schema: String = row.get(4);
+            let variants: Vec<String> = row.get(5);
 
             let enum_type = Type::new(name.clone(), oid, Kind::Enum(variants), schema.clone());
             let array_type = Type::new(
@@ -89,8 +96,8 @@ impl OidCache {
                 Kind::Array(enum_type.clone()),
                 schema,
             );
-            self.enum_types.insert(name.clone(), enum_type);
-            self.enum_array_types.insert(name, array_type);
+            self.enum_types.insert(qualified_name.clone(), enum_type);
+            self.enum_array_types.insert(qualified_name, array_type);
         }
 
         Ok(())
@@ -381,5 +388,58 @@ mod tests {
 
         drop_enum(&client, &a).await;
         drop_enum(&client, &b).await;
+    }
+
+    /// An enum in a non-default schema, referenced by its
+    /// schema-qualified name, must resolve and be retrievable by that same name.
+    #[tokio::test]
+    async fn preload_resolves_schema_qualified_enum() {
+        let Some(client) = try_connect().await else {
+            return;
+        };
+        let schema_a = enum_name("qual_a");
+        let schema_b = enum_name("qual_b");
+        let qualified_a = format!("\"{schema_a}\".status");
+        let qualified_b = format!("\"{schema_b}\".status");
+
+        for (schema, labels) in [(&schema_a, "'a1', 'a2'"), (&schema_b, "'b1'")] {
+            client
+                .simple_query(&format!("CREATE SCHEMA \"{schema}\""))
+                .await
+                .unwrap();
+            client
+                .simple_query(&format!(
+                    "CREATE TYPE \"{schema}\".status AS ENUM ({labels})"
+                ))
+                .await
+                .unwrap();
+        }
+
+        let mut cache = OidCache::new();
+        let list_a = db::Type::List(Box::new(db_enum(&qualified_a)));
+        let preload = cache
+            .preload(&client, [&list_a, &db_enum(&qualified_b)])
+            .await;
+
+        if preload.is_ok() {
+            let ty_a = cache.get(&db_enum(&qualified_a));
+            assert_eq!(ty_a.kind(), &Kind::Enum(vec!["a1".into(), "a2".into()]));
+            assert_eq!(ty_a.schema(), schema_a);
+
+            let ty_b = cache.get(&db_enum(&qualified_b));
+            assert_eq!(ty_b.kind(), &Kind::Enum(vec!["b1".into()]));
+            assert_eq!(ty_b.schema(), schema_b);
+
+            let list = cache.get(&list_a);
+            assert_eq!(list.name(), "_status");
+            assert_eq!(list.schema(), schema_a);
+        }
+
+        for schema in [&schema_a, &schema_b] {
+            let _ = client
+                .simple_query(&format!("DROP SCHEMA \"{schema}\" CASCADE"))
+                .await;
+        }
+        preload.unwrap();
     }
 }
