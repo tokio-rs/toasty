@@ -78,7 +78,9 @@ use toasty_core::{
     driver::{
         Capability, ConnectContext, ConnectionUrl, Driver, ExecResponse, QueryLogConfig,
         log::QueryLog,
-        operation::{IsolationLevel, Operation, RawSqlRet, Transaction, TypedValue},
+        operation::{
+            IsolationLevel, Operation, RawSqlRet, Transaction, TransactionMode, TypedValue,
+        },
     },
     schema::{
         db::{self, Migration, Table},
@@ -167,9 +169,12 @@ enum TursoPath {
     InMemory,
     /// A remote Turso Cloud database reached over HTTP ("serverless").
     /// Holds the connection URL with any `authToken` query parameter
-    /// stripped.
+    /// stripped and the natural default selected from its scheme.
     #[cfg(feature = "serverless")]
-    Remote(String),
+    Remote {
+        url: String,
+        default_begin_sql: &'static str,
+    },
 }
 
 /// Driver builder options applied when opening a database.
@@ -179,6 +184,7 @@ enum TursoPath {
 #[derive(Debug, Default, Clone)]
 struct BuilderOptions {
     index_method: bool,
+    transaction_mode: TransactionMode,
 
     local_options: LocalBuilderOptions,
 
@@ -489,7 +495,10 @@ impl Turso {
     /// selects a remote Turso Cloud database reached over HTTP:
     /// `turso://my-db.turso.io` (the form `turso db show --url` prints).
     /// The `libsql`, `https` and `http` schemes are also accepted for
-    /// remote URLs, and an `authToken` query parameter is honored as if
+    /// remote URLs. A `libsql` URL defaults to deferred transactions;
+    /// `turso`, `https` and `http` retain concurrent transactions. Use
+    /// [`Self::with_transaction_mode`] to override the default. An
+    /// `authToken` query parameter is honored as if
     /// passed to [`Self::with_auth_token`] (and stripped from the URL the
     /// driver stores and reports). Scheme-relative and path forms
     /// (`turso:todos.db`, `turso:/path/to/db`) always name local files;
@@ -540,7 +549,15 @@ impl Turso {
         let remote = url.as_str();
         let remote = remote.split_once('?').map_or(remote, |(base, _)| base);
 
-        let mut driver = Self::with_path(TursoPath::Remote(remote.to_string()));
+        let default_begin_sql = if url.has_scheme("libsql") {
+            "BEGIN"
+        } else {
+            "BEGIN CONCURRENT"
+        };
+        let mut driver = Self::with_path(TursoPath::Remote {
+            url: remote.to_string(),
+            default_begin_sql,
+        });
         if let Some(token) = auth_token {
             driver = driver.with_auth_token(token);
         }
@@ -633,11 +650,29 @@ impl Turso {
     /// `Deferred` falls back to plain `BEGIN`, while `Immediate` and
     /// `Exclusive` issue `BEGIN IMMEDIATE` / `BEGIN EXCLUSIVE` respectively.
     ///
-    /// On a serverless (Turso Cloud) database this is a no-op: those
-    /// databases are MVCC-native and transactions already run under
-    /// `BEGIN CONCURRENT` by default.
+    /// On a serverless (Turso Cloud) database this is a no-op: transactions
+    /// already use the default selected from the URL scheme: `BEGIN` for
+    /// `libsql`, `BEGIN CONCURRENT` for `turso`, `https` and `http`.
+    /// [`Self::with_transaction_mode`] overrides that default.
     pub fn concurrent_writes(mut self) -> Self {
         self.concurrent_writes = true;
+        self
+    }
+
+    /// Set the mode used when a transaction requests [`TransactionMode::Default`],
+    /// including transactions Toasty starts implicitly for multi-operation plans
+    /// and read-modify-write operations.
+    ///
+    /// Use [`TransactionMode::Deferred`] for libSQL databases on Turso Cloud,
+    /// which do not support `BEGIN CONCURRENT`. An explicit per-transaction mode
+    /// overrides this setting. [`TransactionMode::Default`] preserves the
+    /// driver's natural default: deferred for `libsql` serverless URLs,
+    /// concurrent for other serverless URLs or embedded connections with
+    /// [`Self::concurrent_writes`], deferred otherwise.
+    ///
+    /// This does not change the journal mode selected by [`Self::concurrent_writes`].
+    pub fn with_transaction_mode(mut self, mode: TransactionMode) -> Self {
+        self.options.transaction_mode = mode;
         self
     }
 
@@ -931,7 +966,7 @@ impl Turso {
             TursoPath::File(p) => p.to_str().unwrap_or(":memory:"),
             TursoPath::InMemory => ":memory:",
             #[cfg(feature = "serverless")]
-            TursoPath::Remote(url) => url,
+            TursoPath::Remote { url, .. } => url,
         }
     }
 
@@ -949,7 +984,7 @@ impl Turso {
 
         let db = match &self.path {
             #[cfg(feature = "serverless")]
-            TursoPath::Remote(url) => {
+            TursoPath::Remote { url, .. } => {
                 // Sync replicates a local file against a remote; a
                 // serverless URL leaves no local file to replicate. The
                 // combination is contradictory, not something to resolve
@@ -1052,7 +1087,7 @@ impl Driver for Turso {
             TursoPath::InMemory => Cow::Borrowed("turso::memory:"),
             TursoPath::File(path) => Cow::Owned(format!("turso:{}", path.display())),
             #[cfg(feature = "serverless")]
-            TursoPath::Remote(url) => Cow::Borrowed(url),
+            TursoPath::Remote { url, .. } => Cow::Borrowed(url),
         }
     }
 
@@ -1088,16 +1123,20 @@ impl Driver for Turso {
             conn.pragma_update("journal_mode", "'mvcc'").await?;
         }
 
-        // Serverless databases are MVCC-native (Turso Cloud, created with
-        // `--tursodb`), so transactions default to `BEGIN CONCURRENT` —
-        // the same semantics `concurrent_writes()` opts into for the
-        // embedded engine, which makes that flag a no-op here. Callers can
-        // still choose classic locking per transaction with
-        // `TransactionMode::Deferred`/`Immediate`/`Exclusive`.
-        let default_begin_sql = if conn.is_serverless() || self.concurrent_writes {
-            "BEGIN CONCURRENT"
-        } else {
-            "BEGIN"
+        // Remote schemes select the natural default before the HTTP client
+        // normalizes them. Explicit driver and per-transaction modes win.
+        let default_begin_sql = match self.options.transaction_mode {
+            TransactionMode::Default => match &self.path {
+                #[cfg(feature = "serverless")]
+                TursoPath::Remote {
+                    default_begin_sql, ..
+                } => *default_begin_sql,
+                _ if self.concurrent_writes => "BEGIN CONCURRENT",
+                _ => "BEGIN",
+            },
+            TransactionMode::Deferred => "BEGIN DEFERRED",
+            TransactionMode::Immediate => "BEGIN IMMEDIATE",
+            TransactionMode::Exclusive => "BEGIN EXCLUSIVE",
         };
 
         Ok(Box::new(Connection {
@@ -1122,7 +1161,7 @@ impl Driver for Turso {
         // There is no file to delete on a remote database; drop every user
         // table instead (indexes and triggers go down with their table).
         #[cfg(feature = "serverless")]
-        if let TursoPath::Remote(_) = &self.path {
+        if let TursoPath::Remote { .. } = &self.path {
             let AnyDatabase::Serverless(db) = self.database().await? else {
                 unreachable!("a Remote path always opens a serverless database");
             };
@@ -1168,12 +1207,8 @@ impl Driver for Turso {
 /// An open connection to a Turso database.
 pub struct Connection {
     conn: AnyConn,
-    /// SQL to issue for [`TransactionMode::Default`]. Resolved by the
-    /// driver at `connect()` time — either `"BEGIN"` for classic
-    /// deferred locking, or `"BEGIN CONCURRENT"` when the driver was
-    /// configured with `concurrent_writes()`. The connection no longer
-    /// needs to know which mode it was opened in; it just emits the
-    /// pre-baked command.
+    /// SQL to issue for [`TransactionMode::Default`], resolved from the
+    /// driver's configured mode and MVCC default at `connect()` time.
     default_begin_sql: &'static str,
     query_log: QueryLogConfig,
 }
@@ -1444,13 +1479,13 @@ mod serverless_tests {
         let driver = Turso::new("turso://my-db.aws-us-east-1.turso.io").unwrap();
         assert!(matches!(
             &driver.path,
-            TursoPath::Remote(url) if url == "turso://my-db.aws-us-east-1.turso.io"
+            TursoPath::Remote { url, .. } if url == "turso://my-db.aws-us-east-1.turso.io"
         ));
 
         let driver = Turso::new("libsql://my-db.aws-us-east-1.turso.io").unwrap();
         assert!(matches!(
             &driver.path,
-            TursoPath::Remote(url) if url == "libsql://my-db.aws-us-east-1.turso.io"
+            TursoPath::Remote { url, .. } if url == "libsql://my-db.aws-us-east-1.turso.io"
         ));
 
         // Scheme-relative and path forms always name local files.

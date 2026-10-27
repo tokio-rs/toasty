@@ -225,10 +225,10 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) -> Result<()> {
 pub async fn combined_has_many_and_has_one_preload(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    // A backend without mutation RETURNING cannot provide generated IDs for a
+    // A backend without insert RETURNING cannot provide generated IDs for a
     // batch of auto-increment todos. Seed those todos individually so the
     // preload behavior remains covered on that backend.
-    let user = if driver_test_cfg!(id_u64) && !test.capability().returning_from_mutation {
+    let user = if driver_test_cfg!(id_u64) && !test.capability().returning_from_insert {
         let user = User::create()
             .name("Bob Smith")
             .profile(Profile::create().bio("Developer"))

@@ -60,7 +60,7 @@ impl ToSql for &stmt::Expr {
                 // The rhs Value::List is bound as one JSON string. MySQL's
                 // `JSON_CONTAINS(target, candidate)` matches when every
                 // element of `candidate` appears in `target`.
-                Dialect::Mysql => {
+                Dialect::Mysql | Dialect::MariaDb => {
                     fmt!(f, "JSON_CONTAINS(" e.lhs.as_ref() ", " e.rhs.as_ref() ")")
                 }
                 // SQLite has no direct superset operator; emulate via
@@ -74,7 +74,7 @@ impl ToSql for &stmt::Expr {
             },
             stmt::Expr::Intersects(e) => match f.serializer.dialect {
                 Dialect::Postgresql => fmt!(f, e.lhs.as_ref() " && " e.rhs.as_ref()),
-                Dialect::Mysql => {
+                Dialect::Mysql | Dialect::MariaDb => {
                     fmt!(f, "JSON_OVERLAPS(" e.lhs.as_ref() ", " e.rhs.as_ref() ")")
                 }
                 Dialect::Sqlite => fmt!(
@@ -86,7 +86,7 @@ impl ToSql for &stmt::Expr {
             },
             stmt::Expr::Length(e) => match f.serializer.dialect {
                 Dialect::Postgresql => fmt!(f, "cardinality(" e.expr.as_ref() ")"),
-                Dialect::Mysql => fmt!(f, "JSON_LENGTH(" e.expr.as_ref() ")"),
+                Dialect::Mysql | Dialect::MariaDb => fmt!(f, "JSON_LENGTH(" e.expr.as_ref() ")"),
                 Dialect::Sqlite => fmt!(f, "json_array_length(" e.expr.as_ref() ")"),
             },
             stmt::Expr::Ident(name) => {
@@ -110,6 +110,14 @@ impl ToSql for &stmt::Expr {
                     fmt!(f, expr.lhs " MEMBER OF (" expr.rhs ")");
                 }
                 Dialect::Mysql => unreachable!("AnyOp with non-Eq operator on MySQL: {expr:?}"),
+                // MariaDB lacks MEMBER OF. JSON_ARRAY preserves the scalar's
+                // JSON type and makes string membership case-sensitive.
+                Dialect::MariaDb if matches!(expr.op, stmt::BinaryOp::Eq) => {
+                    fmt!(f, "JSON_CONTAINS(" expr.rhs ", JSON_ARRAY(" expr.lhs "))");
+                }
+                Dialect::MariaDb => {
+                    unreachable!("AnyOp with non-Eq operator on MariaDB: {expr:?}")
+                }
                 // SQLite renders `value = ANY(col)` (i.e. `Path::contains`)
                 // as `value IN (SELECT value FROM json_each(col))`.
                 Dialect::Sqlite if matches!(expr.op, stmt::BinaryOp::Eq) => {
@@ -173,7 +181,7 @@ impl ToSql for &stmt::Expr {
                     // column side to BINARY forces a case-sensitive byte
                     // comparison.  extract_params has escaped `%`/`_`/`!` and
                     // appended `%` to the prefix parameter.
-                    Dialect::Mysql => {
+                    Dialect::Mysql | Dialect::MariaDb => {
                         fmt!(f, "BINARY " expr.expr " LIKE " expr.prefix " ESCAPE '!'");
                     }
                 }
@@ -243,7 +251,7 @@ impl ToSql for &stmt::Expr {
                 fmt!(f, placeholder);
             }
             stmt::Expr::Default => match f.serializer.dialect {
-                Dialect::Postgresql | Dialect::Mysql => fmt!(f, "DEFAULT"),
+                Dialect::Postgresql | Dialect::Mysql | Dialect::MariaDb => fmt!(f, "DEFAULT"),
                 // SQLite does not support the DEFAULT keyword but NULL acts similarly.
                 Dialect::Sqlite => fmt!(f, "NULL"),
             },
@@ -289,7 +297,7 @@ fn serialize_json_extract(f: &mut super::Formatter<'_>, func: &stmt::FuncJsonExt
                 "')"
             );
         }
-        Dialect::Mysql => serialize_mysql_json_extract(f, func),
+        Dialect::Mysql | Dialect::MariaDb => serialize_mysql_json_extract(f, func),
         Dialect::Postgresql => {
             // Descend with `->`, take the leaf as text with `->>`, then cast the
             // text to the leaf type so it compares against a bound parameter.

@@ -55,6 +55,13 @@ pub async fn select_has_one(t: &mut Test) -> Result<()> {
     assert_eq!(profiles.len(), 1);
     assert_eq!(profiles[0].bio, "apple a day");
 
+    let bios: Vec<String> = User::all()
+        .select(User::fields().profile().bio())
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(bios, ["apple a day"]);
+
     toasty::create!(User {
         name: "Bob",
         profile: Profile::create().bio("beta bio"),

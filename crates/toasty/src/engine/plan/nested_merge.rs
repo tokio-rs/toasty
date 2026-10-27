@@ -282,6 +282,17 @@ impl NestedMergePlanner<'_> {
                         let child_stmt_id = *child_stmt_id;
                         let child_stmt_state = &hir[child_stmt_id];
                         let child_stmt = child_stmt_state.stmt.as_deref().unwrap();
+                        if let stmt::Statement::Query(query) = child_stmt
+                            && let stmt::ExprSet::Values(values) = &query.body
+                            && values.is_empty()
+                        {
+                            *expr = if query.single {
+                                stmt::Expr::null()
+                            } else {
+                                stmt::Expr::list_from_vec(vec![])
+                            };
+                            return false;
+                        }
                         let child_returning = child_stmt.returning_unwrap();
 
                         match child_returning {

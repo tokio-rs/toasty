@@ -3,6 +3,18 @@ use crate::engine::simplify::Simplify;
 use toasty_core::stmt::{self, Direction, Limit, LimitOffset, OrderBy, OrderByExpr, Query, Values};
 
 #[test]
+fn null_filter_query_is_empty() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
+    let mut query = Query::new_select(
+        stmt::Source::table(toasty_core::schema::db::TableId(0)),
+        stmt::Expr::null(),
+    );
+    simplify.simplify_stmt_query_when_empty(&mut query);
+    assert!(matches!(query.body, stmt::ExprSet::Values(values) if values.is_empty()));
+}
+
+#[test]
 fn empty_values_query_is_empty() {
     let schema = test_schema();
     let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);

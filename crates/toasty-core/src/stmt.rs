@@ -41,7 +41,9 @@ mod cte;
 pub use cte::Cte;
 
 mod cx;
-pub use cx::{DerivedRef, ExprContext, ExprTarget, IntoExprTarget, Resolve, ResolvedRef};
+pub use cx::{
+    DerivedRef, ExprContext, ExprTarget, IntoExprTarget, ProjectedField, Resolve, ResolvedRef,
+};
 
 mod delete;
 pub use delete::Delete;

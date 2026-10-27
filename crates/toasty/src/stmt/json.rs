@@ -253,6 +253,55 @@ where
     }
 }
 
+/// Accept a borrowed `T` wherever the API expects `IntoExpr<Json<T>>`, so a
+/// caller that still needs the value afterwards doesn't have to clone it.
+/// The value is serialized out of the borrow.
+///
+/// This doesn't overlap the `IntoExpr<Json<T>> for T` blanket: unifying the
+/// two would require `T == &T`.
+impl<T> IntoExpr<Json<T>> for &T
+where
+    T: serde_core::Serialize,
+{
+    fn into_expr(self) -> Expr<Json<T>> {
+        json_expr(self)
+    }
+
+    fn by_ref(&self) -> Expr<Json<T>> {
+        json_expr(*self)
+    }
+}
+
+/// Same, for the explicit `Json(&value)` form.
+impl<T> IntoExpr<Json<T>> for Json<&T>
+where
+    T: serde_core::Serialize,
+{
+    fn into_expr(self) -> Expr<Json<T>> {
+        json_expr(self.0)
+    }
+
+    fn by_ref(&self) -> Expr<Json<T>> {
+        json_expr(self.0)
+    }
+}
+
+/// `Json(&value)` on an `Option<Json<T>>` field, mirroring the
+/// `IntoExpr<Option<T>> for T` blanket that lets the owned `Json(value)`
+/// skip the `Some(...)`.
+impl<T> IntoExpr<Option<Json<T>>> for Json<&T>
+where
+    T: serde_core::Serialize,
+{
+    fn into_expr(self) -> Expr<Option<Json<T>>> {
+        json_expr::<Json<T>>(self.0).cast()
+    }
+
+    fn by_ref(&self) -> Expr<Option<Json<T>>> {
+        json_expr::<Json<T>>(self.0).cast()
+    }
+}
+
 impl<T> super::assignment::Assign<Json<T>> for Json<T>
 where
     T: serde_core::Serialize,
@@ -274,6 +323,37 @@ where
 {
     fn into_assignment(self) -> super::assignment::Assignment<Json<T>> {
         super::set(<Self as IntoExpr<Json<T>>>::into_expr(self))
+    }
+}
+
+/// Mirrors the borrowed `IntoExpr` impls on the assignment side, so the
+/// update builders take a reference too.
+impl<T> super::assignment::Assign<Json<T>> for &T
+where
+    T: serde_core::Serialize,
+{
+    fn into_assignment(self) -> super::assignment::Assignment<Json<T>> {
+        super::set(<Self as IntoExpr<Json<T>>>::into_expr(self))
+    }
+}
+
+/// Same, for the explicit `Json(&value)` form.
+impl<T> super::assignment::Assign<Json<T>> for Json<&T>
+where
+    T: serde_core::Serialize,
+{
+    fn into_assignment(self) -> super::assignment::Assignment<Json<T>> {
+        super::set(<Self as IntoExpr<Json<T>>>::into_expr(self))
+    }
+}
+
+/// `Json(&value)` assigned to an `Option<Json<T>>` field.
+impl<T> super::assignment::Assign<Option<Json<T>>> for Json<&T>
+where
+    T: serde_core::Serialize,
+{
+    fn into_assignment(self) -> super::assignment::Assignment<Option<Json<T>>> {
+        super::set(<Self as IntoExpr<Option<Json<T>>>>::into_expr(self))
     }
 }
 

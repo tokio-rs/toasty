@@ -269,7 +269,7 @@ impl Exec<'_> {
         &self,
         stmt: &mut stmt::Statement,
     ) -> Option<MySQLUpdateReturning> {
-        if self.engine.capability().returning_from_mutation || !self.engine.capability().sql() {
+        if self.engine.capability().returning_from_update || !self.engine.capability().sql() {
             return None;
         }
 

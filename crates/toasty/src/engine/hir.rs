@@ -226,6 +226,10 @@ pub(super) enum Arg {
         /// The parent statement that provides the data for this reference.
         stmt_id: StmtId,
 
+        /// Position of `target_expr_ref` in the parent's [`BackRef::exprs`]
+        /// for this statement.
+        back_ref_column: usize,
+
         /// Number of nesting levels between this statement and the referenced parent.
         ///
         /// A value of 1 means the immediate parent, 2 means the grandparent, etc.

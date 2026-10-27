@@ -96,6 +96,7 @@
 //! | `sqlite`       | `toasty-driver-sqlite`       |
 //! | `postgresql`   | `toasty-driver-postgresql`   |
 //! | `mysql`        | `toasty-driver-mysql`        |
+//! | `mariadb`      | `toasty-driver-mysql`        |
 //! | `dynamodb`     | `toasty-driver-dynamodb`     |
 //! | `turso`        | `toasty-driver-turso`        |
 //!
