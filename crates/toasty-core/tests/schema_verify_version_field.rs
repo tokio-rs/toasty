@@ -57,6 +57,7 @@ fn build_model(fields: Vec<Field>, version_field: Option<FieldId>) -> Model {
             unique: true,
             primary_key: true,
         }],
+        referenced_fields: vec![],
         version_field,
     })
 }
