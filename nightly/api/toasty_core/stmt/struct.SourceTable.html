@@ -2,9 +2,9 @@
     pub tables: <a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="enum" href="enum.TableRef.html" title="enum toasty_core::stmt::TableRef">TableRef</a>&gt;,
     pub from: <a class="struct" href="https://doc.rust-lang.org/1.98.1/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="struct.TableWithJoins.html" title="struct toasty_core::stmt::TableWithJoins">TableWithJoins</a>&gt;,
 }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A lowered table-level data source for a <code>SELECT</code> statement.</p>
-<p>Contains a list of table references (which may be schema tables, CTEs, or
-derived tables) and the <code>FROM</code> items that reference them by index
-(<a href="struct.SourceTableId.html" title="struct toasty_core::stmt::SourceTableId"><code>SourceTableId</code></a>).</p>
+<p>Contains a list of table references (which may be schema tables, CTEs,
+derived tables, or table functions) and the <code>FROM</code> items that reference
+them by index (<a href="struct.SourceTableId.html" title="struct toasty_core::stmt::SourceTableId"><code>SourceTableId</code></a>).</p>
 <h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
 <div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">use </span>toasty_core::stmt::{SourceTable, TableRef, TableWithJoins, TableFactor, SourceTableId};
 <span class="kw">use </span>toasty_core::schema::db::TableId;
