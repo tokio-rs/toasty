@@ -3,21 +3,12 @@
 //! Tests that the engine decides whether a plan needs a transaction from what
 //! the driver says it can do, via [`Capability::interactive_transactions`].
 //!
-//! Each test wraps the SQLite driver in one that reports different
-//! capabilities and records what it is asked to do, so the assertions are
+//! Each test runs SQLite behind an [`InstrumentedDriver`] that reports chosen
+//! capabilities and records what the engine asks of it, so the assertions are
 //! about the engine's choices rather than any backend's behaviour.
 
-use std::sync::{Arc, Mutex, OnceLock};
-
-use async_trait::async_trait;
-use toasty_core::{
-    Schema,
-    driver::{Capability, ConnectContext, Driver, ExecResponse, Operation},
-    schema::{
-        db::{AppliedMigration, Migration},
-        diff,
-    },
-};
+use toasty_core::driver::{Capability, Operation};
+use toasty_driver_integration_suite::{InstrumentedDriver, InstrumentedHandle};
 
 #[derive(Debug, toasty::Model)]
 struct Author {
@@ -48,127 +39,23 @@ struct Book {
     author: toasty::Deferred<Author>,
 }
 
-/// What the engine asked the driver to do, in order.
-#[derive(Debug, PartialEq, Eq)]
-enum Call {
-    Transaction,
-    Statement,
-}
+/// Capabilities of a SQL backend that cannot open a transaction, so its reads
+/// get no snapshot.
+const WITHOUT_TRANSACTIONS: Capability = Capability {
+    interactive_transactions: false,
+    ..Capability::SQLITE
+};
 
-type Log = Arc<Mutex<Vec<Call>>>;
+async fn setup(capability: &'static Capability) -> (toasty::Db, InstrumentedHandle) {
+    let driver = InstrumentedDriver::new(Box::new(toasty_driver_sqlite::Sqlite::in_memory()))
+        .with_capability(capability);
+    let log = driver.handle();
 
-/// Wraps the SQLite driver, reporting chosen capabilities and recording the
-/// calls the engine makes.
-#[derive(Debug)]
-struct Probe {
-    inner: toasty_driver_sqlite::Sqlite,
-    capability: &'static Capability,
-    log: Log,
-}
-
-impl Probe {
-    /// Capabilities of a SQL backend that cannot open a transaction, so its
-    /// reads get no snapshot.
-    fn without_transactions() -> &'static Capability {
-        static CAPABILITY: OnceLock<Capability> = OnceLock::new();
-        CAPABILITY.get_or_init(|| Capability {
-            interactive_transactions: false,
-            ..Capability::SQLITE
-        })
-    }
-}
-
-#[async_trait]
-impl Driver for Probe {
-    fn url(&self) -> std::borrow::Cow<'_, str> {
-        self.inner.url()
-    }
-
-    fn capability(&self) -> &'static Capability {
-        self.capability
-    }
-
-    async fn connect(
-        &self,
-        cx: &ConnectContext,
-    ) -> toasty_core::Result<Box<dyn toasty_core::Connection>> {
-        Ok(Box::new(ProbeConnection {
-            inner: self.inner.connect(cx).await?,
-            log: self.log.clone(),
-        }))
-    }
-
-    fn max_connections(&self) -> Option<usize> {
-        self.inner.max_connections()
-    }
-
-    fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
-        self.inner.generate_migration(schema_diff)
-    }
-
-    async fn reset_db(&self) -> toasty_core::Result<()> {
-        self.inner.reset_db().await
-    }
-}
-
-#[derive(Debug)]
-struct ProbeConnection {
-    inner: Box<dyn toasty_core::Connection>,
-    log: Log,
-}
-
-#[async_trait]
-impl toasty_core::driver::Connection for ProbeConnection {
-    async fn exec(
-        &mut self,
-        schema: &Arc<Schema>,
-        op: Operation,
-    ) -> toasty_core::Result<ExecResponse> {
-        self.log.lock().unwrap().push(match op {
-            Operation::Transaction(_) => Call::Transaction,
-            _ => Call::Statement,
-        });
-        self.inner.exec(schema, op).await
-    }
-
-    async fn push_schema(&mut self, schema: &Schema) -> toasty_core::Result<()> {
-        self.inner.push_schema(schema).await
-    }
-
-    async fn applied_migrations(&mut self) -> toasty_core::Result<Vec<AppliedMigration>> {
-        self.inner.applied_migrations().await
-    }
-
-    async fn apply_migration(
-        &mut self,
-        id: u64,
-        name: &str,
-        migration: &Migration,
-    ) -> toasty_core::Result<()> {
-        self.inner.apply_migration(id, name, migration).await
-    }
-}
-
-async fn setup(capability: &'static Capability) -> (toasty::Db, Log) {
-    let log: Log = Arc::new(Mutex::new(vec![]));
     let mut builder = toasty::Db::builder();
     builder.models(toasty::models!(Author, Book));
-    let db = builder
-        .build(Probe {
-            inner: toasty_driver_sqlite::Sqlite::in_memory(),
-            capability,
-            log: log.clone(),
-        })
-        .await
-        .unwrap();
+    let db = builder.build(driver).await.unwrap();
     db.push_schema().await.unwrap();
     (db, log)
-}
-
-/// Clears the calls made while seeding, so an assertion sees only the
-/// statement under test.
-fn take(log: &Log) -> Vec<Call> {
-    std::mem::take(&mut *log.lock().unwrap())
 }
 
 async fn seed(db: &toasty::Db) -> u64 {
@@ -189,13 +76,27 @@ async fn seed(db: &toasty::Db) -> u64 {
     author.id
 }
 
+/// Drains the log, returning the operations the engine issued since it was
+/// last cleared.
+fn drain(log: &InstrumentedHandle) -> Vec<Operation> {
+    let mut ops = Vec::new();
+    while !log.is_empty() {
+        ops.push(log.pop_op());
+    }
+    ops
+}
+
+fn took_transaction(ops: &[Operation]) -> bool {
+    ops.iter().any(|op| matches!(op, Operation::Transaction(_)))
+}
+
 /// The default: an eager load reads under a transaction so both statements
 /// see one snapshot.
 #[tokio::test]
 async fn read_only_plan_takes_a_transaction_by_default() {
     let (db, log) = setup(&Capability::SQLITE).await;
     let author_id = seed(&db).await;
-    take(&log);
+    log.clear();
 
     let mut handle = db.clone();
     let author = Author::filter_by_id(author_id)
@@ -205,10 +106,10 @@ async fn read_only_plan_takes_a_transaction_by_default() {
         .unwrap();
     assert_eq!(author.books.get().len(), 2);
 
-    let calls = take(&log);
+    let ops = drain(&log);
     assert!(
-        calls.contains(&Call::Transaction),
-        "expected a transaction, got {calls:?}"
+        took_transaction(&ops),
+        "expected a transaction, got {ops:?}"
     );
 }
 
@@ -216,9 +117,9 @@ async fn read_only_plan_takes_a_transaction_by_default() {
 /// rather than a transaction it would have to refuse.
 #[tokio::test]
 async fn a_read_only_plan_skips_the_transaction_without_interactive_transactions() {
-    let (db, log) = setup(Probe::without_transactions()).await;
+    let (db, log) = setup(&WITHOUT_TRANSACTIONS).await;
     let author_id = seed(&db).await;
-    take(&log);
+    log.clear();
 
     let mut handle = db.clone();
     let author = Author::filter_by_id(author_id)
@@ -228,10 +129,10 @@ async fn a_read_only_plan_skips_the_transaction_without_interactive_transactions
         .unwrap();
     assert_eq!(author.books.get().len(), 2, "the eager load still resolves");
 
-    let calls = take(&log);
+    let ops = drain(&log);
     assert!(
-        !calls.contains(&Call::Transaction),
-        "expected no transaction, got {calls:?}"
+        !took_transaction(&ops),
+        "expected no transaction, got {ops:?}"
     );
 }
 
@@ -241,7 +142,7 @@ async fn a_read_only_plan_skips_the_transaction_without_interactive_transactions
 /// not to trade away.
 #[tokio::test]
 async fn a_writing_plan_still_takes_a_transaction_without_interactive_transactions() {
-    let (db, log) = setup(Probe::without_transactions()).await;
+    let (db, log) = setup(&WITHOUT_TRANSACTIONS).await;
     let author_id = seed(&db).await;
 
     let mut handle = db.clone();
@@ -250,13 +151,13 @@ async fn a_writing_plan_still_takes_a_transaction_without_interactive_transactio
         .await
         .unwrap();
     // Only the delete should be in view; resolving the author is setup.
-    take(&log);
+    log.clear();
 
     author.delete().exec(&mut handle).await.unwrap();
 
-    let calls = take(&log);
+    let ops = drain(&log);
     assert!(
-        calls.contains(&Call::Transaction),
-        "a delete that cascades writes twice, so it must still be wrapped: {calls:?}"
+        took_transaction(&ops),
+        "a delete that cascades writes twice, so it must still be wrapped: {ops:?}"
     );
 }
