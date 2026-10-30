@@ -119,6 +119,8 @@ the entry lands here.
 
 ## Drivers
 
+- Backends without interactive transactions — a read-only plan runs without
+  one ([design](design/transaction-less-backends.md), [#1128])
 - Connection pooling improvements ([#384])
 - Retry-safe transparent recovery from connection loss ([design](design/retry-safe-recovery.md), [#863])
 - New driver backends
@@ -136,6 +138,7 @@ the entry lands here.
 [#608]: https://github.com/tokio-rs/toasty/issues/608
 [#669]: https://github.com/tokio-rs/toasty/issues/669
 [#863]: https://github.com/tokio-rs/toasty/issues/863
+[#1128]: https://github.com/tokio-rs/toasty/issues/1128
 
 ## Macros
 

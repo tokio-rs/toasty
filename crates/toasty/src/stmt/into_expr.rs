@@ -352,6 +352,27 @@ where
 }
 impl_assign_via_expr!({T, U: IntoExpr<T>} Vec<U> => List<T>);
 
+// The `&T` blanket above only forwards `IntoExpr<T>`, so `&Vec<U>` needs its
+// own `List<T>` impl. Generated `by_ref` code for data-carrying enums relies
+// on it: match ergonomics bind variant fields as `&T`.
+impl<T, U> IntoExpr<List<T>> for &Vec<U>
+where
+    U: IntoExpr<T>,
+{
+    fn into_expr(self) -> Expr<List<T>> {
+        Expr::from_untyped(stmt::Expr::list(
+            self.iter().map(|item| item.by_ref().untyped),
+        ))
+    }
+
+    fn by_ref(&self) -> Expr<List<T>> {
+        Expr::from_untyped(stmt::Expr::list(
+            self.iter().map(|item| item.by_ref().untyped),
+        ))
+    }
+}
+impl_assign_via_expr!({T, U: IntoExpr<T>} &Vec<U> => List<T>);
+
 // `Vec<scalar>` model fields bind through the existing `IntoExpr<List<T>>`
 // impls (slice, array, `Vec<U>`, …) — `Field::ExprTarget = List<T>` for
 // `Vec<T: Scalar>`, so the create/update setter macros emit
@@ -467,6 +488,12 @@ impl_into_expr_for_tuple! {
     7 T7 E7
     8 T8 E8
     9 T9 E9
+    10 T10 E10
+    11 T11 E11
+    12 T12 E12
+    13 T13 E13
+    14 T14 E14
+    15 T15 E15
 }
 
 #[test]
@@ -478,4 +505,5 @@ fn assert_bounds() {
     assert_into_expr::<List<(String, String)>, &[(&String, &String)]>();
     assert_into_expr::<List<(String, String)>, [(&String, &String); 3]>();
     assert_into_expr::<List<(String, String)>, &[(&String, &String); 3]>();
+    assert_into_expr::<List<String>, &Vec<String>>();
 }

@@ -41,6 +41,7 @@ toasty_driver_integration_suite::generate_driver_tests!(
     native_json: false,
     native_jsonb: false,
     native_enum: false,
+    insert_values_unnest: false,
     vec_scalar: true,
     unique_list_index: false,
     vec_remove: false,
@@ -187,6 +188,44 @@ async fn deferred_mode_opts_out_of_begin_concurrent() {
         !msg.contains("Write-write conflict"),
         "deferred-mode error should NOT be MVCC's Write-write conflict; got: {msg}"
     );
+}
+
+/// A driver-wide mode applies to default transactions in either builder order,
+/// while an explicit per-transaction mode still takes precedence.
+#[tokio::test]
+async fn driver_transaction_mode_overrides_default() {
+    for driver in [
+        Turso::in_memory()
+            .concurrent_writes()
+            .with_transaction_mode(TransactionMode::Immediate),
+        Turso::in_memory()
+            .with_transaction_mode(TransactionMode::Immediate)
+            .concurrent_writes(),
+    ] {
+        let db = toasty::Db::builder()
+            .models(toasty::models!())
+            .max_pool_size(4)
+            .build(driver)
+            .await
+            .unwrap();
+        let mut db_a = db.clone();
+        let mut db_b = db.clone();
+        let tx_a = db_a.transaction().await.unwrap();
+
+        match db_b.transaction().await {
+            Ok(_) => panic!("the configured default must acquire the write lock at BEGIN"),
+            Err(err) => assert!(err.is_serialization_failure(), "{err}"),
+        }
+
+        let tx_b = db_b
+            .transaction_builder()
+            .mode(TransactionMode::Deferred)
+            .begin()
+            .await
+            .unwrap();
+        tx_b.rollback().await.unwrap();
+        tx_a.rollback().await.unwrap();
+    }
 }
 
 /// `.mode(TransactionMode::Immediate)` under `concurrent_writes()` must

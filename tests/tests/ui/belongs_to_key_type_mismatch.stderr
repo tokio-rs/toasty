@@ -1,0 +1,8 @@
+error[E0277]: the trait bound `toasty::stmt::Path<_, uuid::Uuid>: From<toasty::stmt::Path<Human, u32>>` is not satisfied
+  --> tests/ui/belongs_to_key_type_mismatch.rs:13:17
+   |
+13 | #[derive(Debug, toasty::Model)]
+   |                 ^^^^^^^^^^^^^ the trait `From<toasty::stmt::Path<Human, u32>>` is not implemented for `toasty::stmt::Path<_, uuid::Uuid>`
+   |
+   = note: required for `toasty::stmt::Path<Human, u32>` to implement `Into<toasty::stmt::Path<_, uuid::Uuid>>`
+   = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)

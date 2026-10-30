@@ -215,6 +215,15 @@ impl Expr {
         matches!(self, Self::Value(..))
     }
 
+    /// Returns the integer of a bound or static `I64` literal, or `None` for
+    /// any other expression.
+    pub fn as_i64_literal(&self) -> Option<i64> {
+        match self {
+            Self::Value(Value::I64(n)) | Self::Static(Value::I64(n)) => Some(*n),
+            _ => None,
+        }
+    }
+
     /// Returns `true` if the expression is a sub-statement.
     pub fn is_stmt(&self) -> bool {
         matches!(self, Self::Stmt(..))
