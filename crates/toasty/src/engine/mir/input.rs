@@ -46,8 +46,8 @@ impl Operation {
             // The input's cardinality is observed, so the read is
             // unconditional even though no row data is used.
             Operation::Repeat(m) => vec![(m.input, Always)],
-            Operation::QueryPk(m) => m.input.into_iter().map(|i| (i, Always)).collect(),
-            Operation::Scan(m) => m.input.into_iter().map(|i| (i, Always)).collect(),
+            Operation::QueryPk(m) => m.inputs.iter().map(|&i| (i, Always)).collect(),
+            Operation::Scan(m) => m.inputs.iter().map(|&i| (i, Always)).collect(),
             Operation::UpdateByKey(m) => vec![(m.input, Always)],
             Operation::Upsert(m) => m.inputs.iter().map(|&i| (i, Always)).collect(),
         }

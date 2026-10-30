@@ -1,0 +1,16 @@
+error[E0277]: `belongs_to` key field has type `uuid::Uuid`, but the field it references has type `u32`
+  --> tests/ui/embed_enum_belongs_to_key_type_mismatch.rs:26:9
+   |
+26 |         id: uuid::Uuid,
+   |         ^^ this key field must have type `u32`
+   |
+   = help: the trait `toasty::codegen_support::foreign_key::SameKeyType<u32>` is not implemented for `uuid::Uuid`
+   = note: a foreign key stores the referenced field's value, so both fields must have the same type
+note: required by a bound in `toasty::codegen_support::foreign_key::TargetField::<T>::check_key`
+  --> $WORKSPACE/crates/toasty/src/codegen_support/foreign_key.rs
+   |
+   |     pub fn check_key<Key>(self)
+   |            --------- required by a bound in this associated function
+   |     where
+   |         Key: SameKeyType<T>,
+   |              ^^^^^^^^^^^^^^ required by this bound in `TargetField::<T>::check_key`

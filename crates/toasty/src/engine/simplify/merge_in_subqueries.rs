@@ -103,6 +103,9 @@ impl Simplify<'_> {
                 let Expr::InSubquery(first) = &mut operands[i] else {
                     unreachable!();
                 };
+                // Merged rows are present unique keys, so either flag gives the
+                // same result; keep it only when both sides compare keys.
+                first.relation_key &= other.relation_key;
                 let select = first.query.body.as_select_mut_unwrap();
                 select.add_filter(other.query.body.as_select_unwrap().filter.clone());
                 // Combining filters can expose further memberships at a deeper
