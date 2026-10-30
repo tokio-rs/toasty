@@ -88,7 +88,7 @@ migration behavior:
 |---|---|---|
 | `path` | `"toasty"` | Base directory for migration files, snapshots, and history |
 | `prefix_style` | `"Sequential"` | File naming: `"Sequential"` (0001_, 0002_) or `"Timestamp"` (20240112_153045_) |
-| `flavor` | unset | Database flavor used when `--flavor` is not passed: `"sqlite"`, `"postgresql"`, `"mysql"`, or `"turso"` |
+| `flavor` | unset | Database flavor used when `--flavor` is not passed: `"sqlite"`, `"postgresql"`, `"mysql"`, `"mariadb"`, or `"turso"` |
 | `table_name_prefix` | unset | Prefix applied to every table name in the extracted schema |
 
 Set `table_name_prefix` to the same value the application passes to
