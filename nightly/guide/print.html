@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-6bedf422.js";
+            window.path_to_searchindex_js = "searchindex-0c307976.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -6343,7 +6343,7 @@ know whether a given relation was preloaded. Use <code>.try_get()</code> to acce
 loaded value without panicking — it returns <code>None</code> if the relation has not been
 loaded:</p>
 <pre><code class="language-rust ignore">fn post_count(user: &amp;User) -&gt; Option&lt;usize&gt; {
-    user.posts.try_get().map(&lt;[_]&gt;::len)
+    user.posts.try_get().map(Vec::len)
 }</code></pre>
 <p><code>.try_get()</code> is available on relation fields and returns the same reference
 shape as <code>.get()</code> wrapped in an <code>Option</code>:</p>
