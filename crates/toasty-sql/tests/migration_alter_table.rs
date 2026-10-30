@@ -15,6 +15,7 @@ fn make_column(table_id: usize, index: usize, name: &str, storage_ty: Type) -> C
             index,
         },
         name: name.to_string(),
+        comment: None,
         ty: core_stmt::Type::String,
         storage_ty,
         nullable: false,
@@ -34,6 +35,7 @@ fn make_table(id: usize, name: &str, columns: Vec<Column>) -> Table {
     Table {
         id: TableId(id),
         name: name.to_string(),
+        comment: None,
         columns,
         primary_key: PrimaryKey {
             columns: pk_columns,
