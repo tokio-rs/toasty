@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.11.0...toasty-driver-integration-suite-v0.12.0) - 2026-10-30
+
+### Added
+
+- Includes now support offset and limit ([#1123], [#1122])
+- Read-only plans can run without interactive transactions ([#1302])
+
+### Fixed
+
+- Select now supports tuple projections with up to 16 fields ([#1296])
+- Can now use vector references in list expressions ([#1290])
+- Worker-gone channel errors now return connection_lost instead of panicking ([#1244])
+- Unsupported OR index filters no longer panic ([#1288])
+- Key lookups now work with additional key predicates ([#1284])
+- Subquery inputs in key-value filters now work correctly ([#1282])
+- Relation membership checks now correctly exclude absent keys ([#1271])
+- Eager loading of belongs_to now works with foreign keys
+
+### Changed
+
+- PostgreSQL batch inserts are now more efficient ([#1103])
+
+[#1103]: https://github.com/tokio-rs/toasty/pull/1103
+[#1122]: https://github.com/tokio-rs/toasty/pull/1122
+[#1123]: https://github.com/tokio-rs/toasty/pull/1123
+[#1244]: https://github.com/tokio-rs/toasty/pull/1244
+[#1271]: https://github.com/tokio-rs/toasty/pull/1271
+[#1282]: https://github.com/tokio-rs/toasty/pull/1282
+[#1284]: https://github.com/tokio-rs/toasty/pull/1284
+[#1288]: https://github.com/tokio-rs/toasty/pull/1288
+[#1290]: https://github.com/tokio-rs/toasty/pull/1290
+[#1296]: https://github.com/tokio-rs/toasty/pull/1296
+[#1302]: https://github.com/tokio-rs/toasty/pull/1302
+
 ## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.10.0...toasty-driver-integration-suite-v0.11.0) - 2026-09-24
 
 ### Added
