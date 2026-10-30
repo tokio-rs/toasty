@@ -1968,28 +1968,28 @@
 <a href=#1968 id=1968 data-nosnippet>1968</a>    }
 <a href=#1969 id=1969 data-nosnippet>1969</a>
 <a href=#1970 id=1970 data-nosnippet>1970</a>    <span class="doccomment">/// Moves a returning sub-statement's `LIMIT` off the statement and onto
-<a href=#1971 id=1971 data-nosnippet>1971</a>    /// [`hir::StatementInfo::per_parent_limit`], where `NestedMerge` applies it
-<a href=#1972 id=1972 data-nosnippet>1972</a>    /// per parent row while merging.
-<a href=#1973 id=1973 data-nosnippet>1973</a>    </span><span class="kw">fn </span>take_per_parent_limit(<span class="kw-2">&amp;mut </span><span class="self">self</span>, stmt: <span class="kw-2">&amp;mut </span>stmt::Statement) {
-<a href=#1974 id=1974 data-nosnippet>1974</a>        <span class="kw">let </span>stmt::Statement::Query(query) = stmt <span class="kw">else </span>{
-<a href=#1975 id=1975 data-nosnippet>1975</a>            <span class="kw">return</span>;
-<a href=#1976 id=1976 data-nosnippet>1976</a>        };
-<a href=#1977 id=1977 data-nosnippet>1977</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(limit) = query.limit.take() <span class="kw">else </span>{
-<a href=#1978 id=1978 data-nosnippet>1978</a>            <span class="kw">return</span>;
-<a href=#1979 id=1979 data-nosnippet>1979</a>        };
-<a href=#1980 id=1980 data-nosnippet>1980</a>        <span class="kw">let </span>stmt::Limit::Offset(limit_offset) = limit <span class="kw">else </span>{
-<a href=#1981 id=1981 data-nosnippet>1981</a>            <span class="macro">todo!</span>(<span class="string">"cursor pagination on an `.include(...)` query"</span>)
-<a href=#1982 id=1982 data-nosnippet>1982</a>        };
-<a href=#1983 id=1983 data-nosnippet>1983</a>        <span class="macro">assert!</span>(
-<a href=#1984 id=1984 data-nosnippet>1984</a>            limit_offset.offset.is_none(),
-<a href=#1985 id=1985 data-nosnippet>1985</a>            <span class="string">"include limits do not support offset"
-<a href=#1986 id=1986 data-nosnippet>1986</a>        </span>);
-<a href=#1987 id=1987 data-nosnippet>1987</a>        <span class="kw">let </span>n = <span class="kw">match </span><span class="kw-2">&amp;</span>limit_offset.limit {
-<a href=#1988 id=1988 data-nosnippet>1988</a>            stmt::Expr::Value(stmt::Value::I64(n)) | stmt::Expr::Static(stmt::Value::I64(n)) =&gt; <span class="kw-2">*</span>n,
-<a href=#1989 id=1989 data-nosnippet>1989</a>            expr =&gt; <span class="macro">panic!</span>(<span class="string">"include limit must be an i64 literal; got {expr:#?}"</span>),
-<a href=#1990 id=1990 data-nosnippet>1990</a>        };
-<a href=#1991 id=1991 data-nosnippet>1991</a>        <span class="self">self</span>.curr_stmt_info().per_parent_limit =
-<a href=#1992 id=1992 data-nosnippet>1992</a>            <span class="prelude-val">Some</span>(usize::try_from(n).expect(<span class="string">"include limit must be non-negative"</span>));
+<a href=#1971 id=1971 data-nosnippet>1971</a>    /// [`hir::StatementInfo::per_parent_limit`] and
+<a href=#1972 id=1972 data-nosnippet>1972</a>    /// [`hir::StatementInfo::per_parent_offset`], where `NestedMerge` applies
+<a href=#1973 id=1973 data-nosnippet>1973</a>    /// them per parent row while merging.
+<a href=#1974 id=1974 data-nosnippet>1974</a>    </span><span class="kw">fn </span>take_per_parent_limit(<span class="kw-2">&amp;mut </span><span class="self">self</span>, stmt: <span class="kw-2">&amp;mut </span>stmt::Statement) {
+<a href=#1975 id=1975 data-nosnippet>1975</a>        <span class="kw">let </span>stmt::Statement::Query(query) = stmt <span class="kw">else </span>{
+<a href=#1976 id=1976 data-nosnippet>1976</a>            <span class="kw">return</span>;
+<a href=#1977 id=1977 data-nosnippet>1977</a>        };
+<a href=#1978 id=1978 data-nosnippet>1978</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(limit) = query.limit.take() <span class="kw">else </span>{
+<a href=#1979 id=1979 data-nosnippet>1979</a>            <span class="kw">return</span>;
+<a href=#1980 id=1980 data-nosnippet>1980</a>        };
+<a href=#1981 id=1981 data-nosnippet>1981</a>        <span class="kw">let </span>stmt::Limit::Offset(limit_offset) = limit <span class="kw">else </span>{
+<a href=#1982 id=1982 data-nosnippet>1982</a>            <span class="macro">todo!</span>(<span class="string">"cursor pagination on an `.include(...)` query"</span>)
+<a href=#1983 id=1983 data-nosnippet>1983</a>        };
+<a href=#1984 id=1984 data-nosnippet>1984</a>        <span class="kw">let </span>limit = as_include_limit_literal(<span class="kw-2">&amp;</span>limit_offset.limit, <span class="string">"limit"</span>);
+<a href=#1985 id=1985 data-nosnippet>1985</a>        <span class="kw">let </span>offset = limit_offset
+<a href=#1986 id=1986 data-nosnippet>1986</a>            .offset
+<a href=#1987 id=1987 data-nosnippet>1987</a>            .as_ref()
+<a href=#1988 id=1988 data-nosnippet>1988</a>            .map(|offset| as_include_limit_literal(offset, <span class="string">"offset"</span>));
+<a href=#1989 id=1989 data-nosnippet>1989</a>
+<a href=#1990 id=1990 data-nosnippet>1990</a>        <span class="kw">let </span>stmt_info = <span class="self">self</span>.curr_stmt_info();
+<a href=#1991 id=1991 data-nosnippet>1991</a>        stmt_info.per_parent_limit = <span class="prelude-val">Some</span>(limit);
+<a href=#1992 id=1992 data-nosnippet>1992</a>        stmt_info.per_parent_offset = offset;
 <a href=#1993 id=1993 data-nosnippet>1993</a>    }
 <a href=#1994 id=1994 data-nosnippet>1994</a>
 <a href=#1995 id=1995 data-nosnippet>1995</a>    <span class="kw">fn </span>schema(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'b </span>Schema {
@@ -2497,4 +2497,14 @@
 <a href=#2497 id=2497 data-nosnippet>2497</a>        <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
 <a href=#2498 id=2498 data-nosnippet>2498</a>    }
 <a href=#2499 id=2499 data-nosnippet>2499</a>}
+<a href=#2500 id=2500 data-nosnippet>2500</a>
+<a href=#2501 id=2501 data-nosnippet>2501</a><span class="doccomment">/// Reads an include's `LIMIT` or `OFFSET` operand as a row count. Panics on any
+<a href=#2502 id=2502 data-nosnippet>2502</a>/// other shape — an invariant violation that the include builder prevents.
+<a href=#2503 id=2503 data-nosnippet>2503</a></span><span class="kw">fn </span>as_include_limit_literal(expr: <span class="kw-2">&amp;</span>stmt::Expr, what: <span class="kw-2">&amp;</span>str) -&gt; usize {
+<a href=#2504 id=2504 data-nosnippet>2504</a>    <span class="kw">let </span>n = <span class="kw">match </span>expr {
+<a href=#2505 id=2505 data-nosnippet>2505</a>        stmt::Expr::Value(stmt::Value::I64(n)) | stmt::Expr::Static(stmt::Value::I64(n)) =&gt; <span class="kw-2">*</span>n,
+<a href=#2506 id=2506 data-nosnippet>2506</a>        expr =&gt; <span class="macro">panic!</span>(<span class="string">"include {what} must be an i64 literal; got {expr:#?}"</span>),
+<a href=#2507 id=2507 data-nosnippet>2507</a>    };
+<a href=#2508 id=2508 data-nosnippet>2508</a>    usize::try_from(n).unwrap_or_else(|<span class="kw">_</span>| <span class="macro">panic!</span>(<span class="string">"include {what} must be non-negative"</span>))
+<a href=#2509 id=2509 data-nosnippet>2509</a>}
 </code></pre></div></section></main></body></html>
