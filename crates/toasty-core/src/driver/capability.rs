@@ -273,26 +273,13 @@ pub struct Capability {
 
     /// Whether the backend can hold a transaction open across calls.
     ///
-    /// A plan of several database operations is wrapped in `BEGIN`/`COMMIT`
-    /// when it writes, or when the driver has transactions to give its reads a
-    /// snapshot with. A driver that reports `false` gets its read-only plans
-    /// run unwrapped: the transaction an eager load takes is there for the
-    /// snapshot, not for atomicity, so running it unwrapped returns the right
-    /// rows and gives up only that they cannot straddle a concurrent write.
-    ///
-    /// This does not relax writes. A plan that writes more than once needs a
-    /// transaction for atomicity, so on a driver that reports `false` the
-    /// engine rejects it at plan time with
-    /// [`Error::unsupported_feature`](crate::Error::unsupported_feature)
-    /// rather than issuing a `BEGIN` the driver cannot honour or running the
-    /// writes unwrapped. Delivering those writes atomically is
-    /// `transaction_delivery`'s subject, in
-    /// `docs/dev/design/atomic-batches.md`.
-    ///
+    /// When `false`, a read-only plan of several statements runs without
+    /// `BEGIN`/`COMMIT`, giving up the snapshot but returning the right rows.
+    /// A plan that writes more than once still needs a transaction and is
+    /// rejected at plan time with
+    /// [`Error::unsupported_feature`](crate::Error::unsupported_feature).
     /// Set it `false` only when the backend genuinely cannot open a
-    /// transaction. Setting it on a backend that can would quietly weaken
-    /// reads that users expect to be consistent. See
-    /// `docs/dev/design/transaction-less-backends.md`.
+    /// transaction.
     pub interactive_transactions: bool,
 
     /// Whether the backend can walk a paginated query in reverse from a
