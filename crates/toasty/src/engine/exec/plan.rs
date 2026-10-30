@@ -56,4 +56,20 @@ impl Step {
                 .count(),
         }
     }
+
+    /// Whether this step can modify the database, counting into `If` arms.
+    ///
+    /// Static like [`Step::db_op_count`], and conservative in the same
+    /// direction: a write in a skipped `If` arm still counts, which can leave
+    /// a transaction wrapping reads alone. Costing a transaction that was not
+    /// needed is harmless; the reverse is not.
+    pub(crate) fn writes(&self, plan: &mir::LogicalPlan) -> bool {
+        match self {
+            Step::Run(node_id) => plan[node_id].op.is_effectful(),
+            Step::If(action) => action
+                .then
+                .iter()
+                .any(|node_id| plan[*node_id].op.is_effectful()),
+        }
+    }
 }

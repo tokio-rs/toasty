@@ -28,6 +28,7 @@ struct ExecPlanner<'a> {
     logical_plan: &'a LogicalPlan,
     steps: Vec<Step>,
     use_transactions: bool,
+    interactive_transactions: bool,
 }
 
 impl Engine {
@@ -41,24 +42,25 @@ impl Engine {
         .build_logical_plan()?;
 
         // Build the execution plan from the logical plan
-        Ok(self.plan_execution(logical_plan))
+        self.plan_execution(logical_plan)
     }
 
-    fn plan_execution(&self, logical_plan: mir::LogicalPlan) -> ExecPlan {
+    fn plan_execution(&self, logical_plan: mir::LogicalPlan) -> Result<ExecPlan> {
         let (steps, needs_transaction) = ExecPlanner {
             logical_plan: &logical_plan,
             steps: vec![],
             use_transactions: self.capability().sql(),
+            interactive_transactions: self.capability().interactive_transactions,
         }
-        .plan_execution();
+        .plan_execution()?;
 
-        ExecPlan {
+        Ok(ExecPlan {
             vars: VarStore::new(logical_plan.node_count(), self.schema.clone()),
             returning: logical_plan.completion(),
             plan: logical_plan,
             steps,
             needs_transaction,
-        }
+        })
     }
 }
 

@@ -271,6 +271,17 @@ pub struct Capability {
     /// [`Error::unsupported_feature`](crate::Error::unsupported_feature).
     pub transaction_lock_mode: bool,
 
+    /// Whether the backend can hold a transaction open across calls.
+    ///
+    /// When `false`, a read-only plan of several statements runs without
+    /// `BEGIN`/`COMMIT`, giving up the snapshot but returning the right rows.
+    /// A plan that writes more than once still needs a transaction and is
+    /// rejected at plan time with
+    /// [`Error::unsupported_feature`](crate::Error::unsupported_feature).
+    /// Set it `false` only when the backend genuinely cannot open a
+    /// transaction.
+    pub interactive_transactions: bool,
+
     /// Whether the backend can walk a paginated query in reverse from a
     /// cursor.
     ///
@@ -723,6 +734,7 @@ impl Capability {
         // SQLite exposes `BEGIN DEFERRED|IMMEDIATE|EXCLUSIVE` for
         // lock-acquisition policy.
         transaction_lock_mode: true,
+        interactive_transactions: true,
 
         backward_pagination: true,
         sql_nulls_first_on_asc: true,
@@ -984,6 +996,7 @@ impl Capability {
 
         // DynamoDB rejects `Operation::Transaction` wholesale.
         transaction_lock_mode: false,
+        interactive_transactions: false,
 
         backward_pagination: false,
         sql_nulls_first_on_asc: false,
