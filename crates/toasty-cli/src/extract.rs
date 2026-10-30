@@ -10,10 +10,10 @@ use anyhow::{Context, Result, bail};
 use console::style;
 use std::path::Path;
 use std::process::{Command, Stdio};
+use toasty::schema::db;
 use toasty::schema_dump::{
     DUMP_SCHEMA_ENV, DUMP_TABLE_NAME_PREFIX_ENV, SCHEMA_DUMP_VERSION, SchemaDump,
 };
-use toasty_core::schema::db;
 
 /// Builds the selected target of `project` and extracts its schema, lowered
 /// for `flavor`.

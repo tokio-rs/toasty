@@ -66,7 +66,6 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<dif
         let Some(rename) = ask_next_rename(&diff, &mut confirmed)? else {
             break;
         };
-        drop(diff);
 
         match rename {
             Rename::Table(from, to) => hints.add_table_hint(from, to),

@@ -48,7 +48,7 @@ libloading.workspace = true
 rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 toml.workspace = true
 
 [dev-dependencies]
