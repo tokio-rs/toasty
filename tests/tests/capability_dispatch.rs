@@ -58,6 +58,9 @@ async fn setup(capability: &'static Capability) -> (toasty::Db, InstrumentedHand
     (db, log)
 }
 
+/// Seeds one author with two books, one statement at a time: a nested create
+/// is a multi-write plan, which a driver without interactive transactions
+/// rejects (see the last test).
 async fn seed(db: &toasty::Db) -> u64 {
     let mut handle = db.clone();
     let author = Author::create()
@@ -137,27 +140,30 @@ async fn a_read_only_plan_skips_the_transaction_without_interactive_transactions
 }
 
 /// The flag relaxes reads and nothing else. A plan that writes more than once
-/// still asks for a transaction, so a backend that has none still refuses it
-/// rather than committing half of it — the guarantee this design is careful
-/// not to trade away.
+/// needs a transaction for atomicity, so without one the engine rejects it
+/// before any statement reaches the driver, rather than committing half of
+/// it — the guarantee this design is careful not to trade away.
 #[tokio::test]
-async fn a_writing_plan_still_takes_a_transaction_without_interactive_transactions() {
+async fn a_writing_plan_is_rejected_without_interactive_transactions() {
     let (db, log) = setup(&WITHOUT_TRANSACTIONS).await;
-    let author_id = seed(&db).await;
-
-    let mut handle = db.clone();
-    let author = Author::filter_by_id(author_id)
-        .get(&mut handle)
-        .await
-        .unwrap();
-    // Only the delete should be in view; resolving the author is setup.
     log.clear();
 
-    author.delete().exec(&mut handle).await.unwrap();
+    let mut handle = db.clone();
+    let err = Author::create()
+        .name("Alice")
+        .books([Book::create().title("Alpha"), Book::create().title("Beta")])
+        .exec(&mut handle)
+        .await
+        .expect_err("a nested create writes more than once, so it must be rejected");
+    assert!(err.is_unsupported_feature(), "unexpected error: {err}");
 
     let ops = drain(&log);
     assert!(
-        took_transaction(&ops),
-        "a delete that cascades writes twice, so it must still be wrapped: {ops:?}"
+        ops.is_empty(),
+        "no statement should reach the driver, got {ops:?}"
     );
+
+    // Nothing was written, not even the parent row.
+    assert_eq!(Author::all().count().exec(&mut handle).await.unwrap(), 0);
+    assert_eq!(Book::all().count().exec(&mut handle).await.unwrap(), 0);
 }

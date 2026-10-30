@@ -280,9 +280,13 @@ pub struct Capability {
     /// snapshot, not for atomicity, so running it unwrapped returns the right
     /// rows and gives up only that they cannot straddle a concurrent write.
     ///
-    /// This does not relax writes. A plan that writes still asks for a
-    /// transaction and a driver without one still refuses it; delivering those
-    /// writes atomically is `transaction_delivery`'s subject, in
+    /// This does not relax writes. A plan that writes more than once needs a
+    /// transaction for atomicity, so on a driver that reports `false` the
+    /// engine rejects it at plan time with
+    /// [`Error::unsupported_feature`](crate::Error::unsupported_feature)
+    /// rather than issuing a `BEGIN` the driver cannot honour or running the
+    /// writes unwrapped. Delivering those writes atomically is
+    /// `transaction_delivery`'s subject, in
     /// `docs/dev/design/atomic-batches.md`.
     ///
     /// Set it `false` only when the backend genuinely cannot open a

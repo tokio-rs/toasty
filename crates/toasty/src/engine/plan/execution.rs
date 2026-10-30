@@ -1,21 +1,24 @@
 use indexmap::IndexSet;
 
-use crate::engine::{
-    exec::{self, Step},
-    mir,
-    plan::ExecPlanner,
+use crate::{
+    Result,
+    engine::{
+        exec::{self, Step},
+        mir,
+        plan::ExecPlanner,
+    },
 };
 
 impl ExecPlanner<'_> {
     /// Converts the logical plan's execution order into the exec program's
     /// step sequence, returning the steps and whether the plan needs to be
     /// wrapped in a transaction.
-    pub(super) fn plan_execution(mut self) -> (Vec<Step>, bool) {
+    pub(super) fn plan_execution(mut self) -> Result<(Vec<Step>, bool)> {
         self.plan_steps();
 
-        let needs_transaction = self.needs_transaction();
+        let needs_transaction = self.needs_transaction()?;
 
-        (self.steps, needs_transaction)
+        Ok((self.steps, needs_transaction))
     }
 
     fn plan_steps(&mut self) {
@@ -65,19 +68,33 @@ impl ExecPlanner<'_> {
     /// A plan of several database operations takes a transaction for one of
     /// two reasons: so its writes commit together, or so its reads see one
     /// snapshot. Only the second is optional. A driver whose backend cannot
-    /// hold a transaction open still needs its reads to run, whereas letting
-    /// its writes proceed unwrapped would drop atomicity silently — so a
-    /// writing plan asks for a transaction regardless, and such a driver
-    /// refuses it as before.
-    fn needs_transaction(&self) -> bool {
+    /// hold a transaction open gets its read-only plans unwrapped. A plan
+    /// that writes is rejected here instead: running it unwrapped would drop
+    /// atomicity silently, and asking for a transaction would only move the
+    /// refusal into the driver. Delivering such writes atomically is
+    /// `transaction_delivery`'s subject, in
+    /// `docs/dev/design/atomic-batches.md`.
+    fn needs_transaction(&self) -> Result<bool> {
         let db_ops = self
             .steps
             .iter()
             .map(|step| step.db_op_count(self.logical_plan))
             .sum::<usize>();
+
+        if !self.use_transactions || db_ops <= 1 {
+            return Ok(false);
+        }
+
         let writes = self.steps.iter().any(|step| step.writes(self.logical_plan));
 
-        self.use_transactions && db_ops > 1 && (writes || self.interactive_transactions)
+        if writes && !self.interactive_transactions {
+            return Err(toasty_core::Error::unsupported_feature(
+                "the plan needs a transaction, \
+                 but the driver does not support interactive transactions",
+            ));
+        }
+
+        Ok(writes || self.interactive_transactions)
     }
 
     /// Wraps a run of same-guard nodes in an `If`, deriving the skip
