@@ -98,8 +98,5 @@ Show with concrete examples rather than abstract description.
 
 ## Keeping the guide current
 
-Toasty iterates quickly. The
-[`sync-docs`](../../.claude/skills/sync-docs/SKILL.md) skill walks
-the commit log for user-observable changes and updates this guide and
-the rustdoc to match. Run it periodically — or before a release —
-to catch features that have landed without doc updates.
+Review the commit log periodically — or before a release — for
+user-observable changes. Update this guide and the rustdoc to match.

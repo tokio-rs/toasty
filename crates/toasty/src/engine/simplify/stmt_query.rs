@@ -30,7 +30,9 @@ impl Simplify<'_> {
             return false;
         };
 
-        if select.filter.is_false() {
+        // SQL-style predicates retain only true rows. A constant NULL
+        // comparison (for example, a cleared relation key) also matches none.
+        if select.filter.is_false() || select.filter.as_expr().is_value_null() {
             return true;
         }
 

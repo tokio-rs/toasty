@@ -1135,7 +1135,7 @@ impl RelationSource for EmbeddedRelationSource<'_> {
     }
 
     fn set_returning_field(&mut self, _field: &Field, _expr: stmt::Expr) {
-        unreachable!("embedded relations are deferred belongs-to fields")
+        unreachable!("embedded belongs-to returning slots are filled by include lowering")
     }
 
     fn needs_existence_check(&self) -> bool {

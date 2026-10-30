@@ -50,9 +50,13 @@ pub trait Model: Load<Output = Self> + Sized {
     /// of a has-many relation, parameterized by the origin model.
     type ManyField<Origin>;
 
-    /// The field accessor type used when this model appears as the "one" side
-    /// of a has-one relation, parameterized by the origin model.
-    type OneField<Origin>;
+    /// The field accessor for a singular relation to this model,
+    /// parameterized by the origin and path target.
+    ///
+    /// `Target` is `Self` for required relations and `Option<Self>` for
+    /// optional relations, as resolved by
+    /// [`RelationOneField::Expr`](super::RelationOneField::Expr).
+    type OneField<Origin, Target>;
 
     /// Unique identifier for this model within the schema.
     ///

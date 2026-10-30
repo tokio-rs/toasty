@@ -112,6 +112,12 @@ impl Expr {
         matches!(self, Self::Reference(ExprReference::Field { .. }))
     }
 
+    /// Returns `true` if this references a field in the current query scope
+    /// (`nesting == 0`).
+    pub fn is_self_field(&self) -> bool {
+        self.as_self_field_index().is_some()
+    }
+
     /// Returns the field index if this references a field in the current
     /// query scope (`nesting == 0`), or `None` otherwise.
     pub fn as_self_field_index(&self) -> Option<usize> {

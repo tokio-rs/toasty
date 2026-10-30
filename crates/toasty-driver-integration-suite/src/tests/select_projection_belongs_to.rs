@@ -55,3 +55,26 @@ pub async fn select_belongs_to(t: &mut Test) -> Result<()> {
     assert_eq!(user.map(|u| u.name).as_deref(), Some("Alice"));
     Ok(())
 }
+
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
+pub async fn select_belongs_to_in_list(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    let alice = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+    let todo = toasty::create!(Todo {
+        title: "Hello",
+        user: &alice,
+    })
+    .exec(&mut db)
+    .await?;
+
+    let users: Vec<Vec<User>> = Todo::filter_by_id(todo.id)
+        .select(toasty::stmt::Expr::list([Todo::fields().user()]))
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(users, [[{ id: == alice.id, name: "Alice" }]]);
+    Ok(())
+}

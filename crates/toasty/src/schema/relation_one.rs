@@ -20,9 +20,9 @@ pub trait RelationOneField: Load<Output = Self> {
     /// `<Target as Model>::Query<Option<Target>>`.
     type One;
 
-    /// The expression-level type used in create/update setters. Resolves to
-    /// the unwrapped `Self::Target` for non-nullable impls and `Option<Self::Target>`
-    /// for nullable impls.
+    /// The path target and expression type used in create/update setters.
+    /// Resolves to `Self::Target` for non-nullable impls and
+    /// `Option<Self::Target>` for nullable impls.
     type Expr;
 
     /// Whether the field stores its value in a deferred load slot.

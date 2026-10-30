@@ -378,7 +378,7 @@ impl Expand<'_> {
                 let assoc = #toasty::#chain_builder::<#model_ident, #target>(
                     self.stmt,
                     #field_offset,
-                    #model_ident::fields().#field_ident().into(),
+                    <#model_ident as #toasty::Model>::path_field(#field_offset),
                 );
                 <#toasty::QueryMany<#target>>::from_assoc_many(assoc)
             }

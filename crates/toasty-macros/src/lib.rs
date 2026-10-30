@@ -1260,10 +1260,10 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// (see [`Model`][`derive@Model`]). The differences:
 ///
 /// - `key` references a sibling field of the same struct or variant.
-/// - The field type must be `toasty::Deferred<..>`; the always-loaded
-///   form is not supported.
-/// - There is no `.include()`: load the referenced model with an
-///   ordinary `get_by_*` / `find_by_*` on the stored key.
+/// - An `.include()` path loads only the field it names. Including a deferred
+///   embed does not load deferred relations inside it; name each relation in
+///   its own include path.
+/// - A non-deferred relation loads automatically with its containing embed.
 /// - A `has_many` on the target cannot pair with it.
 ///
 /// ```no_run

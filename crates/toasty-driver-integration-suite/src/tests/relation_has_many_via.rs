@@ -780,13 +780,13 @@ pub async fn select_via_has_one(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    let subscriptions: Vec<Subscription> = User::filter(User::fields().name().eq("Alice"))
+    let subscriptions: Vec<Option<Subscription>> = User::filter(User::fields().name().eq("Alice"))
         .select(User::fields().subscription())
         .exec(&mut db)
         .await?;
 
     assert_eq!(1, subscriptions.len());
-    assert_eq!(subscriptions[0].plan, "pro");
+    assert_eq!(subscriptions[0].as_ref().unwrap().plan, "pro");
 
     Ok(())
 }

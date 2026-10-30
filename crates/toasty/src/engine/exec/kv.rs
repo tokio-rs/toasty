@@ -7,6 +7,55 @@ use crate::engine::simplify;
 use super::Exec;
 
 impl Exec<'_> {
+    /// Bind a key-value row filter to its operation's input values.
+    ///
+    /// Returns `false` when the bound filter matches no row, so the caller
+    /// can skip the driver call. A filter that binds to `true` is removed.
+    pub(super) fn bind_row_filter(
+        &self,
+        filter: &mut Option<stmt::Expr>,
+        input: &[stmt::Value],
+        table: TableId,
+    ) -> bool {
+        let Some(expr) = filter else {
+            return true;
+        };
+
+        // An absent candidate key matches no row. Dropping it keeps the
+        // key-value comparison two-valued, so a negated membership still
+        // admits every other row. Only lists bound from the input carry
+        // candidate keys; constant lists in the filter are left as written.
+        stmt::visit_mut::for_each_expr_mut(expr, |expr| {
+            if let stmt::Expr::InList(in_list) = expr
+                && is_input_arg(&in_list.list)
+            {
+                in_list.list.substitute(input);
+
+                if let stmt::Expr::Value(stmt::Value::List(values)) = &mut *in_list.list {
+                    values.retain(|value| !is_absent_key(value));
+                }
+            }
+        });
+
+        expr.substitute(input);
+
+        // Bound inputs can reduce the filter to a constant, e.g. an empty
+        // candidate list turns `x IN ()` into `false`.
+        let db_table = self.engine.schema.db.table(table);
+        let cx = self.engine.expr_cx_for(db_table);
+        simplify::simplify_expr(cx, self.engine.capability, expr);
+
+        if expr.is_unsatisfiable() {
+            return false;
+        }
+
+        if expr.is_true() {
+            *filter = None;
+        }
+
+        true
+    }
+
     /// Split a composite filter into individual key predicates.
     ///
     /// Recognizes these forms and decomposes them:
@@ -94,7 +143,7 @@ impl Exec<'_> {
         let mut seen = ValueSet::with_capacity(values.len());
         values
             .into_iter()
-            .filter(|v| !v.is_null())
+            .filter(|v| !is_absent_key(v))
             .filter(|v| seen.insert(v.clone()))
             .filter_map(|v| {
                 let mut pred = stmt::Expr::binary_op(expr.clone(), stmt::BinaryOp::Eq, v);
@@ -102,5 +151,25 @@ impl Exec<'_> {
                 (!pred.is_unsatisfiable()).then_some(pred)
             })
             .collect()
+    }
+}
+
+/// Whether `expr` is a reference to the operation's input, possibly projected.
+fn is_input_arg(expr: &stmt::Expr) -> bool {
+    match expr {
+        stmt::Expr::Arg(_) => true,
+        stmt::Expr::Project(project) => matches!(&*project.base, stmt::Expr::Arg(_)),
+        _ => false,
+    }
+}
+
+/// Whether a key value is absent: null itself, or a composite key with any
+/// null component. An absent key identifies no row, and key-value drivers
+/// reject null key attributes, so key lookups skip it.
+pub(super) fn is_absent_key(value: &stmt::Value) -> bool {
+    match value {
+        stmt::Value::Null => true,
+        stmt::Value::Record(record) => record.fields.iter().any(is_absent_key),
+        _ => false,
     }
 }
