@@ -1968,8 +1968,9 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     }
 
     /// Moves a returning sub-statement's `LIMIT` off the statement and onto
-    /// [`hir::StatementInfo::per_parent_limit`], where `NestedMerge` applies it
-    /// per parent row while merging.
+    /// [`hir::StatementInfo::per_parent_limit`] and
+    /// [`hir::StatementInfo::per_parent_offset`], where `NestedMerge` applies
+    /// them per parent row while merging.
     fn take_per_parent_limit(&mut self, stmt: &mut stmt::Statement) {
         let stmt::Statement::Query(query) = stmt else {
             return;
@@ -1980,16 +1981,15 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         let stmt::Limit::Offset(limit_offset) = limit else {
             todo!("cursor pagination on an `.include(...)` query")
         };
-        assert!(
-            limit_offset.offset.is_none(),
-            "include limits do not support offset"
-        );
-        let n = match &limit_offset.limit {
-            stmt::Expr::Value(stmt::Value::I64(n)) | stmt::Expr::Static(stmt::Value::I64(n)) => *n,
-            expr => panic!("include limit must be an i64 literal; got {expr:#?}"),
-        };
-        self.curr_stmt_info().per_parent_limit =
-            Some(usize::try_from(n).expect("include limit must be non-negative"));
+        let limit = as_include_limit_literal(&limit_offset.limit, "limit");
+        let offset = limit_offset
+            .offset
+            .as_ref()
+            .map(|offset| as_include_limit_literal(offset, "offset"));
+
+        let stmt_info = self.curr_stmt_info();
+        stmt_info.per_parent_limit = Some(limit);
+        stmt_info.per_parent_offset = offset;
     }
 
     fn schema(&self) -> &'b Schema {
@@ -2496,4 +2496,14 @@ fn in_list_is_value_list(e: &stmt::ExprInList) -> bool {
             .all(|i| matches!(i, stmt::Expr::Value(v) if scalar(v))),
         _ => false,
     }
+}
+
+/// Reads an include's `LIMIT` or `OFFSET` operand as a row count. Panics on any
+/// other shape — an invariant violation that the include builder prevents.
+fn as_include_limit_literal(expr: &stmt::Expr, what: &str) -> usize {
+    let n = match expr {
+        stmt::Expr::Value(stmt::Value::I64(n)) | stmt::Expr::Static(stmt::Value::I64(n)) => *n,
+        expr => panic!("include {what} must be an i64 literal; got {expr:#?}"),
+    };
+    usize::try_from(n).unwrap_or_else(|_| panic!("include {what} must be non-negative"))
 }

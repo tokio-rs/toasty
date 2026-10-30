@@ -53,6 +53,30 @@ impl<Origin, T> Include<Origin, T> {
         self
     }
 
+    /// Skips the first `n` related rows loaded by this include, per parent
+    /// record. Requires a prior call to [`limit`](Include::limit).
+    ///
+    /// # Panics
+    ///
+    /// Panics if no `limit` has been set on this include.
+    pub fn offset(mut self, n: usize) -> Self {
+        let n = i64::try_from(n).expect("offset exceeds i64::MAX");
+        let query = self.query_mut();
+        query.limit = match query.limit.take() {
+            Some(stmt::Limit::Offset(limit_offset)) => {
+                Some(stmt::Limit::Offset(stmt::LimitOffset {
+                    limit: limit_offset.limit,
+                    offset: Some(stmt::Value::from(n).into()),
+                }))
+            }
+            Some(stmt::Limit::Cursor(_)) => {
+                panic!("cannot use offset with cursor-based pagination")
+            }
+            None => panic!("limit required for offset"),
+        };
+        self
+    }
+
     fn query_mut(&mut self) -> &mut stmt::Query {
         self.untyped
             .query
