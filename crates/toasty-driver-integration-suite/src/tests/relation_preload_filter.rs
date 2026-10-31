@@ -33,6 +33,38 @@ pub async fn preload_has_many_with_filter(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// An include filter that matches nothing, such as an empty `in_list`,
+/// returns every parent with an empty preloaded `Vec`. Only the parent
+/// query reaches the driver.
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
+pub async fn preload_has_many_with_unsatisfiable_filter(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    toasty::create!(User {
+        name: "alice",
+        todos: [{ title: "a" }]
+    })
+    .exec(&mut db)
+    .await?;
+
+    test.log().clear();
+
+    let empty: Vec<String> = vec![];
+    let users: Vec<User> = User::all()
+        .include(
+            User::fields()
+                .todos()
+                .filter(Todo::fields().title().in_list(empty)),
+        )
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(users, [{ name: "alice", todos.get(): [] }]);
+    assert_eq!(test.log().len(), 1, "only the parent query should run");
+
+    Ok(())
+}
+
 /// An include filter is independent of a parent-side `.any(...)`. The
 /// parent filter selects which users come back; the include filter
 /// selects which todos travel with each user.
