@@ -945,8 +945,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             );
         }
 
-        // A select that simplification proved empty but kept for its
-        // returning. `COUNT(*)` over no rows is a single row of zero.
+        // A select whose filter is `false` matches no rows, so it needs no
+        // database round trip. `COUNT(*)` over no rows is a single row of zero.
         if let Some(query) = stmt.as_query()
             && let stmt::ExprSet::Select(select) = &query.body
             && select.filter.is_false()

@@ -434,6 +434,7 @@ pub async fn preload_belongs_to_with_contradictory_filter(test: &mut Test) -> Re
         .exec(&mut db)
         .await?;
 
+    test.log().clear();
     let title = Todo::fields().title();
     let todos: Vec<Todo> = Todo::filter(title.clone().eq("x").and(title.eq("y")))
         .include(Todo::fields().user())
@@ -441,6 +442,7 @@ pub async fn preload_belongs_to_with_contradictory_filter(test: &mut Test) -> Re
         .await?;
 
     assert!(todos.is_empty());
+    assert!(test.log().is_empty());
 
     Ok(())
 }

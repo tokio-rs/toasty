@@ -98,7 +98,8 @@ fn returning_needs_select(returning: &stmt::Returning) -> bool {
     stmt::visit::for_each_expr(returning, |expr| {
         needs_select |= matches!(
             expr,
-            stmt::Expr::Arg(_) | stmt::Expr::Func(stmt::ExprFunc::Count(_))
+            stmt::Expr::Arg(_)
+                | stmt::Expr::Func(stmt::ExprFunc::Count(stmt::FuncCount { arg: None, .. }))
         );
     });
     needs_select
