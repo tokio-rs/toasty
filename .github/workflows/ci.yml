@@ -61,6 +61,25 @@ jobs:
       - name: cargo clippy
         run: cargo clippy --workspace --all-features
 
+  clippy-codegen:
+    name: Clippy code generation regression
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: nightly-2026-11-02
+      # The fixture denies its regression lint; nightly has unrelated warnings.
+      RUSTFLAGS: ""
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUSTUP_TOOLCHAIN }}
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Check generated field checks with Clippy
+        run: cargo clippy --locked -p toasty --test clippy_codegen
+
   check-wasm:
     needs: check
     name: cargo check (wasm32)

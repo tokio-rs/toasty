@@ -53,7 +53,7 @@ pub mod tag {
 
 /// Asserts that a Rust field type can be stored as the given storage tag.
 ///
-/// Macro-generated code emits a `_check::<FieldType>()` call where `_check`
+/// Macro-generated code emits a `check::<FieldType>` reference where `check`
 /// is bounded by `CompatibleWith<Tag>`. Trait resolution happens after type
 /// alias substitution, so `type String = u32;` cannot defeat the check the
 /// way it would defeat any analysis of the raw `String` token in the macro.

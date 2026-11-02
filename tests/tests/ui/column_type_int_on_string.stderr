@@ -13,11 +13,11 @@ help: `std::string::String` implements trait `toasty::codegen_support::storage::
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::Text>`
    | impl CompatibleWith<tag::VarChar> for String {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::VarChar>`
-note: required by a bound in `_check`
+note: required by a bound in `check`
   --> tests/ui/column_type_int_on_string.rs:4:17
    |
  4 | #[derive(Debug, toasty::Model)]
-   |                 ^^^^^^^^^^^^^ required by this bound in `_check`
+   |                 ^^^^^^^^^^^^^ required by this bound in `check`
 ...
 11 |     name: String,
    |           ------ required by a bound in this function
