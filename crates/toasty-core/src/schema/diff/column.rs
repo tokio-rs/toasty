@@ -41,6 +41,7 @@ impl<'a> Column<'a> {
     pub fn diff(cx: &Context<'a>, previous: &'a [db::Column], next: &'a [db::Column]) -> Vec<Self> {
         fn has_diff(previous: &db::Column, next: &db::Column) -> bool {
             previous.name != next.name
+                || previous.comment != next.comment
                 || previous.storage_ty != next.storage_ty
                 || previous.nullable != next.nullable
                 || previous.primary_key != next.primary_key
