@@ -1,5 +1,5 @@
 use crate::{
-    db::Driver,
+    db::Capability,
     schema::{db, diff},
 };
 
@@ -12,7 +12,7 @@ use super::Snapshot;
 /// policies.
 #[derive(Debug)]
 pub struct Generated {
-    /// The driver-specific migration statements.
+    /// The migration statements for the target database.
     pub migration: db::Migration,
 
     /// Snapshot of the schema after the migration is applied.
@@ -21,10 +21,11 @@ pub struct Generated {
 
 /// Generate a database migration from `previous` to `next`.
 ///
-/// Returns `None` when the schemas are equivalent after applying
-/// `rename_hints`.
+/// The migration SQL is rendered in the dialect named by `capability.sql`;
+/// no database connection is involved. Returns `None` when the schemas are
+/// equivalent after applying `rename_hints`.
 pub fn generate(
-    driver: &dyn Driver,
+    capability: &Capability,
     previous: &db::Schema,
     next: &db::Schema,
     rename_hints: &diff::RenameHints,
@@ -36,7 +37,7 @@ pub fn generate(
     }
 
     Some(Generated {
-        migration: driver.generate_migration(&schema_diff),
+        migration: toasty_sql::generate_migration(&schema_diff, capability),
         snapshot: Snapshot::new(next.clone()),
     })
 }
