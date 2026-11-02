@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.11.0...toasty-macros-v0.12.0) - 2026-11-02
+
+### Added
+
+- Support limit in includes ([#1122])
+
+### Fixed
+
+- [**breaking**] Reject mismatched key types in embedded enum relationships ([#1277])
+
+[#1122]: https://github.com/tokio-rs/toasty/pull/1122
+[#1277]: https://github.com/tokio-rs/toasty/pull/1277
+
 ## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.10.0...toasty-macros-v0.11.0) - 2026-09-24
 
 ### Added
