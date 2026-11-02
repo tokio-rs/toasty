@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.11.0...toasty-v0.12.0) - 2026-11-02
+
+### Added
+
+- Support for `offset` in includes ([#1123])
+- Support for `limit` in includes ([#1122])
+- Read-only plans can now run without interactive transactions ([#1302])
+- `Deferred::try_get` method for safe value access without panicking ([#1310])
+- Select statements now support tuples up to 16 fields ([#1296])
+- `&Vec<T>` can now be used where list expressions are expected ([#1290])
+
+### Fixed
+
+- Migration breakpoints now split correctly regardless of line ending ([#1311])
+- Worker-gone channel errors return connection_lost instead of panicking ([#1244])
+- Unsupported OR index filters no longer cause panics ([#1288])
+- Key lookups with additional predicates now work correctly ([#1284])
+- Subquery inputs in key-value filters are now handled correctly ([#1282])
+- Absent keys are now correctly excluded from relation membership ([#1271])
+- Mismatched belongs_to key types in embedded enums are now rejected ([#1277])
+
+### Changed
+
+- PostgreSQL batch inserts now use unnest arrays for improved performance ([#1103])
+
+[#1103]: https://github.com/tokio-rs/toasty/pull/1103
+[#1122]: https://github.com/tokio-rs/toasty/pull/1122
+[#1123]: https://github.com/tokio-rs/toasty/pull/1123
+[#1244]: https://github.com/tokio-rs/toasty/pull/1244
+[#1271]: https://github.com/tokio-rs/toasty/pull/1271
+[#1277]: https://github.com/tokio-rs/toasty/pull/1277
+[#1282]: https://github.com/tokio-rs/toasty/pull/1282
+[#1284]: https://github.com/tokio-rs/toasty/pull/1284
+[#1288]: https://github.com/tokio-rs/toasty/pull/1288
+[#1290]: https://github.com/tokio-rs/toasty/pull/1290
+[#1296]: https://github.com/tokio-rs/toasty/pull/1296
+[#1302]: https://github.com/tokio-rs/toasty/pull/1302
+[#1310]: https://github.com/tokio-rs/toasty/pull/1310
+[#1311]: https://github.com/tokio-rs/toasty/pull/1311
+
 ## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.10.0...toasty-v0.11.0) - 2026-09-24
 
 ### Added
