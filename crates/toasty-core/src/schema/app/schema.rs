@@ -597,6 +597,28 @@ impl Builder {
             }
         }
 
+        // Include embedded models: their belongs-to relations also consume
+        // fields on root models, even though they do not have inverse pairs.
+        let mut referenced_fields = HashSet::new();
+        for model in self.models.values() {
+            for field in model.fields() {
+                if let FieldTy::BelongsTo(relation) = &field.ty {
+                    referenced_fields
+                        .extend(relation.foreign_key.fields.iter().map(|fk| fk.target));
+                }
+            }
+        }
+        for model in self.models.values_mut() {
+            if let Model::Root(model) = model {
+                model.referenced_fields = model
+                    .fields
+                    .iter()
+                    .filter(|field| referenced_fields.contains(&field.id))
+                    .map(|field| field.id)
+                    .collect();
+            }
+        }
+
         Ok(())
     }
 

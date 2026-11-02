@@ -107,6 +107,7 @@ fn model_root(id: usize, field_types: &[(Type, &str)]) -> ModelRoot {
         },
         table_name: "t".to_string(),
         indices: vec![],
+        referenced_fields: vec![],
         version_field: None,
     }
 }
