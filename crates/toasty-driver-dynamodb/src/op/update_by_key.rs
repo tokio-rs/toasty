@@ -67,7 +67,13 @@ fn filter_failed(
 /// A missing item with no filter means the update targeted a deleted (or
 /// never-existing) record by key. DynamoDB `UpdateItem` would otherwise silently
 /// create that item (upsert), which contradicts the SQL backends' semantics of
-/// an update that matches nothing. Surface `record_not_found` in that case.
+/// an update that matches nothing.
+///
+/// How a missing target is reported depends on what kind of update it is:
+///
+/// - An instance update (`returning` is set, the caller reloads the row)
+///   surfaces `record_not_found`, matching the SQL backends.
+/// - A query update just matched nothing, so it returns count 0 like SQL.
 fn classify_condition_failed(
     item: Option<&HashMap<String, AttributeValue>>,
     message: Option<&str>,
@@ -84,9 +90,12 @@ fn classify_condition_failed(
     }
 
     if item.is_none() {
-        return Err(toasty_core::Error::record_not_found(
-            "update target does not exist",
-        ));
+        if returning {
+            return Err(toasty_core::Error::record_not_found(
+                "update target does not exist",
+            ));
+        }
+        return Ok(ExecResponse::count(0));
     }
 
     Err(toasty_core::Error::condition_failed(
@@ -808,13 +817,23 @@ mod tests {
         assert!(filter_failed(Some(&item), &table, Some(&filter)));
     }
 
-    // Missing item with no filter (update by key on a deleted record): surface
-    // record_not_found instead of silently counting 0 or upserting.
+    // Missing item with no filter on an instance update (returning requested):
+    // the update targeted a deleted record → record_not_found, mirroring the
+    // SQL backends.
     #[test]
     fn missing_item_without_filter_is_record_not_found() {
         let table = make_table();
-        let res = classify_condition_failed(None, None, &table, None, false);
+        let res = classify_condition_failed(None, None, &table, None, true);
         assert!(matches!(res, Err(ref e) if e.is_record_not_found()));
+    }
+
+    // Missing item with no filter on a query update: it simply matched nothing,
+    // so it returns count 0 like SQL — not an error.
+    #[test]
+    fn missing_item_without_filter_is_empty_count() {
+        let table = make_table();
+        let res = classify_condition_failed(None, None, &table, None, false);
+        assert!(matches!(res, Ok(ref r) if matches!(r.values, Rows::Count(0))));
     }
 
     // Missing item with a filter (query-based update): the filter trivially did
@@ -825,6 +844,17 @@ mod tests {
         let filter = status_eq_active();
         let res = classify_condition_failed(None, None, &table, Some(&filter), false);
         assert!(matches!(res, Ok(ref r) if matches!(r.values, Rows::Count(0))));
+    }
+
+    // Missing item with a filter on an instance update: the filter trivially
+    // did not match → empty returning stream, which the engine turns into the
+    // reload's `Null` → record_not_found at the load layer.
+    #[test]
+    fn missing_item_with_filter_is_empty_stream() {
+        let table = make_table();
+        let filter = status_eq_active();
+        let res = classify_condition_failed(None, None, &table, Some(&filter), true);
+        assert!(matches!(res, Ok(ref r) if matches!(r.values, Rows::Stream(_))));
     }
 
     // Item present, filter matches, but the condition failed → condition error.
