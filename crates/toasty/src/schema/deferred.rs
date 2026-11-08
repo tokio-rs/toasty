@@ -48,10 +48,19 @@ impl<T> Deferred<T> {
     ///
     /// # Panics
     ///
-    /// Panics if the field has not been loaded.
+    /// Panics if the field has not been loaded. Use [`try_get`] to handle
+    /// the unloaded state without panicking.
+    ///
+    /// [`try_get`]: Deferred::try_get
     #[track_caller]
     pub fn get(&self) -> &T {
         self.value.as_ref().expect("deferred field not loaded")
+    }
+
+    /// Returns a reference to the loaded value, or `None` if the field has
+    /// not been loaded.
+    pub fn try_get(&self) -> Option<&T> {
+        self.value.as_deref()
     }
 
     /// Clears the loaded value, returning the field to the unloaded state.

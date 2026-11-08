@@ -1,6 +1,6 @@
 //! Compile-time validation and runtime support for `#[version]` fields.
 //!
-//! `#[derive(Model)]` emits a `_check::<FieldType>()` obligation bounded by
+//! `#[derive(Model)]` emits a `check::<FieldType>` obligation bounded by
 //! [`Version`] for every `#[version]` field. The concrete impl covers
 //! `u64` directly; the blanket propagates through tuple-newtype embeds of any
 //! depth, mirroring the [`Auto`] blanket in

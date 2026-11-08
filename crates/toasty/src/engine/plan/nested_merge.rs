@@ -156,12 +156,16 @@ impl NestedMergePlanner<'_> {
                     level,
                     qualification,
                     single: query.single,
+                    limit: stmt_state.per_parent_limit,
+                    offset: stmt_state.per_parent_offset,
                 }
             }
             stmt::Statement::Insert(insert) => NestedChild {
                 level,
                 qualification: MergeQualification::All,
                 single: insert.source.single,
+                limit: None,
+                offset: None,
             },
             stmt => todo!("stmt={stmt:#?}"),
         };

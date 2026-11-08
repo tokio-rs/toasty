@@ -141,7 +141,7 @@ loaded:
 
 ```rust,ignore
 fn post_count(user: &User) -> Option<usize> {
-    user.posts.try_get().map(<[_]>::len)
+    user.posts.try_get().map(Vec::len)
 }
 ```
 

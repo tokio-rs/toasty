@@ -4,9 +4,9 @@ use super::{TableRef, TableWithJoins};
 
 /// A lowered table-level data source for a `SELECT` statement.
 ///
-/// Contains a list of table references (which may be schema tables, CTEs, or
-/// derived tables) and the `FROM` items that reference them by index
-/// ([`SourceTableId`]).
+/// Contains a list of table references (which may be schema tables, CTEs,
+/// derived tables, or table functions) and the `FROM` items that reference
+/// them by index ([`SourceTableId`]).
 ///
 /// # Examples
 ///

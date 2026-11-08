@@ -130,6 +130,8 @@ impl fmt::Debug for InstrumentedHandle {
 pub struct InstrumentedDriver {
     inner: Box<dyn Driver>,
     handle: InstrumentedHandle,
+    /// Reported in place of the inner driver's capability when set.
+    capability: Option<&'static Capability>,
 }
 
 impl InstrumentedDriver {
@@ -137,7 +139,16 @@ impl InstrumentedDriver {
         Self {
             inner: driver,
             handle: InstrumentedHandle::default(),
+            capability: None,
         }
+    }
+
+    /// Report `capability` to the engine instead of the inner driver's own,
+    /// so a test can watch how the engine plans for a backend it does not
+    /// have. The inner driver still executes whatever the engine asks of it.
+    pub fn with_capability(mut self, capability: &'static Capability) -> Self {
+        self.capability = Some(capability);
+        self
     }
 
     /// Get the single control handle for this driver. The handle exposes
@@ -154,7 +165,7 @@ impl Driver for InstrumentedDriver {
     }
 
     fn capability(&self) -> &'static Capability {
-        self.inner.capability()
+        self.capability.unwrap_or_else(|| self.inner.capability())
     }
 
     async fn connect(&self, cx: &ConnectContext) -> Result<Box<dyn Connection>> {

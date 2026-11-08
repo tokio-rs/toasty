@@ -11,11 +11,11 @@ help: the trait `toasty::codegen_support::storage::CompatibleWith<toasty::codege
    |
    | impl CompatibleWith<tag::U32> for u32 {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-note: required by a bound in `_check`
+note: required by a bound in `check`
   --> tests/ui/column_type_alias_shadowing.rs:10:17
    |
 10 | #[derive(Debug, toasty::Model)]
-   |                 ^^^^^^^^^^^^^ required by this bound in `_check`
+   |                 ^^^^^^^^^^^^^ required by this bound in `check`
 ...
 17 |     name: String,
    |           ------ required by a bound in this function

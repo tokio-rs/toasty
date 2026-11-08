@@ -14,6 +14,20 @@ fn equality_compares_load_state_and_value() {
 }
 
 #[test]
+fn try_get_returns_none_when_unloaded() {
+    let unloaded = Deferred::<i32>::default();
+    let loaded = Deferred::from(42);
+
+    assert_eq!(unloaded.try_get(), None);
+    assert_eq!(loaded.try_get(), Some(&42));
+
+    // A loaded `None` is distinguishable from the unloaded state.
+    let loaded_none = Deferred::<Option<i32>>::from(None);
+    assert_eq!(loaded_none.try_get(), Some(&None));
+    assert_eq!(Deferred::<Option<i32>>::default().try_get(), None);
+}
+
+#[test]
 fn loaded_none_is_distinct_from_unloaded() {
     let unloaded = Deferred::<Option<i32>>::default();
     let loaded_none = Deferred::from(None);

@@ -547,17 +547,7 @@ impl Expand<'_> {
                     return None;
                 };
 
-                // Pin the diagnostic at the field type's span so the error
-                // lands on the user's declaration, not the derive call site.
-                Some(quote_spanned! { ty.span()=>
-                    const _: () = {
-                        fn _check<__T>()
-                        where
-                            __T: #toasty::index::IndexableField,
-                        {}
-                        let _ = _check::<#ty>;
-                    };
-                })
+                Some(compat_check(ty, quote! { #toasty::index::IndexableField }))
             })
             .collect::<Vec<_>>();
 
@@ -618,19 +608,19 @@ impl Expand<'_> {
 /// Emit a span-pinned compile-time obligation that `ty` satisfies `bound`.
 ///
 /// The check leans on the type checker rather than inspecting `ty`: the
-/// zero-cost `_check::<#ty>` reference forces the bound to hold. `quote_spanned`
+/// zero-cost `check::<#ty>` reference forces the bound to hold. `quote_spanned`
 /// pins any resulting diagnostic at the field type's span so the error lands on
 /// the user's declaration, not the derive call site. Shared by the
-/// storage/auto/version `expand_*_compat_checks` expansions, which differ only
-/// in the `bound` they require.
+/// storage, auto, version, and index checks, which differ only in the `bound`
+/// they require.
 fn compat_check(ty: &syn::Type, bound: TokenStream) -> TokenStream {
     quote_spanned! { ty.span()=>
         const _: () = {
-            fn _check<__T>()
+            fn check<__T>()
             where
                 __T: #bound,
             {}
-            let _ = _check::<#ty>;
+            let _ = check::<#ty>;
         };
     }
 }
