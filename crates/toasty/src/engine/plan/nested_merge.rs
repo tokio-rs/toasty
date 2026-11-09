@@ -293,7 +293,7 @@ impl NestedMergePlanner<'_> {
                             *expr = if query.single {
                                 stmt::Expr::null()
                             } else {
-                                stmt::Expr::list_from_vec(vec![])
+                                stmt::Expr::Value(stmt::Value::List(vec![]))
                             };
                             return false;
                         }
