@@ -30,3 +30,22 @@ pub async fn not_found(t: &mut Test) -> Result<()> {
     );
     Ok(())
 }
+
+#[driver_test(scenario(crate::scenarios::two_models))]
+pub async fn instance_update_after_delete(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    let mut user = toasty::create!(User { name: "hello" })
+        .exec(&mut db)
+        .await?;
+
+    // Delete the row through a separate handle so `user` goes stale
+    User::filter_by_id(user.id).delete().exec(&mut db).await?;
+
+    let err = user.update().name("stale").exec(&mut db).await.unwrap_err();
+    assert!(
+        err.is_record_not_found(),
+        "expected RecordNotFound, got: {err}"
+    );
+    Ok(())
+}

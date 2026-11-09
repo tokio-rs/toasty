@@ -63,7 +63,18 @@ fn filter_failed(
 /// Interprets a `ConditionalCheckFailedException` from `update_item`: if the
 /// filter was the failing predicate return an empty response; otherwise surface
 /// a condition error.
-fn on_update_item_condition_failed(
+///
+/// A missing item with no filter means the update targeted a deleted (or
+/// never-existing) record by key. DynamoDB `UpdateItem` would otherwise silently
+/// create that item (upsert), which contradicts the SQL backends' semantics of
+/// an update that matches nothing.
+///
+/// How a missing target is reported depends on what kind of update it is:
+///
+/// - An instance update (`returning` is set, the caller reloads the row)
+///   surfaces `record_not_found`, matching the SQL backends.
+/// - A query update just matched nothing, so it returns count 0 like SQL.
+fn classify_condition_failed(
     item: Option<&HashMap<String, AttributeValue>>,
     message: Option<&str>,
     table: &db::Table,
@@ -71,18 +82,37 @@ fn on_update_item_condition_failed(
     returning: bool,
 ) -> Result<ExecResponse> {
     if filter_failed(item, table, filter) {
-        if returning {
-            Ok(ExecResponse::empty_value_stream())
+        return Ok(if returning {
+            ExecResponse::empty_value_stream()
         } else {
-            Ok(ExecResponse::count(0))
-        }
-    } else {
-        Err(toasty_core::Error::condition_failed(
-            message
-                .unwrap_or("DynamoDB conditional check failed")
-                .to_string(),
-        ))
+            ExecResponse::count(0)
+        });
     }
+
+    if item.is_none() {
+        if returning {
+            return Err(toasty_core::Error::record_not_found(
+                "update target does not exist",
+            ));
+        }
+        return Ok(ExecResponse::count(0));
+    }
+
+    Err(toasty_core::Error::condition_failed(
+        message
+            .unwrap_or("DynamoDB conditional check failed")
+            .to_string(),
+    ))
+}
+
+fn on_update_item_condition_failed(
+    item: Option<&HashMap<String, AttributeValue>>,
+    message: Option<&str>,
+    table: &db::Table,
+    filter: Option<&stmt::Expr>,
+    returning: bool,
+) -> Result<ExecResponse> {
+    classify_condition_failed(item, message, table, filter, returning)
 }
 
 /// Interprets a `TransactionCanceledException` from `transact_write_items`:
@@ -306,6 +336,25 @@ impl Connection {
                     panic!("expected exactly 1 key, got {}", op.keys.len());
                 };
 
+                // Never let a key-based update silently upsert a deleted record:
+                // require the key attributes to exist so a missing item raises
+                // ConditionalCheckFailedException, which maps to
+                // record_not_found above when there is no filter.
+                let mut guard_parts = Vec::new();
+                for name in ddb_key(table, key).keys() {
+                    let token = format!("#pk_{name}");
+                    expr_attrs.attr_names.insert(token.clone(), name.clone());
+                    guard_parts.push(format!("attribute_exists({token})"));
+                }
+                let condition_expression = match (&filter_expression, guard_parts.is_empty()) {
+                    (Some(filter), false) => {
+                        Some(format!("({filter}) AND ({})", guard_parts.join(" AND ")))
+                    }
+                    (Some(_), true) => filter_expression,
+                    (None, false) => Some(guard_parts.join(" AND ")),
+                    (None, true) => None,
+                };
+
                 let res = self
                     .client
                     .update_item()
@@ -318,7 +367,7 @@ impl Connection {
                     } else {
                         None
                     })
-                    .set_condition_expression(filter_expression)
+                    .set_condition_expression(condition_expression)
                     .return_values_on_condition_check_failure(
                         ReturnValuesOnConditionCheckFailure::AllOld,
                     )
@@ -677,11 +726,12 @@ impl Connection {
 
 #[cfg(test)]
 mod tests {
-    use super::filter_failed;
+    use super::{classify_condition_failed, filter_failed};
     use crate::db;
     use aws_sdk_dynamodb::types::AttributeValue;
     use std::collections::HashMap;
     use toasty_core::{
+        driver::Rows,
         schema::db::{Column, ColumnId, IndexId, PrimaryKey, TableId, Type},
         stmt::{self, BinaryOp, Expr, ExprBinaryOp, ExprColumn, ExprReference},
     };
@@ -765,5 +815,64 @@ mod tests {
         let filter = status_eq_active();
         let item = item_with_status("inactive");
         assert!(filter_failed(Some(&item), &table, Some(&filter)));
+    }
+
+    // Missing item with no filter on an instance update (returning requested):
+    // the update targeted a deleted record → record_not_found, mirroring the
+    // SQL backends.
+    #[test]
+    fn missing_item_without_filter_is_record_not_found() {
+        let table = make_table();
+        let res = classify_condition_failed(None, None, &table, None, true);
+        assert!(matches!(res, Err(ref e) if e.is_record_not_found()));
+    }
+
+    // Missing item with no filter on a query update: it simply matched nothing,
+    // so it returns count 0 like SQL — not an error.
+    #[test]
+    fn missing_item_without_filter_is_empty_count() {
+        let table = make_table();
+        let res = classify_condition_failed(None, None, &table, None, false);
+        assert!(matches!(res, Ok(ref r) if matches!(r.values, Rows::Count(0))));
+    }
+
+    // Missing item with a filter (query-based update): the filter trivially did
+    // not match → count 0, unchanged from before.
+    #[test]
+    fn missing_item_with_filter_is_empty_count() {
+        let table = make_table();
+        let filter = status_eq_active();
+        let res = classify_condition_failed(None, None, &table, Some(&filter), false);
+        assert!(matches!(res, Ok(ref r) if matches!(r.values, Rows::Count(0))));
+    }
+
+    // Missing item with a filter on an instance update: the filter trivially
+    // did not match → empty returning stream, which the engine turns into the
+    // reload's `Null` → record_not_found at the load layer.
+    #[test]
+    fn missing_item_with_filter_is_empty_stream() {
+        let table = make_table();
+        let filter = status_eq_active();
+        let res = classify_condition_failed(None, None, &table, Some(&filter), true);
+        assert!(matches!(res, Ok(ref r) if matches!(r.values, Rows::Stream(_))));
+    }
+
+    // Item present, filter matches, but the condition failed → condition error.
+    #[test]
+    fn matching_item_without_filter_is_condition_failed() {
+        let table = make_table();
+        let item = item_with_status("active");
+        let res = classify_condition_failed(Some(&item), None, &table, None, false);
+        assert!(matches!(res, Err(ref e) if !e.is_record_not_found()));
+    }
+
+    // Item present but filter does not match → count 0.
+    #[test]
+    fn non_matching_item_with_filter_is_empty_count() {
+        let table = make_table();
+        let filter = status_eq_active();
+        let item = item_with_status("inactive");
+        let res = classify_condition_failed(Some(&item), None, &table, Some(&filter), false);
+        assert!(matches!(res, Ok(ref r) if matches!(r.values, Rows::Count(0))));
     }
 }
