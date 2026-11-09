@@ -209,6 +209,169 @@ pub async fn query_infers_storage_values(t: &mut Test) -> Result<()> {
 }
 
 #[driver_test(requires(sql))]
+pub async fn bind_uuid_matches_uuid_column(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: u64,
+        uuid_v: uuid::Uuid,
+        name: String,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+    let table = table_name(&db, "items");
+    let first = uuid::Uuid::from_u128(0x0123456789ab4def8123456789abcdef);
+    let second = uuid::Uuid::from_u128(0xfedcba9876543210fedcba9876543210);
+
+    toasty::create!(Item::[
+        { uuid_v: first, name: "first" },
+        { uuid_v: second, name: "second" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let select = format!(
+        "SELECT name FROM {table} WHERE uuid_v = {}",
+        placeholder(&db, 1),
+    );
+    let expected = [Value::String("first".to_string())];
+
+    // Inferred type: the UUID is bound in the driver's default UUID storage.
+    let rows = toasty::sql::query(select.clone())
+        .bind(first)
+        .exec(&mut db)
+        .await?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(fields(&rows[0]), expected.as_slice());
+
+    // Explicit type: same storage type, stated by the caller.
+    let uuid_ty = db.capability().storage_types.default_uuid_type.clone();
+    let rows = toasty::sql::query(select)
+        .bind_typed(first, uuid_ty)
+        .exec(&mut db)
+        .await?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(fields(&rows[0]), expected.as_slice());
+
+    let updated = toasty::sql::statement(format!(
+        "UPDATE {table} SET name = {} WHERE uuid_v = {}",
+        placeholder(&db, 1),
+        placeholder(&db, 2),
+    ))
+    .bind("renamed")
+    .bind(second)
+    .exec(&mut db)
+    .await?;
+    assert_eq!(updated, 1);
+
+    Ok(())
+}
+
+#[driver_test(requires(sql))]
+pub async fn bind_timestamp_and_decimal_match_columns(t: &mut Test) -> Result<(), BoxError> {
+    use rust_decimal::Decimal;
+    use std::str::FromStr;
+
+    #[derive(Debug, toasty::Model)]
+    struct Event {
+        #[key]
+        #[auto]
+        id: u64,
+        created_at: jiff::Timestamp,
+        amount: Decimal,
+        name: String,
+    }
+
+    let mut db = t.setup_db(models!(Event)).await;
+    let table = table_name(&db, "events");
+    let at = jiff::Timestamp::from_second(1_700_000_000)?;
+    let later = jiff::Timestamp::from_second(1_800_000_000)?;
+    let amount = Decimal::from_str("12.50")?;
+
+    toasty::create!(Event::[
+        { created_at: at, amount: amount, name: "first" },
+        { created_at: later, amount: Decimal::from_str("99.75")?, name: "second" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let expected = [Value::String("first".to_string())];
+
+    let rows = toasty::sql::query(format!(
+        "SELECT name FROM {table} WHERE created_at = {}",
+        placeholder(&db, 1),
+    ))
+    .bind(at)
+    .exec(&mut db)
+    .await?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(fields(&rows[0]), expected.as_slice());
+
+    let rows = toasty::sql::query(format!(
+        "SELECT name FROM {table} WHERE amount = {}",
+        placeholder(&db, 1),
+    ))
+    .bind(amount)
+    .exec(&mut db)
+    .await?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(fields(&rows[0]), expected.as_slice());
+
+    Ok(())
+}
+
+#[driver_test(requires(sql))]
+pub async fn bind_civil_and_zoned_match_columns(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    struct Civil {
+        #[key]
+        #[auto]
+        id: u64,
+        date_v: jiff::civil::Date,
+        time_v: jiff::civil::Time,
+        datetime_v: jiff::civil::DateTime,
+        zoned_v: jiff::Zoned,
+        name: String,
+    }
+
+    let mut db = t.setup_db(models!(Civil)).await;
+    let table = table_name(&db, "civils");
+    let date = jiff::civil::date(2025, 6, 15);
+    let time = jiff::civil::time(9, 30, 45, 123_456_000);
+    let datetime = jiff::civil::datetime(2025, 6, 15, 9, 30, 45, 123_456_000);
+    let zoned: jiff::Zoned = "2025-06-15T09:30:45.123456-04:00[America/New_York]".parse()?;
+
+    toasty::create!(Civil {
+        date_v: date,
+        time_v: time,
+        datetime_v: datetime,
+        zoned_v: zoned.clone(),
+        name: "first"
+    })
+    .exec(&mut db)
+    .await?;
+
+    for (column, value) in [
+        ("date_v", Value::from(date)),
+        ("time_v", Value::from(time)),
+        ("datetime_v", Value::from(datetime)),
+        ("zoned_v", Value::from(zoned)),
+    ] {
+        let rows = toasty::sql::query(format!(
+            "SELECT name FROM {table} WHERE {column} = {}",
+            placeholder(&db, 1),
+        ))
+        .bind(value)
+        .exec(&mut db)
+        .await?;
+        assert_eq!(rows.len(), 1, "column {column}");
+    }
+
+    Ok(())
+}
+
+#[driver_test(requires(sql))]
 pub async fn query_column_types_decode_scalars(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
