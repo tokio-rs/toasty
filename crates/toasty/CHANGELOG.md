@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.11.0...toasty-v0.12.0) - 2026-11-09
+
+### Added
+
+- Offset and limit support in includes ([#1123], [#1122])
+- Read-only plans can run without interactive transactions ([#1302])
+- New `Deferred::try_get` method for optional value access ([#1310])
+- Tuple projections up to 16 fields in select expressions ([#1296])
+- Extended trait implementations for list expressions ([#1290])
+
+### Fixed
+
+- Fixed migration breakpoint splitting for different line endings ([#1311])
+- Worker-gone channel errors now return connection_lost instead of panicking ([#1244])
+- Fixed panics when handling unsupported OR index filters ([#1288])
+- Improved key lookup retention with additional predicates ([#1284])
+- Fixed subquery input binding in key-value filters ([#1282])
+- Fixed relation membership checks to exclude absent keys ([#1271])
+- Added validation for belongs_to key types in embedded enums ([#1277])
+
+[#1122]: https://github.com/tokio-rs/toasty/pull/1122
+[#1123]: https://github.com/tokio-rs/toasty/pull/1123
+[#1244]: https://github.com/tokio-rs/toasty/pull/1244
+[#1271]: https://github.com/tokio-rs/toasty/pull/1271
+[#1277]: https://github.com/tokio-rs/toasty/pull/1277
+[#1282]: https://github.com/tokio-rs/toasty/pull/1282
+[#1284]: https://github.com/tokio-rs/toasty/pull/1284
+[#1288]: https://github.com/tokio-rs/toasty/pull/1288
+[#1290]: https://github.com/tokio-rs/toasty/pull/1290
+[#1296]: https://github.com/tokio-rs/toasty/pull/1296
+[#1302]: https://github.com/tokio-rs/toasty/pull/1302
+[#1310]: https://github.com/tokio-rs/toasty/pull/1310
+[#1311]: https://github.com/tokio-rs/toasty/pull/1311
+
 ## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.10.0...toasty-v0.11.0) - 2026-09-24
 
 ### Added
