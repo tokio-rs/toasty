@@ -45,8 +45,8 @@ precise instant in time:</p>
 
 <span class="kw">let </span>dt = date(<span class="number">2024</span>, <span class="number">7</span>, <span class="number">15</span>).at(<span class="number">21</span>, <span class="number">27</span>, <span class="number">0</span>, <span class="number">0</span>);
 <span class="kw">let </span>zdt1 = dt.in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
-<span class="kw">let </span>zdt2 = zdt1.in_tz(<span class="string">"Israel"</span>)<span class="question-mark">?</span>;
-<span class="macro">assert_eq!</span>(zdt2.to_string(), <span class="string">"2024-07-16T04:27:00+03:00[Israel]"</span>);
+<span class="kw">let </span>zdt2 = zdt1.in_tz(<span class="string">"Asia/Jerusalem"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(zdt2.to_string(), <span class="string">"2024-07-16T04:27:00+03:00[Asia/Jerusalem]"</span>);
 </code></pre></div><h2 id="the-system-time-zone"><a class="doc-anchor" href="#the-system-time-zone">§</a>The system time zone</h2>
 <p>The system time zone can be retrieved via <a href="struct.TimeZone.html#method.system" title="associated function toasty::stmt::TimeZone::system"><code>TimeZone::system</code></a>. If it
 couldn’t be detected or if the <code>tz-system</code> crate feature is not enabled,
@@ -280,7 +280,7 @@ found in the default <a href="crate::tz::TimeZoneDatabase"><code>TimeZoneDatabas
 <h5 id="example"><a class="doc-anchor" href="#example">§</a>Example</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{tz::TimeZone, Timestamp};
 
-<span class="kw">let </span>tz = TimeZone::get(<span class="string">"Japan"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"Asia/Tokyo"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(
     tz.to_datetime(Timestamp::UNIX_EPOCH).to_string(),
     <span class="string">"1970-01-01T09:00:00"</span>,
@@ -709,7 +709,7 @@ zone transition:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{Unit, Zoned};
 
-<span class="kw">let </span>now: Zoned = <span class="string">"2024-12-31 18:25-05[US/Eastern]"</span>.parse()<span class="question-mark">?</span>;
+<span class="kw">let </span>now: Zoned = <span class="string">"2024-12-31 18:25-05[America/New_York]"</span>.parse()<span class="question-mark">?</span>;
 <span class="kw">let </span>trans = now.time_zone().preceding(now.timestamp()).next().unwrap();
 <span class="kw">let </span>prev_at = trans.timestamp().to_zoned(now.time_zone().clone());
 <span class="kw">let </span>span = now.since((Unit::Year, <span class="kw-2">&amp;</span>prev_at))<span class="question-mark">?</span>;
@@ -720,7 +720,7 @@ particular datetime) for a particular time zone:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{tz::offset, Zoned};
 
-<span class="kw">let </span>now: Zoned = <span class="string">"2024-12-31 18:25-05[US/Eastern]"</span>.parse()<span class="question-mark">?</span>;
+<span class="kw">let </span>now: Zoned = <span class="string">"2024-12-31 18:25-05[America/New_York]"</span>.parse()<span class="question-mark">?</span>;
 <span class="kw">let </span>transitions = now
     .time_zone()
     .preceding(now.timestamp())
@@ -732,11 +732,31 @@ particular datetime) for a particular time zone:</p>
     ))
     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 <span class="macro">assert_eq!</span>(transitions, <span class="macro">vec!</span>[
-    (<span class="string">"2024-11-03 01:00-05[US/Eastern]"</span>.parse()<span class="question-mark">?</span>, offset(-<span class="number">5</span>), <span class="string">"EST"</span>.to_string()),
-    (<span class="string">"2024-03-10 03:00-04[US/Eastern]"</span>.parse()<span class="question-mark">?</span>, offset(-<span class="number">4</span>), <span class="string">"EDT"</span>.to_string()),
-    (<span class="string">"2023-11-05 01:00-05[US/Eastern]"</span>.parse()<span class="question-mark">?</span>, offset(-<span class="number">5</span>), <span class="string">"EST"</span>.to_string()),
-    (<span class="string">"2023-03-12 03:00-04[US/Eastern]"</span>.parse()<span class="question-mark">?</span>, offset(-<span class="number">4</span>), <span class="string">"EDT"</span>.to_string()),
-    (<span class="string">"2022-11-06 01:00-05[US/Eastern]"</span>.parse()<span class="question-mark">?</span>, offset(-<span class="number">5</span>), <span class="string">"EST"</span>.to_string()),
+    (
+        <span class="string">"2024-11-03 01:00-05[America/New_York]"</span>.parse()<span class="question-mark">?</span>,
+        offset(-<span class="number">5</span>),
+        <span class="string">"EST"</span>.to_string(),
+    ),
+    (
+        <span class="string">"2024-03-10 03:00-04[America/New_York]"</span>.parse()<span class="question-mark">?</span>,
+        offset(-<span class="number">4</span>),
+        <span class="string">"EDT"</span>.to_string(),
+    ),
+    (
+        <span class="string">"2023-11-05 01:00-05[America/New_York]"</span>.parse()<span class="question-mark">?</span>,
+        offset(-<span class="number">5</span>),
+        <span class="string">"EST"</span>.to_string(),
+    ),
+    (
+        <span class="string">"2023-03-12 03:00-04[America/New_York]"</span>.parse()<span class="question-mark">?</span>,
+        offset(-<span class="number">4</span>),
+        <span class="string">"EDT"</span>.to_string(),
+    ),
+    (
+        <span class="string">"2022-11-06 01:00-05[America/New_York]"</span>.parse()<span class="question-mark">?</span>,
+        offset(-<span class="number">5</span>),
+        <span class="string">"EST"</span>.to_string(),
+    ),
 ]);
 </code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.following" class="method"><h4 class="code-header">pub fn <a href="#method.following" class="fn">following</a>&lt;'t&gt;(
     &amp;'t self,
@@ -768,7 +788,7 @@ transition:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{Unit, Zoned};
 
-<span class="kw">let </span>now: Zoned = <span class="string">"2024-12-31 18:25-05[US/Eastern]"</span>.parse()<span class="question-mark">?</span>;
+<span class="kw">let </span>now: Zoned = <span class="string">"2024-12-31 18:25-05[America/New_York]"</span>.parse()<span class="question-mark">?</span>;
 <span class="kw">let </span>trans = now.time_zone().following(now.timestamp()).next().unwrap();
 <span class="kw">let </span>next_at = trans.timestamp().to_zoned(now.time_zone().clone());
 <span class="kw">let </span>span = now.until((Unit::Year, <span class="kw-2">&amp;</span>next_at))<span class="question-mark">?</span>;
@@ -779,7 +799,7 @@ particular datetime) for a particular time zone:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{tz::offset, Zoned};
 
-<span class="kw">let </span>now: Zoned = <span class="string">"2024-12-31 18:25-05[US/Eastern]"</span>.parse()<span class="question-mark">?</span>;
+<span class="kw">let </span>now: Zoned = <span class="string">"2024-12-31 18:25-05[America/New_York]"</span>.parse()<span class="question-mark">?</span>;
 <span class="kw">let </span>transitions = now
     .time_zone()
     .following(now.timestamp())
@@ -791,11 +811,31 @@ particular datetime) for a particular time zone:</p>
     ))
     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 <span class="macro">assert_eq!</span>(transitions, <span class="macro">vec!</span>[
-    (<span class="string">"2025-03-09 03:00-04[US/Eastern]"</span>.parse()<span class="question-mark">?</span>, offset(-<span class="number">4</span>), <span class="string">"EDT"</span>.to_string()),
-    (<span class="string">"2025-11-02 01:00-05[US/Eastern]"</span>.parse()<span class="question-mark">?</span>, offset(-<span class="number">5</span>), <span class="string">"EST"</span>.to_string()),
-    (<span class="string">"2026-03-08 03:00-04[US/Eastern]"</span>.parse()<span class="question-mark">?</span>, offset(-<span class="number">4</span>), <span class="string">"EDT"</span>.to_string()),
-    (<span class="string">"2026-11-01 01:00-05[US/Eastern]"</span>.parse()<span class="question-mark">?</span>, offset(-<span class="number">5</span>), <span class="string">"EST"</span>.to_string()),
-    (<span class="string">"2027-03-14 03:00-04[US/Eastern]"</span>.parse()<span class="question-mark">?</span>, offset(-<span class="number">4</span>), <span class="string">"EDT"</span>.to_string()),
+    (
+        <span class="string">"2025-03-09 03:00-04[America/New_York]"</span>.parse()<span class="question-mark">?</span>,
+        offset(-<span class="number">4</span>),
+        <span class="string">"EDT"</span>.to_string(),
+    ),
+    (
+        <span class="string">"2025-11-02 01:00-05[America/New_York]"</span>.parse()<span class="question-mark">?</span>,
+        offset(-<span class="number">5</span>),
+        <span class="string">"EST"</span>.to_string(),
+    ),
+    (
+        <span class="string">"2026-03-08 03:00-04[America/New_York]"</span>.parse()<span class="question-mark">?</span>,
+        offset(-<span class="number">4</span>),
+        <span class="string">"EDT"</span>.to_string(),
+    ),
+    (
+        <span class="string">"2026-11-01 01:00-05[America/New_York]"</span>.parse()<span class="question-mark">?</span>,
+        offset(-<span class="number">5</span>),
+        <span class="string">"EST"</span>.to_string(),
+    ),
+    (
+        <span class="string">"2027-03-14 03:00-04[America/New_York]"</span>.parse()<span class="question-mark">?</span>,
+        offset(-<span class="number">4</span>),
+        <span class="string">"EDT"</span>.to_string(),
+    ),
 ]);
 </code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.memory_usage" class="method"><h4 class="code-header">pub fn <a href="#method.memory_usage" class="fn">memory_usage</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.usize.html">usize</a></h4></section></summary><div class="docblock"><p>Returns the heap memory usage, in bytes, of this timezone.</p>
 <p>This does <strong>not</strong> include the stack size used up by this timezone.

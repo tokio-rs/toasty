@@ -26,9 +26,9 @@ day you see on the calendar and the time you see on the clock) and Unix
 time (a precise instant in time). Indeed, a <code>Zoned</code> can be losslessy
 converted to any other datetime type in this crate: <a href="struct.Timestamp.html" title="struct toasty_sql::stmt::Timestamp"><code>Timestamp</code></a>,
 <a href="struct.DateTime.html" title="struct toasty_sql::stmt::DateTime"><code>DateTime</code></a>, <a href="struct.Date.html" title="struct toasty_sql::stmt::Date"><code>Date</code></a> and <a href="struct.Time.html" title="struct toasty_sql::stmt::Time"><code>Time</code></a>.</li>
-<li>A <code>Zoned</code> value can be losslessly serialized and deserialized, via
-<a href="https://serde.rs/">serde</a>, by adhering to <a href="https://datatracker.ietf.org/doc/html/rfc8536">RFC 8536</a>. An example of a serialized zoned
-datetime is <code>2024-07-04T08:39:00-04:00[America/New_York]</code>.</li>
+<li>A <code>Zoned</code> value with an IANA time zone can be losslessly serialized and
+deserialized, via <a href="https://serde.rs/">serde</a>, by adhering to <a href="https://datatracker.ietf.org/doc/html/rfc8536">RFC 8536</a>. An example of a
+serialized zoned datetime is <code>2024-07-04T08:39:00-04:00[America/New_York]</code>.</li>
 <li>Since a <code>Zoned</code> stores a [<code>TimeZone</code>] itself, multiple time zone aware
 operations can be chained together without repeatedly specifying the time
 zone.</li>
@@ -77,7 +77,10 @@ midnight:</p>
 <span class="comment">// ... although it isn't always midnight, in the case of a time zone
 // transition at midnight!
 </span><span class="kw">let </span>zdt: Zoned = <span class="string">"2015-10-18[America/Sao_Paulo]"</span>.parse()<span class="question-mark">?</span>;
-<span class="macro">assert_eq!</span>(zdt.to_string(), <span class="string">"2015-10-18T01:00:00-02:00[America/Sao_Paulo]"</span>);
+<span class="macro">assert_eq!</span>(
+    zdt.to_string(),
+    <span class="string">"2015-10-18T01:00:00-02:00[America/Sao_Paulo]"</span>,
+);
 </code></pre></div>
 <p>For more information on the specific format supported, see the
 <a href="crate::fmt::temporal"><code>fmt::temporal</code></a> module documentation.</p>
@@ -93,7 +96,7 @@ of <code>60</code>, then it is automatically constrained to <code>59</code>:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, Zoned};
 
-<span class="kw">let </span>zdt: Zoned = <span class="string">"2016-12-31 23:59:60[Australia/Tasmania]"</span>.parse()<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt: Zoned = <span class="string">"2016-12-31 23:59:60[Australia/Hobart]"</span>.parse()<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(zdt.datetime(), date(<span class="number">2016</span>, <span class="number">12</span>, <span class="number">31</span>).at(<span class="number">23</span>, <span class="number">59</span>, <span class="number">59</span>, <span class="number">0</span>));
 </code></pre></div><h2 id="comparisons"><a class="doc-anchor" href="#comparisons">§</a>Comparisons</h2>
 <p>The <code>Zoned</code> type provides both <code>Eq</code> and <code>Ord</code> trait implementations to
@@ -294,11 +297,11 @@ and select the desired strategy via a method on
 <h5 id="example-what-was-the-civil-time-in-tasmania-at-the-unix-epoch"><a class="doc-anchor" href="#example-what-was-the-civil-time-in-tasmania-at-the-unix-epoch">§</a>Example: What was the civil time in Tasmania at the Unix epoch?</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{tz::TimeZone, Timestamp, Zoned};
 
-<span class="kw">let </span>tz = TimeZone::get(<span class="string">"Australia/Tasmania"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"Australia/Hobart"</span>)<span class="question-mark">?</span>;
 <span class="kw">let </span>zdt = Zoned::new(Timestamp::UNIX_EPOCH, tz);
 <span class="macro">assert_eq!</span>(
     zdt.to_string(),
-    <span class="string">"1970-01-01T11:00:00+11:00[Australia/Tasmania]"</span>,
+    <span class="string">"1970-01-01T11:00:00+11:00[Australia/Hobart]"</span>,
 );
 </code></pre></div><h5 id="example-what-was-the-civil-time-in-new-york-when-world-war-1-ended"><a class="doc-anchor" href="#example-what-was-the-civil-time-in-new-york-when-world-war-1-ended">§</a>Example: What was the civil time in New York when World War 1 ended?</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::civil::date;
@@ -331,7 +334,9 @@ the month first and then the day!</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::civil::date;
 
-<span class="kw">let </span>zdt1 = date(<span class="number">2024</span>, <span class="number">10</span>, <span class="number">31</span>).at(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt1 = date(<span class="number">2024</span>, <span class="number">10</span>, <span class="number">31</span>)
+    .at(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="kw">let </span>zdt2 = zdt1.with().month(<span class="number">11</span>).day(<span class="number">30</span>).build()<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(
     zdt2,
@@ -402,7 +407,9 @@ arithmetic, rounding and serialization.</p>
 <span class="kw">let </span>zdt1 = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">9</span>).at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(zdt1.year(), <span class="number">2024</span>);
 
-<span class="kw">let </span>zdt2 = date(-<span class="number">2024</span>, <span class="number">3</span>, <span class="number">9</span>).at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt2 = date(-<span class="number">2024</span>, <span class="number">3</span>, <span class="number">9</span>)
+    .at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(zdt2.year(), -<span class="number">2024</span>);
 
 <span class="kw">let </span>zdt3 = date(<span class="number">0</span>, <span class="number">3</span>, <span class="number">9</span>).at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
@@ -434,7 +441,9 @@ is, <code>CE</code>) are aligned with years in this crate.</p>
 <span class="kw">let </span>zdt = date(-<span class="number">10</span>, <span class="number">10</span>, <span class="number">3</span>).at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(zdt.era_year(), (<span class="number">11</span>, Era::BCE));
 
-<span class="kw">let </span>zdt = date(-<span class="number">9_999</span>, <span class="number">10</span>, <span class="number">3</span>).at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(-<span class="number">9_999</span>, <span class="number">10</span>, <span class="number">3</span>)
+    .at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(zdt.era_year(), (<span class="number">10_000</span>, Era::BCE));
 </code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.month" class="method"><h4 class="code-header">pub fn <a href="#method.month" class="fn">month</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.i8.html">i8</a></h4></section></summary><div class="docblock"><p>Returns the month for this zoned datetime.</p>
 <p>The value returned is guaranteed to be in the range <code>1..=12</code>.</p>
@@ -580,13 +589,19 @@ Otherwise, the value is in the range <code>1..=365</code>.</p>
 <h5 id="example-15"><a class="doc-anchor" href="#example-15">§</a>Example</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::civil::date;
 
-<span class="kw">let </span>zdt = date(<span class="number">2006</span>, <span class="number">8</span>, <span class="number">24</span>).at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2006</span>, <span class="number">8</span>, <span class="number">24</span>)
+    .at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(zdt.day_of_year(), <span class="number">236</span>);
 
-<span class="kw">let </span>zdt = date(<span class="number">2023</span>, <span class="number">12</span>, <span class="number">31</span>).at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2023</span>, <span class="number">12</span>, <span class="number">31</span>)
+    .at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(zdt.day_of_year(), <span class="number">365</span>);
 
-<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">12</span>, <span class="number">31</span>).at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">12</span>, <span class="number">31</span>)
+    .at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(zdt.day_of_year(), <span class="number">366</span>);
 </code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.day_of_year_no_leap" class="method"><h4 class="code-header">pub fn <a href="#method.day_of_year_no_leap" class="fn">day_of_year_no_leap</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.i16.html">i16</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the ordinal day of the year that this zoned datetime resides
 in, but ignores leap years.</p>
@@ -601,10 +616,14 @@ December 31, even for leap years.</p>
 <span class="kw">let </span>zdt = date(<span class="number">2006</span>, <span class="number">8</span>, <span class="number">24</span>).at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(zdt.day_of_year_no_leap(), <span class="prelude-val">Some</span>(<span class="number">236</span>));
 
-<span class="kw">let </span>zdt = date(<span class="number">2023</span>, <span class="number">12</span>, <span class="number">31</span>).at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2023</span>, <span class="number">12</span>, <span class="number">31</span>)
+    .at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(zdt.day_of_year_no_leap(), <span class="prelude-val">Some</span>(<span class="number">365</span>));
 
-<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">12</span>, <span class="number">31</span>).at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">12</span>, <span class="number">31</span>)
+    .at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(zdt.day_of_year_no_leap(), <span class="prelude-val">Some</span>(<span class="number">365</span>));
 
 <span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">2</span>, <span class="number">29</span>).at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
@@ -617,7 +636,9 @@ zone transition at midnight.</p>
 <h5 id="example-17"><a class="doc-anchor" href="#example-17">§</a>Example</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, Zoned};
 
-<span class="kw">let </span>zdt = date(<span class="number">2015</span>, <span class="number">10</span>, <span class="number">18</span>).at(<span class="number">12</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2015</span>, <span class="number">10</span>, <span class="number">18</span>)
+    .at(<span class="number">12</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(
     zdt.start_of_day()<span class="question-mark">?</span>.to_string(),
     <span class="string">"2015-10-18T00:00:00-04:00[America/New_York]"</span>,
@@ -629,7 +650,9 @@ day.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, Zoned};
 
-<span class="kw">let </span>zdt = date(<span class="number">2015</span>, <span class="number">10</span>, <span class="number">18</span>).at(<span class="number">12</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/Sao_Paulo"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2015</span>, <span class="number">10</span>, <span class="number">18</span>)
+    .at(<span class="number">12</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/Sao_Paulo"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(
     zdt.start_of_day()<span class="question-mark">?</span>.to_string(),
     <span class="comment">// not midnight!
@@ -836,7 +859,9 @@ resides is a leap year.</p>
 <span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">1</span>, <span class="number">1</span>).at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert!</span>(zdt.in_leap_year());
 
-<span class="kw">let </span>zdt = date(<span class="number">2023</span>, <span class="number">12</span>, <span class="number">31</span>).at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2023</span>, <span class="number">12</span>, <span class="number">31</span>)
+    .at(<span class="number">7</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert!</span>(!zdt.in_leap_year());
 </code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.tomorrow" class="method"><h4 class="code-header">pub fn <a href="#method.tomorrow" class="fn">tomorrow</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a>, Error&gt;</h4></section></summary><div class="docblock"><p>Returns the zoned datetime with a date immediately following this one.</p>
 <p>In most cases, the time in the zoned datetime returned remains
@@ -897,7 +922,12 @@ be less than the minimum <code>Zoned</code> value.</p>
 );
 
 <span class="comment">// The min doesn't have a yesterday.
-</span><span class="macro">assert!</span>(Timestamp::MIN.in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>.yesterday().is_err());
+</span><span class="macro">assert!</span>(
+    Timestamp::MIN
+        .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?
+        </span>.yesterday()
+        .is_err()
+);
 </code></pre></div><h5 id="example-ambiguous-datetimes-are-automatically-resolved-1"><a class="doc-anchor" href="#example-ambiguous-datetimes-are-automatically-resolved-1">§</a>Example: ambiguous datetimes are automatically resolved</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, Timestamp};
 
@@ -1136,25 +1166,33 @@ works as expected even at the boundaries of a week:</p>
 <h5 id="example-30"><a class="doc-anchor" href="#example-30">§</a>Example</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::civil::date;
 
-<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">14</span>).at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">14</span>)
+    .at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(zdt.timestamp().as_second(), <span class="number">1_710_456_300</span>);
 </code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.datetime" class="method"><h4 class="code-header">pub fn <a href="#method.datetime" class="fn">datetime</a>(&amp;self) -&gt; <a class="struct" href="struct.DateTime.html" title="struct toasty_sql::stmt::DateTime">DateTime</a></h4></section></summary><div class="docblock"><p>Returns the civil datetime component of this zoned datetime.</p>
 <h5 id="example-31"><a class="doc-anchor" href="#example-31">§</a>Example</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::civil::date;
 
-<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">14</span>).at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">14</span>)
+    .at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(zdt.datetime(), date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">14</span>).at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>));
 </code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.date" class="method"><h4 class="code-header">pub fn <a href="#method.date" class="fn">date</a>(&amp;self) -&gt; <a class="struct" href="struct.Date.html" title="struct toasty_sql::stmt::Date">Date</a></h4></section></summary><div class="docblock"><p>Returns the civil date component of this zoned datetime.</p>
 <h5 id="example-32"><a class="doc-anchor" href="#example-32">§</a>Example</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::civil::date;
 
-<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">14</span>).at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">14</span>)
+    .at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(zdt.date(), date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">14</span>));
 </code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.time" class="method"><h4 class="code-header">pub fn <a href="#method.time" class="fn">time</a>(&amp;self) -&gt; <a class="struct" href="struct.Time.html" title="struct toasty_sql::stmt::Time">Time</a></h4></section></summary><div class="docblock"><p>Returns the civil time component of this zoned datetime.</p>
 <h5 id="example-33"><a class="doc-anchor" href="#example-33">§</a>Example</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::civil::{date, time};
 
-<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">14</span>).at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">14</span>)
+    .at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(zdt.time(), time(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>));
 </code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.iso_week_date" class="method"><h4 class="code-header">pub fn <a href="#method.iso_week_date" class="fn">iso_week_date</a>(self) -&gt; ISOWeekDate</h4></section></summary><div class="docblock"><p>Construct a civil <a href="https://en.wikipedia.org/wiki/ISO_week_date">ISO 8601 week date</a> from this zoned datetime.</p>
 <p>The [<code>ISOWeekDate</code>] type describes itself in more detail, but in
@@ -1168,25 +1206,29 @@ Gregorian date to an ISO 8601 week date:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::civil::{Date, Time, Weekday, date};
 
-<span class="kw">let </span>zdt = date(<span class="number">1995</span>, <span class="number">1</span>, <span class="number">1</span>).at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">1995</span>, <span class="number">1</span>, <span class="number">1</span>).at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="kw">let </span>weekdate = zdt.iso_week_date();
 <span class="macro">assert_eq!</span>(weekdate.year(), <span class="number">1994</span>);
 <span class="macro">assert_eq!</span>(weekdate.week(), <span class="number">52</span>);
 <span class="macro">assert_eq!</span>(weekdate.weekday(), Weekday::Sunday);
 
-<span class="kw">let </span>zdt = date(<span class="number">1996</span>, <span class="number">12</span>, <span class="number">31</span>).at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">1996</span>, <span class="number">12</span>, <span class="number">31</span>)
+    .at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="kw">let </span>weekdate = zdt.iso_week_date();
 <span class="macro">assert_eq!</span>(weekdate.year(), <span class="number">1997</span>);
 <span class="macro">assert_eq!</span>(weekdate.week(), <span class="number">1</span>);
 <span class="macro">assert_eq!</span>(weekdate.weekday(), Weekday::Tuesday);
 
-<span class="kw">let </span>zdt = date(<span class="number">2019</span>, <span class="number">12</span>, <span class="number">30</span>).at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2019</span>, <span class="number">12</span>, <span class="number">30</span>)
+    .at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="kw">let </span>weekdate = zdt.iso_week_date();
 <span class="macro">assert_eq!</span>(weekdate.year(), <span class="number">2020</span>);
 <span class="macro">assert_eq!</span>(weekdate.week(), <span class="number">1</span>);
 <span class="macro">assert_eq!</span>(weekdate.weekday(), Weekday::Monday);
 
-<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">9</span>).at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">9</span>).at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="kw">let </span>weekdate = zdt.iso_week_date();
 <span class="macro">assert_eq!</span>(weekdate.year(), <span class="number">2024</span>);
 <span class="macro">assert_eq!</span>(weekdate.week(), <span class="number">10</span>);
@@ -1195,11 +1237,15 @@ Gregorian date to an ISO 8601 week date:</p>
 <h5 id="example-35"><a class="doc-anchor" href="#example-35">§</a>Example</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::civil::date;
 
-<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">2</span>, <span class="number">14</span>).at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">2</span>, <span class="number">14</span>)
+    .at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="comment">// -05 because New York is in "standard" time at this point.
 </span><span class="macro">assert_eq!</span>(zdt.offset(), jiff::tz::offset(-<span class="number">5</span>));
 
-<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">7</span>, <span class="number">14</span>).at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">7</span>, <span class="number">14</span>)
+    .at(<span class="number">18</span>, <span class="number">45</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="comment">// But we get -04 once "summer" or "daylight saving time" starts.
 </span><span class="macro">assert_eq!</span>(zdt.offset(), jiff::tz::offset(-<span class="number">4</span>));
 </code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.checked_add" class="method"><h4 class="code-header">pub fn <a href="#method.checked_add" class="fn">checked_add</a>&lt;A&gt;(&amp;self, duration: A) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a>, Error&gt;<div class="where">where
@@ -1243,7 +1289,9 @@ convenient creation of spans.</p>
     date(<span class="number">2016</span>, <span class="number">4</span>, <span class="number">7</span>).at(<span class="number">3</span>, <span class="number">24</span>, <span class="number">30</span>, <span class="number">4_000</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>,
 );
 
-<span class="kw">let </span>zdt = date(<span class="number">2019</span>, <span class="number">1</span>, <span class="number">31</span>).at(<span class="number">15</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2019</span>, <span class="number">1</span>, <span class="number">31</span>)
+    .at(<span class="number">15</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="kw">let </span>got = zdt.checked_add(<span class="number">1</span>.months())<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(
     got,
@@ -1334,7 +1382,9 @@ of the fact that the 1 o’clock hour was repeated on <code>2024-11-03</code>.</
 </code></pre></div><h5 id="example-error-on-overflow"><a class="doc-anchor" href="#example-error-on-overflow">§</a>Example: error on overflow</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, ToSpan};
 
-<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">31</span>).at(<span class="number">13</span>, <span class="number">13</span>, <span class="number">13</span>, <span class="number">13</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">31</span>)
+    .at(<span class="number">13</span>, <span class="number">13</span>, <span class="number">13</span>, <span class="number">13</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert!</span>(zdt.checked_add(<span class="number">9000</span>.years()).is_err());
 <span class="macro">assert!</span>(zdt.checked_add(-<span class="number">19000</span>.years()).is_err());
 </code></pre></div><h5 id="example-adding-absolute-durations"><a class="doc-anchor" href="#example-adding-absolute-durations">§</a>Example: adding absolute durations</h5>
@@ -1345,28 +1395,28 @@ of the fact that the 1 o’clock hour was repeated on <code>2024-11-03</code>.</
 
 <span class="kw">use </span>jiff::{civil::date, SignedDuration};
 
-<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">2</span>, <span class="number">29</span>).at(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">2</span>, <span class="number">29</span>).at(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 
 <span class="kw">let </span>dur = SignedDuration::from_hours(<span class="number">25</span>);
 <span class="macro">assert_eq!</span>(
     zdt.checked_add(dur)<span class="question-mark">?</span>,
-    date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">1</span>).at(<span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>,
+    date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">1</span>).at(<span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>,
 );
 <span class="macro">assert_eq!</span>(
     zdt.checked_add(-dur)<span class="question-mark">?</span>,
-    date(<span class="number">2024</span>, <span class="number">2</span>, <span class="number">27</span>).at(<span class="number">23</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>,
+    date(<span class="number">2024</span>, <span class="number">2</span>, <span class="number">27</span>).at(<span class="number">23</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>,
 );
 
 <span class="kw">let </span>dur = Duration::from_secs(<span class="number">25 </span>* <span class="number">60 </span>* <span class="number">60</span>);
 <span class="macro">assert_eq!</span>(
     zdt.checked_add(dur)<span class="question-mark">?</span>,
-    date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">1</span>).at(<span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>,
+    date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">1</span>).at(<span class="number">1</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>,
 );
 <span class="comment">// One cannot negate an unsigned duration,
 // but you can subtract it!
 </span><span class="macro">assert_eq!</span>(
     zdt.checked_sub(dur)<span class="question-mark">?</span>,
-    date(<span class="number">2024</span>, <span class="number">2</span>, <span class="number">27</span>).at(<span class="number">23</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>,
+    date(<span class="number">2024</span>, <span class="number">2</span>, <span class="number">27</span>).at(<span class="number">23</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>,
 );
 </code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.checked_sub" class="method"><h4 class="code-header">pub fn <a href="#method.checked_sub" class="fn">checked_sub</a>&lt;A&gt;(&amp;self, duration: A) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a>, Error&gt;<div class="where">where
     A: <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;ZonedArithmetic&gt;,</div></h4></section></summary><div class="docblock"><p>This routine is identical to <a href="struct.Zoned.html#method.checked_add" title="method toasty_sql::stmt::Zoned::checked_add"><code>Zoned::checked_add</code></a> with the
@@ -1414,24 +1464,58 @@ except that if saturation occurs, then the result is not reversible.</p>
 <h5 id="example-38"><a class="doc-anchor" href="#example-38">§</a>Example</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, SignedDuration, Timestamp, ToSpan};
 
-<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">31</span>).at(<span class="number">13</span>, <span class="number">13</span>, <span class="number">13</span>, <span class="number">13</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
-<span class="macro">assert_eq!</span>(Timestamp::MAX, zdt.saturating_add(<span class="number">9000</span>.years()).timestamp());
-<span class="macro">assert_eq!</span>(Timestamp::MIN, zdt.saturating_add(-<span class="number">19000</span>.years()).timestamp());
-<span class="macro">assert_eq!</span>(Timestamp::MAX, zdt.saturating_add(SignedDuration::MAX).timestamp());
-<span class="macro">assert_eq!</span>(Timestamp::MIN, zdt.saturating_add(SignedDuration::MIN).timestamp());
-<span class="macro">assert_eq!</span>(Timestamp::MAX, zdt.saturating_add(std::time::Duration::MAX).timestamp());
+<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">31</span>)
+    .at(<span class="number">13</span>, <span class="number">13</span>, <span class="number">13</span>, <span class="number">13</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(
+    Timestamp::MAX,
+    zdt.saturating_add(<span class="number">9000</span>.years()).timestamp(),
+);
+<span class="macro">assert_eq!</span>(
+    Timestamp::MIN,
+    zdt.saturating_add(-<span class="number">19000</span>.years()).timestamp(),
+);
+<span class="macro">assert_eq!</span>(
+    Timestamp::MAX,
+    zdt.saturating_add(SignedDuration::MAX).timestamp(),
+);
+<span class="macro">assert_eq!</span>(
+    Timestamp::MIN,
+    zdt.saturating_add(SignedDuration::MIN).timestamp(),
+);
+<span class="macro">assert_eq!</span>(
+    Timestamp::MAX,
+    zdt.saturating_add(std::time::Duration::MAX).timestamp(),
+);
 </code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.saturating_sub" class="method"><h4 class="code-header">pub fn <a href="#method.saturating_sub" class="fn">saturating_sub</a>&lt;A&gt;(&amp;self, duration: A) -&gt; <a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a><div class="where">where
     A: <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;ZonedArithmetic&gt;,</div></h4></section></summary><div class="docblock"><p>This routine is identical to <a href="struct.Zoned.html#method.saturating_add" title="method toasty_sql::stmt::Zoned::saturating_add"><code>Zoned::saturating_add</code></a> with the span
 parameter negated.</p>
 <h5 id="example-39"><a class="doc-anchor" href="#example-39">§</a>Example</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, SignedDuration, Timestamp, ToSpan};
 
-<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">31</span>).at(<span class="number">13</span>, <span class="number">13</span>, <span class="number">13</span>, <span class="number">13</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
-<span class="macro">assert_eq!</span>(Timestamp::MIN, zdt.saturating_sub(<span class="number">19000</span>.years()).timestamp());
-<span class="macro">assert_eq!</span>(Timestamp::MAX, zdt.saturating_sub(-<span class="number">9000</span>.years()).timestamp());
-<span class="macro">assert_eq!</span>(Timestamp::MIN, zdt.saturating_sub(SignedDuration::MAX).timestamp());
-<span class="macro">assert_eq!</span>(Timestamp::MAX, zdt.saturating_sub(SignedDuration::MIN).timestamp());
-<span class="macro">assert_eq!</span>(Timestamp::MIN, zdt.saturating_sub(std::time::Duration::MAX).timestamp());
+<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">31</span>)
+    .at(<span class="number">13</span>, <span class="number">13</span>, <span class="number">13</span>, <span class="number">13</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(
+    Timestamp::MIN,
+    zdt.saturating_sub(<span class="number">19000</span>.years()).timestamp(),
+);
+<span class="macro">assert_eq!</span>(
+    Timestamp::MAX,
+    zdt.saturating_sub(-<span class="number">9000</span>.years()).timestamp(),
+);
+<span class="macro">assert_eq!</span>(
+    Timestamp::MIN,
+    zdt.saturating_sub(SignedDuration::MAX).timestamp(),
+);
+<span class="macro">assert_eq!</span>(
+    Timestamp::MAX,
+    zdt.saturating_sub(SignedDuration::MIN).timestamp(),
+);
+<span class="macro">assert_eq!</span>(
+    Timestamp::MIN,
+    zdt.saturating_sub(std::time::Duration::MAX).timestamp(),
+);
 </code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.until" class="method"><h4 class="code-header">pub fn <a href="#method.until" class="fn">until</a>&lt;'a, A&gt;(&amp;self, other: A) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Span, Error&gt;<div class="where">where
     A: <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;ZonedDifference&lt;'a&gt;&gt;,</div></h4></section></summary><div class="docblock"><p>Returns a span representing the elapsed time from this zoned datetime
 until the given <code>other</code> zoned datetime.</p>
@@ -1483,8 +1567,12 @@ fail.</p>
 <h5 id="example-40"><a class="doc-anchor" href="#example-40">§</a>Example</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, ToSpan};
 
-<span class="kw">let </span>earlier = date(<span class="number">2006</span>, <span class="number">8</span>, <span class="number">24</span>).at(<span class="number">22</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
-<span class="kw">let </span>later = date(<span class="number">2019</span>, <span class="number">1</span>, <span class="number">31</span>).at(<span class="number">21</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>earlier = date(<span class="number">2006</span>, <span class="number">8</span>, <span class="number">24</span>)
+    .at(<span class="number">22</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>later = date(<span class="number">2019</span>, <span class="number">1</span>, <span class="number">31</span>)
+    .at(<span class="number">21</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(
     earlier.until(<span class="kw-2">&amp;</span>later)<span class="question-mark">?</span>,
     <span class="number">109_031</span>.hours().minutes(<span class="number">30</span>).fieldwise(),
@@ -1502,8 +1590,12 @@ trait implementation.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, Unit, ToSpan};
 
-<span class="kw">let </span>zdt1 = date(<span class="number">1995</span>, <span class="number">12</span>, <span class="number">07</span>).at(<span class="number">3</span>, <span class="number">24</span>, <span class="number">30</span>, <span class="number">3500</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
-<span class="kw">let </span>zdt2 = date(<span class="number">2019</span>, <span class="number">01</span>, <span class="number">31</span>).at(<span class="number">15</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt1 = date(<span class="number">1995</span>, <span class="number">12</span>, <span class="number">07</span>)
+    .at(<span class="number">3</span>, <span class="number">24</span>, <span class="number">30</span>, <span class="number">3500</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt2 = date(<span class="number">2019</span>, <span class="number">01</span>, <span class="number">31</span>)
+    .at(<span class="number">15</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 
 <span class="comment">// The default limits durations to using "hours" as the biggest unit.
 </span><span class="kw">let </span>span = zdt1.until(<span class="kw-2">&amp;</span>zdt2)<span class="question-mark">?</span>;
@@ -1511,7 +1603,10 @@ trait implementation.</p>
 
 <span class="comment">// But we can ask for units all the way up to years.
 </span><span class="kw">let </span>span = zdt1.until((Unit::Year, <span class="kw-2">&amp;</span>zdt2))<span class="question-mark">?</span>;
-<span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{span:#}"</span>), <span class="string">"23y 1mo 24d 12h 5m 29s 999ms 996µs 500ns"</span>);</code></pre></div><h5 id="example-rounding-the-result"><a class="doc-anchor" href="#example-rounding-the-result">§</a>Example: rounding the result</h5>
+<span class="macro">assert_eq!</span>(
+    <span class="macro">format!</span>(<span class="string">"{span:#}"</span>),
+    <span class="string">"23y 1mo 24d 12h 5m 29s 999ms 996µs 500ns"</span>,
+);</code></pre></div><h5 id="example-rounding-the-result"><a class="doc-anchor" href="#example-rounding-the-result">§</a>Example: rounding the result</h5>
 <p>This shows how one might find the difference between two zoned
 datetimes and have the result rounded such that sub-seconds are
 removed.</p>
@@ -1520,8 +1615,12 @@ in order to gain full configurability.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, Unit, ToSpan, ZonedDifference};
 
-<span class="kw">let </span>zdt1 = date(<span class="number">1995</span>, <span class="number">12</span>, <span class="number">07</span>).at(<span class="number">3</span>, <span class="number">24</span>, <span class="number">30</span>, <span class="number">3500</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
-<span class="kw">let </span>zdt2 = date(<span class="number">2019</span>, <span class="number">01</span>, <span class="number">31</span>).at(<span class="number">15</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt1 = date(<span class="number">1995</span>, <span class="number">12</span>, <span class="number">07</span>)
+    .at(<span class="number">3</span>, <span class="number">24</span>, <span class="number">30</span>, <span class="number">3500</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt2 = date(<span class="number">2019</span>, <span class="number">01</span>, <span class="number">31</span>)
+    .at(<span class="number">15</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 
 <span class="kw">let </span>span = zdt1.until(
     ZonedDifference::from(<span class="kw-2">&amp;</span>zdt2).smallest(Unit::Second),
@@ -1581,8 +1680,12 @@ not <code>Copy</code>.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, ToSpan};
 
-<span class="kw">let </span>earlier = date(<span class="number">2006</span>, <span class="number">8</span>, <span class="number">24</span>).at(<span class="number">22</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
-<span class="kw">let </span>later = date(<span class="number">2019</span>, <span class="number">1</span>, <span class="number">31</span>).at(<span class="number">21</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>earlier = date(<span class="number">2006</span>, <span class="number">8</span>, <span class="number">24</span>)
+    .at(<span class="number">22</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>later = date(<span class="number">2019</span>, <span class="number">1</span>, <span class="number">31</span>)
+    .at(<span class="number">21</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(<span class="kw-2">&amp;</span>later - <span class="kw-2">&amp;</span>earlier, <span class="number">109_031</span>.hours().minutes(<span class="number">30</span>).fieldwise());
 </code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.duration_until" class="method"><h4 class="code-header">pub fn <a href="#method.duration_until" class="fn">duration_until</a>(&amp;self, other: &amp;<a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a>) -&gt; SignedDuration</h4></section></summary><div class="docblock"><p>Returns an absolute duration representing the elapsed time from this
 zoned datetime until the given <code>other</code> zoned datetime.</p>
@@ -1606,17 +1709,23 @@ a specific reason to do otherwise.</p>
 <h5 id="example-42"><a class="doc-anchor" href="#example-42">§</a>Example</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, SignedDuration};
 
-<span class="kw">let </span>earlier = date(<span class="number">2006</span>, <span class="number">8</span>, <span class="number">24</span>).at(<span class="number">22</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>;
-<span class="kw">let </span>later = date(<span class="number">2019</span>, <span class="number">1</span>, <span class="number">31</span>).at(<span class="number">21</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>earlier = date(<span class="number">2006</span>, <span class="number">8</span>, <span class="number">24</span>)
+    .at(<span class="number">22</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>later = date(<span class="number">2019</span>, <span class="number">1</span>, <span class="number">31</span>)
+    .at(<span class="number">21</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(
     earlier.duration_until(<span class="kw-2">&amp;</span>later),
-    SignedDuration::from_hours(<span class="number">109_031</span>) + SignedDuration::from_mins(<span class="number">30</span>),
+    SignedDuration::from_hours(<span class="number">109_031</span>)
+        + SignedDuration::from_mins(<span class="number">30</span>),
 );
 
 <span class="comment">// Flipping the dates is fine, but you'll get a negative span.
 </span><span class="macro">assert_eq!</span>(
     later.duration_until(<span class="kw-2">&amp;</span>earlier),
-    -SignedDuration::from_hours(<span class="number">109_031</span>) + -SignedDuration::from_mins(<span class="number">30</span>),
+    -SignedDuration::from_hours(<span class="number">109_031</span>)
+        + -SignedDuration::from_mins(<span class="number">30</span>),
 );
 </code></pre></div><h5 id="example-difference-with-zoneduntil"><a class="doc-anchor" href="#example-difference-with-zoneduntil">§</a>Example: difference with <a href="struct.Zoned.html#method.until" title="method toasty_sql::stmt::Zoned::until"><code>Zoned::until</code></a></h5>
 <p>The main difference between this routine and <code>Zoned::until</code> is that
@@ -1629,8 +1738,8 @@ be done for units like years, months or days.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, SignedDuration, Span, SpanRound, ToSpan, Unit};
 
-<span class="kw">let </span>zdt1 = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">10</span>).at(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>;
-<span class="kw">let </span>zdt2 = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">11</span>).at(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt1 = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">10</span>).at(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt2 = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">11</span>).at(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 
 <span class="kw">let </span>span = zdt1.until((Unit::Day, <span class="kw-2">&amp;</span>zdt2))<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{span:#}"</span>), <span class="string">"1d"</span>);
@@ -1654,8 +1763,8 @@ a <a href="https://doc.rust-lang.org/1.98.1/core/time/struct.Duration.html" titl
 
 <span class="kw">use </span>jiff::civil::date;
 
-<span class="kw">let </span>zdt1 = date(<span class="number">2024</span>, <span class="number">7</span>, <span class="number">1</span>).at(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>;
-<span class="kw">let </span>zdt2 = date(<span class="number">2024</span>, <span class="number">8</span>, <span class="number">1</span>).at(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt1 = date(<span class="number">2024</span>, <span class="number">7</span>, <span class="number">1</span>).at(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt2 = date(<span class="number">2024</span>, <span class="number">8</span>, <span class="number">1</span>).at(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="kw">let </span>duration = Duration::try_from(zdt1.duration_until(<span class="kw-2">&amp;</span>zdt2))<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(duration, Duration::from_secs(<span class="number">31 </span>* <span class="number">24 </span>* <span class="number">60 </span>* <span class="number">60</span>));
 
@@ -1668,11 +1777,16 @@ order of the parameters is flipped.</p>
 <h5 id="example-43"><a class="doc-anchor" href="#example-43">§</a>Example</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, SignedDuration};
 
-<span class="kw">let </span>earlier = date(<span class="number">2006</span>, <span class="number">8</span>, <span class="number">24</span>).at(<span class="number">22</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>;
-<span class="kw">let </span>later = date(<span class="number">2019</span>, <span class="number">1</span>, <span class="number">31</span>).at(<span class="number">21</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>earlier = date(<span class="number">2006</span>, <span class="number">8</span>, <span class="number">24</span>)
+    .at(<span class="number">22</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>later = date(<span class="number">2019</span>, <span class="number">1</span>, <span class="number">31</span>)
+    .at(<span class="number">21</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(
     later.duration_since(<span class="kw-2">&amp;</span>earlier),
-    SignedDuration::from_hours(<span class="number">109_031</span>) + SignedDuration::from_mins(<span class="number">30</span>),
+    SignedDuration::from_hours(<span class="number">109_031</span>)
+        + SignedDuration::from_mins(<span class="number">30</span>),
 );
 </code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.round" class="method"><h4 class="code-header">pub fn <a href="#method.round" class="fn">round</a>&lt;R&gt;(&amp;self, options: R) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a>, Error&gt;<div class="where">where
     R: <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;ZonedRound&gt;,</div></h4></section></summary><div class="docblock"><p>Rounds this zoned datetime according to the [<code>ZonedRound</code>]
@@ -1883,7 +1997,8 @@ installation:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::datetime, ToSpan};
 
-<span class="kw">let </span>start = datetime(<span class="number">2023</span>, <span class="number">7</span>, <span class="number">15</span>, <span class="number">16</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>start = datetime(<span class="number">2023</span>, <span class="number">7</span>, <span class="number">15</span>, <span class="number">16</span>, <span class="number">30</span>, <span class="number">0</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="kw">let </span>end = start.checked_add(<span class="number">2</span>.days())<span class="question-mark">?</span>;
 <span class="kw">let </span><span class="kw-2">mut </span>scan_times = <span class="macro">vec!</span>[];
 <span class="kw">for </span>zdt <span class="kw">in </span>start.series(<span class="number">5</span>.hours()).take_while(|zdt| zdt &lt;= end) {
@@ -2084,8 +2199,14 @@ construct a zoned datetime. For example, if an offset wasn’t parsed.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::Zoned;
 
-<span class="kw">let </span>zdt = Zoned::strptime(<span class="string">"%F %H:%M %:Q"</span>, <span class="string">"2024-07-14 21:14 US/Eastern"</span>)<span class="question-mark">?</span>;
-<span class="macro">assert_eq!</span>(zdt.to_string(), <span class="string">"2024-07-14T21:14:00-04:00[US/Eastern]"</span>);
+<span class="kw">let </span>zdt = Zoned::strptime(
+    <span class="string">"%F %H:%M %:Q"</span>,
+    <span class="string">"2024-07-14 21:14 America/New_York"</span>,
+)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(
+    zdt.to_string(),
+    <span class="string">"2024-07-14T21:14:00-04:00[America/New_York]"</span>,
+);
 </code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.strftime" class="method"><h4 class="code-header">pub fn <a href="#method.strftime" class="fn">strftime</a>&lt;'f, F&gt;(&amp;self, format: <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.reference.html">&amp;'f F</a>) -&gt; Display&lt;'f&gt;<div class="where">where
     F: 'f + <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.AsRef.html" title="trait core::convert::AsRef">AsRef</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.u8.html">u8</a>]&gt; + ?<a class="trait" href="https://doc.rust-lang.org/1.98.1/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a>,</div></h4></section></summary><div class="docblock"><p>Formats this zoned datetime according to the given <code>format</code>.</p>
 <p>The format string uses a “printf”-style API where conversion
@@ -2118,7 +2239,9 @@ this is what it looks like on my system:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::civil::date;
 
-<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">7</span>, <span class="number">15</span>).at(<span class="number">16</span>, <span class="number">24</span>, <span class="number">59</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">7</span>, <span class="number">15</span>)
+    .at(<span class="number">16</span>, <span class="number">24</span>, <span class="number">59</span>, <span class="number">0</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="kw">let </span>string = zdt.strftime(<span class="string">"%a %b %e %I:%M:%S %p %Z %Y"</span>).to_string();
 <span class="macro">assert_eq!</span>(string, <span class="string">"Mon Jul 15 04:24:59 PM EDT 2024"</span>);
 </code></pre></div><h5 id="example-errors-are-silently-ignored"><a class="doc-anchor" href="#example-errors-are-silently-ignored">§</a>Example: errors are silently ignored</h5>
@@ -2190,21 +2313,23 @@ of the fractional second component.</li>
 <h4 id="example-47"><a class="doc-anchor" href="#example-47">§</a>Example</h4>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::civil::date;
 
-<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">6</span>, <span class="number">15</span>).at(<span class="number">7</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">123_000_000</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">6</span>, <span class="number">15</span>)
+    .at(<span class="number">7</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">123_000_000</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(
     <span class="macro">format!</span>(<span class="string">"{zdt:.6?}"</span>),
-    <span class="string">"2024-06-15T07:00:00.123000-04:00[US/Eastern]"</span>,
+    <span class="string">"2024-06-15T07:00:00.123000-04:00[America/New_York]"</span>,
 );
 <span class="comment">// Precision values greater than 9 are clamped to 9.
 </span><span class="macro">assert_eq!</span>(
     <span class="macro">format!</span>(<span class="string">"{zdt:.300?}"</span>),
-    <span class="string">"2024-06-15T07:00:00.123000000-04:00[US/Eastern]"</span>,
+    <span class="string">"2024-06-15T07:00:00.123000000-04:00[America/New_York]"</span>,
 );
 <span class="comment">// A precision of 0 implies the entire fractional
 // component is always truncated.
 </span><span class="macro">assert_eq!</span>(
     <span class="macro">format!</span>(<span class="string">"{zdt:.0?}"</span>),
-    <span class="string">"2024-06-15T07:00:00-04:00[US/Eastern]"</span>,
+    <span class="string">"2024-06-15T07:00:00-04:00[America/New_York]"</span>,
 );
 </code></pre></div></div><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt" class="method trait-impl"><a href="#method.fmt" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/fmt/trait.Debug.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.98.1/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.98.1/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.98.1/core/fmt/trait.Debug.html#tymethod.fmt">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Default-for-Zoned" class="impl"><a href="#impl-Default-for-Zoned" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/default/trait.Default.html" title="trait core::default::Default">Default</a> for <a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.default" class="method trait-impl"><a href="#method.default" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/default/trait.Default.html#tymethod.default" class="fn">default</a>() -&gt; <a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a></h4></section></summary><div class='docblock'>Returns the “default value” for a type. <a href="https://doc.rust-lang.org/1.98.1/core/default/trait.Default.html#tymethod.default">Read more</a></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Display-for-Zoned" class="impl"><a href="#impl-Display-for-Zoned" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/fmt/trait.Display.html" title="trait core::fmt::Display">Display</a> for <a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a></h3><div class="docblock"><p>Converts a <code>Zoned</code> datetime into a RFC 9557 compliant string.</p>
 </div></section></summary><div class="docblock"><h4 id="formatting-options-supported"><a class="doc-anchor" href="#formatting-options-supported">§</a>Formatting options supported</h4>
@@ -2219,30 +2344,40 @@ required to losslessly render the value is used.</li>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::civil::date;
 
 <span class="comment">// No fractional seconds:
-</span><span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">6</span>, <span class="number">15</span>).at(<span class="number">7</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>;
-<span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{zdt}"</span>), <span class="string">"2024-06-15T07:00:00-04:00[US/Eastern]"</span>);
+</span><span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">6</span>, <span class="number">15</span>).at(<span class="number">7</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(
+    <span class="macro">format!</span>(<span class="string">"{zdt}"</span>),
+    <span class="string">"2024-06-15T07:00:00-04:00[America/New_York]"</span>,
+);
 
 <span class="comment">// With fractional seconds:
-</span><span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">6</span>, <span class="number">15</span>).at(<span class="number">7</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">123_000_000</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>;
-<span class="macro">assert_eq!</span>(<span class="macro">format!</span>(<span class="string">"{zdt}"</span>), <span class="string">"2024-06-15T07:00:00.123-04:00[US/Eastern]"</span>);
+</span><span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">6</span>, <span class="number">15</span>)
+    .at(<span class="number">7</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">123_000_000</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(
+    <span class="macro">format!</span>(<span class="string">"{zdt}"</span>),
+    <span class="string">"2024-06-15T07:00:00.123-04:00[America/New_York]"</span>,
+);
 </code></pre></div><h4 id="example-setting-the-precision"><a class="doc-anchor" href="#example-setting-the-precision">§</a>Example: setting the precision</h4>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::civil::date;
 
-<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">6</span>, <span class="number">15</span>).at(<span class="number">7</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">123_000_000</span>).in_tz(<span class="string">"US/Eastern"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">6</span>, <span class="number">15</span>)
+    .at(<span class="number">7</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">123_000_000</span>)
+    .in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(
     <span class="macro">format!</span>(<span class="string">"{zdt:.6}"</span>),
-    <span class="string">"2024-06-15T07:00:00.123000-04:00[US/Eastern]"</span>,
+    <span class="string">"2024-06-15T07:00:00.123000-04:00[America/New_York]"</span>,
 );
 <span class="comment">// Precision values greater than 9 are clamped to 9.
 </span><span class="macro">assert_eq!</span>(
     <span class="macro">format!</span>(<span class="string">"{zdt:.300}"</span>),
-    <span class="string">"2024-06-15T07:00:00.123000000-04:00[US/Eastern]"</span>,
+    <span class="string">"2024-06-15T07:00:00.123000000-04:00[America/New_York]"</span>,
 );
 <span class="comment">// A precision of 0 implies the entire fractional
 // component is always truncated.
 </span><span class="macro">assert_eq!</span>(
     <span class="macro">format!</span>(<span class="string">"{zdt:.0}"</span>),
-    <span class="string">"2024-06-15T07:00:00-04:00[US/Eastern]"</span>,
+    <span class="string">"2024-06-15T07:00:00-04:00[America/New_York]"</span>,
 );
 </code></pre></div></div><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.fmt-1" class="method trait-impl"><a href="#method.fmt-1" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/fmt/trait.Display.html#tymethod.fmt" class="fn">fmt</a>(&amp;self, f: &amp;mut <a class="struct" href="https://doc.rust-lang.org/1.98.1/core/fmt/struct.Formatter.html" title="struct core::fmt::Formatter">Formatter</a>&lt;'_&gt;) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.unit.html">()</a>, <a class="struct" href="https://doc.rust-lang.org/1.98.1/core/fmt/struct.Error.html" title="struct core::fmt::Error">Error</a>&gt;</h4></section></summary><div class='docblock'>Formats the value using the given formatter. <a href="https://doc.rust-lang.org/1.98.1/core/fmt/trait.Display.html#tymethod.fmt">Read more</a></div></details></div></details><section id="impl-Eq-for-Zoned" class="impl"><a href="#impl-Eq-for-Zoned" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/cmp/trait.Eq.html" title="trait core::cmp::Eq">Eq</a> for <a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a></h3></section><details class="toggle implementors-toggle" open><summary><section id="impl-From%3C%26Zoned%3E-for-Date" class="impl"><a href="#impl-From%3C%26Zoned%3E-for-Date" class="anchor">§</a><h3 class="code-header">impl&lt;'a&gt; <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;&amp;'a <a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a>&gt; for <a class="struct" href="struct.Date.html" title="struct toasty_sql::stmt::Date">Date</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from" class="method trait-impl"><a href="#method.from" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(zdt: &amp;'a <a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a>) -&gt; <a class="struct" href="struct.Date.html" title="struct toasty_sql::stmt::Date">Date</a></h4></section></summary><div class='docblock'>Converts to this type from the input type.</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-From%3C%26Zoned%3E-for-DateTime" class="impl"><a href="#impl-From%3C%26Zoned%3E-for-DateTime" class="anchor">§</a><h3 class="code-header">impl&lt;'a&gt; <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;&amp;'a <a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a>&gt; for <a class="struct" href="struct.DateTime.html" title="struct toasty_sql::stmt::DateTime">DateTime</a></h3><div class="docblock"><p>Converts a <a href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned"><code>&amp;Zoned</code></a> to a <a href="struct.DateTime.html" title="struct toasty_sql::stmt::DateTime"><code>DateTime</code></a>.</p>
 </div></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from-1" class="method trait-impl"><a href="#method.from-1" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(zdt: &amp;'a <a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a>) -&gt; <a class="struct" href="struct.DateTime.html" title="struct toasty_sql::stmt::DateTime">DateTime</a></h4></section></summary><div class='docblock'>Converts to this type from the input type.</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-From%3C%26Zoned%3E-for-Time" class="impl"><a href="#impl-From%3C%26Zoned%3E-for-Time" class="anchor">§</a><h3 class="code-header">impl&lt;'a&gt; <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;&amp;'a <a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a>&gt; for <a class="struct" href="struct.Time.html" title="struct toasty_sql::stmt::Time">Time</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from-2" class="method trait-impl"><a href="#method.from-2" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(zdt: &amp;'a <a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a>) -&gt; <a class="struct" href="struct.Time.html" title="struct toasty_sql::stmt::Time">Time</a></h4></section></summary><div class='docblock'>Converts to this type from the input type.</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-From%3C%26Zoned%3E-for-Timestamp" class="impl"><a href="#impl-From%3C%26Zoned%3E-for-Timestamp" class="anchor">§</a><h3 class="code-header">impl&lt;'a&gt; <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;&amp;'a <a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a>&gt; for <a class="struct" href="struct.Timestamp.html" title="struct toasty_sql::stmt::Timestamp">Timestamp</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from-3" class="method trait-impl"><a href="#method.from-3" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(zdt: &amp;'a <a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a>) -&gt; <a class="struct" href="struct.Timestamp.html" title="struct toasty_sql::stmt::Timestamp">Timestamp</a></h4></section></summary><div class='docblock'>Converts to this type from the input type.</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-From%3CZoned%3E-for-Value" class="impl"><a href="#impl-From%3CZoned%3E-for-Value" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;<a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a>&gt; for <a class="enum" href="enum.Value.html" title="enum toasty_sql::stmt::Value">Value</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from-4" class="method trait-impl"><a href="#method.from-4" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(value: <a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a>) -&gt; <a class="enum" href="enum.Value.html" title="enum toasty_sql::stmt::Value">Value</a></h4></section></summary><div class='docblock'>Converts to this type from the input type.</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-From%3CZoned%3E-for-Date" class="impl"><a href="#impl-From%3CZoned%3E-for-Date" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;<a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a>&gt; for <a class="struct" href="struct.Date.html" title="struct toasty_sql::stmt::Date">Date</a></h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.from-5" class="method trait-impl"><a href="#method.from-5" class="anchor">§</a><h4 class="code-header">fn <a href="https://doc.rust-lang.org/1.98.1/core/convert/trait.From.html#tymethod.from" class="fn">from</a>(zdt: <a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a>) -&gt; <a class="struct" href="struct.Date.html" title="struct toasty_sql::stmt::Date">Date</a></h4></section></summary><div class='docblock'>Converts to this type from the input type.</div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-From%3CZoned%3E-for-DateTime" class="impl"><a href="#impl-From%3CZoned%3E-for-DateTime" class="anchor">§</a><h3 class="code-header">impl <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.From.html" title="trait core::convert::From">From</a>&lt;<a class="struct" href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned">Zoned</a>&gt; for <a class="struct" href="struct.DateTime.html" title="struct toasty_sql::stmt::DateTime">DateTime</a></h3><div class="docblock"><p>Converts a <a href="struct.Zoned.html" title="struct toasty_sql::stmt::Zoned"><code>Zoned</code></a> to a <a href="struct.DateTime.html" title="struct toasty_sql::stmt::DateTime"><code>DateTime</code></a>.</p>

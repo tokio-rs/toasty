@@ -625,8 +625,11 @@ to be something other than midnight. For example:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::civil::date;
 
-<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">10</span>).in_tz(<span class="string">"Cuba"</span>)<span class="question-mark">?</span>;
-<span class="macro">assert_eq!</span>(zdt.to_string(), <span class="string">"2024-03-10T01:00:00-04:00[Cuba]"</span>);
+<span class="kw">let </span>zdt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">10</span>).in_tz(<span class="string">"America/Havana"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(
+    zdt.to_string(),
+    <span class="string">"2024-03-10T01:00:00-04:00[America/Havana]"</span>,
+);
 </code></pre></div>
 <p>Since this uses
 <a href="crate::tz::Disambiguation::Compatible"><code>Disambiguation::Compatible</code></a>,
@@ -640,10 +643,13 @@ different:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, tz::TimeZone};
 
-<span class="kw">let </span>tz = TimeZone::get(<span class="string">"Cuba"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"America/Havana"</span>)<span class="question-mark">?</span>;
 <span class="kw">let </span>dt = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">10</span>).at(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>);
 <span class="kw">let </span>zdt = tz.to_ambiguous_zoned(dt).earlier()<span class="question-mark">?</span>;
-<span class="macro">assert_eq!</span>(zdt.to_string(), <span class="string">"2024-03-09T23:00:00-05:00[Cuba]"</span>);
+<span class="macro">assert_eq!</span>(
+    zdt.to_string(),
+    <span class="string">"2024-03-09T23:00:00-05:00[America/Havana]"</span>,
+);
 </code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.to_zoned" class="method"><h4 class="code-header">pub fn <a href="#method.to_zoned" class="fn">to_zoned</a>(self, tz: <a class="struct" href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone">TimeZone</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;<a class="struct" href="struct.Zoned.html" title="struct toasty::stmt::Zoned">Zoned</a>, Error&gt;</h4></section></summary><div class="docblock"><p>Converts a civil datetime to a <a href="struct.Zoned.html" title="struct toasty::stmt::Zoned"><code>Zoned</code></a> datetime by adding the given
 <a href="struct.TimeZone.html" title="struct toasty::stmt::TimeZone"><code>TimeZone</code></a> and setting the clock time to midnight.</p>
 <p>This is a convenience function for

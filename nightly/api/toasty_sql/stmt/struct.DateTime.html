@@ -854,7 +854,7 @@ within the allowable timestamp limits:</p>
 // isn't enough to fit into timestamp limits.
 </span><span class="macro">assert!</span>(dt.in_tz(<span class="string">"UTC"</span>).is_err());
 <span class="macro">assert!</span>(dt.in_tz(<span class="string">"America/New_York"</span>).is_err());
-<span class="macro">assert!</span>(dt.in_tz(<span class="string">"Australia/Tasmania"</span>).is_err());
+<span class="macro">assert!</span>(dt.in_tz(<span class="string">"Australia/Hobart"</span>).is_err());
 <span class="comment">// In fact, the only valid offset one can use to turn the maximum civil
 // datetime into a Zoned value is the maximum offset:
 </span><span class="kw">let </span>tz = Offset::from_seconds(<span class="number">93_599</span>).unwrap().to_time_zone();
@@ -882,7 +882,7 @@ then the later time is selected.</p>
 <p>To convert a datetime to a <code>Zoned</code> using a different disambiguation
 strategy, use [<code>TimeZone::to_ambiguous_zoned</code>].</p>
 <p>In the common case of a time zone being represented as a name string,
-like <code>Australia/Tasmania</code>, consider using <a href="struct.DateTime.html#method.in_tz" title="method toasty_sql::stmt::DateTime::in_tz"><code>DateTime::in_tz</code></a>
+like <code>Australia/Hobart</code>, consider using <a href="struct.DateTime.html#method.in_tz" title="method toasty_sql::stmt::DateTime::in_tz"><code>DateTime::in_tz</code></a>
 instead.</p>
 <h5 id="errors-6"><a class="doc-anchor" href="#errors-6">§</a>Errors</h5>
 <p>This returns an error if this datetime could not be represented as an
