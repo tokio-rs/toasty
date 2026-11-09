@@ -6,7 +6,6 @@ edition.workspace = true
 license.workspace = true
 readme.workspace = true
 publish = false
-default-run = "server"
 
 [features]
 default = [ "sqlite" ]
@@ -16,7 +15,6 @@ sqlite = [ "toasty/sqlite" ]
 
 [dependencies]
 toasty.workspace = true
-toasty-cli.workspace = true
 # `#[tokio::main]` defaults to the multi-thread runtime, which the lean
 # workspace tokio feature set (kept wasm-compatible for `toasty`) omits.
 tokio = { workspace = true, features = ["rt-multi-thread"] }
@@ -27,10 +25,6 @@ tracing-subscriber.workspace = true
 [[bin]]
 name = "server"
 path = "src/bin/server.rs"
-
-[[bin]]
-name = "migrate"
-path = "src/bin/migrate.rs"
 
 [lints]
 workspace = true

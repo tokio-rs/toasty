@@ -29,10 +29,7 @@ use toasty_core::{
         log::QueryLog,
         operation::{RawSqlRet, Transaction, TransactionMode, TypedValue},
     },
-    schema::{
-        db::{self, Migration, Table},
-        diff,
-    },
+    schema::db::{self, Table},
     stmt,
     stmt::ValueRecord,
 };
@@ -245,17 +242,6 @@ impl Driver for PostgreSQL {
         let mut connection = self.connect_with_config(self.config.clone()).await?;
         connection.query_log = cx.query_log;
         Ok(Box::new(connection))
-    }
-
-    fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
-        let statements = sql::MigrationStatement::from_diff(schema_diff, &Capability::POSTGRESQL);
-
-        let sql_strings: Vec<String> = statements
-            .iter()
-            .map(|stmt| sql::Serializer::postgresql(stmt.schema()).serialize(stmt.statement()))
-            .collect();
-
-        Migration::new_sql(sql_strings.join("\n"))
     }
 
     async fn reset_db(&self) -> toasty_core::Result<()> {
