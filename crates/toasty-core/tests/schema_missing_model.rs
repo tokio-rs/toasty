@@ -43,6 +43,7 @@ fn make_root_model(id: ModelId, name: &str, extra_fields: Vec<Field>) -> Model {
         },
         table_name: name.to_string(),
         indices: vec![],
+        referenced_fields: vec![],
         version_field: None,
     })
 }

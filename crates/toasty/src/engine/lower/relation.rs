@@ -384,9 +384,11 @@ impl LowerStatement<'_, '_> {
         &mut self,
         field: &Field,
         pair: &Field,
-        expr: stmt::Expr,
+        mut expr: stmt::Expr,
         source: &mut dyn RelationSource,
     ) {
+        self.rewrite_model_value(&mut expr);
+        crate::engine::fold::fold_stmt(&mut expr);
         match expr {
             stmt::Expr::List(expr_list) => {
                 for expr in expr_list.items {
@@ -445,9 +447,11 @@ impl LowerStatement<'_, '_> {
         &mut self,
         field: &Field,
         pair: &Field,
-        expr: stmt::Expr,
+        mut expr: stmt::Expr,
         source: &dyn RelationSource,
     ) {
+        self.rewrite_model_value(&mut expr);
+        crate::engine::fold::fold_stmt(&mut expr);
         match expr {
             stmt::Expr::Value(value) => {
                 self.plan_mut_has_many_disassociate_value(pair, value, source)
@@ -1185,7 +1189,14 @@ fn assign_projected_key(
     }
 }
 
-fn relation_key_expr(foreign_key: &app::ForeignKey, expr: stmt::Expr) -> stmt::Expr {
+pub(super) fn relation_key_expr(foreign_key: &app::ForeignKey, expr: stmt::Expr) -> stmt::Expr {
+    model_key_expr(expr, foreign_key.fields.iter().map(|field| field.target))
+}
+
+pub(super) fn model_key_expr(
+    expr: stmt::Expr,
+    fields: impl IntoIterator<Item = FieldId>,
+) -> stmt::Expr {
     // A loaded model carries its stored fields, including non-primary keys.
     // Ordinary relation expressions already contain the key itself.
     let mut target = match expr {
@@ -1195,18 +1206,17 @@ fn relation_key_expr(foreign_key: &app::ForeignKey, expr: stmt::Expr) -> stmt::E
     let stmt::Type::Model(target_model) = target.ty else {
         return target.into();
     };
-    if !foreign_key
-        .fields
-        .iter()
-        .all(|field| field.target.model == target_model)
+    let fields: Vec<_> = fields.into_iter().collect();
+    if target.from.is_some()
+        || target.expr.record_len().is_none()
+        || !fields.iter().all(|field| field.model == target_model)
     {
         return target.into();
     }
 
-    let mut key = foreign_key
-        .fields
+    let mut key = fields
         .iter()
-        .map(|field| target.expr.entry_mut(field.target.index).take())
+        .map(|field| target.expr.entry_mut(field.index).take())
         .collect::<Vec<_>>();
 
     if key.len() == 1 {
