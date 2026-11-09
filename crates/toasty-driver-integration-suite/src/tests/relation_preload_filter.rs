@@ -423,3 +423,26 @@ pub async fn preload_required_belongs_to_filter_rejected(test: &mut Test) -> Res
 
     Ok(())
 }
+
+/// Including a relation on a query whose filter can never match returns no
+/// rows.
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
+pub async fn preload_belongs_to_with_contradictory_filter(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    toasty::create!(User::[{ name: "alice", todos: [{ title: "x" }] }])
+        .exec(&mut db)
+        .await?;
+
+    test.log().clear();
+    let title = Todo::fields().title();
+    let todos: Vec<Todo> = Todo::filter(title.clone().eq("x").and(title.eq("y")))
+        .include(Todo::fields().user())
+        .exec(&mut db)
+        .await?;
+
+    assert!(todos.is_empty());
+    assert!(test.log().is_empty());
+
+    Ok(())
+}
