@@ -149,6 +149,12 @@ pub trait Driver: Debug + Send + Sync + 'static {
     /// Drops the entire database and recreates an empty one without applying migrations.
     ///
     /// Used primarily in tests to start with a clean slate.
+    ///
+    /// Implementations must leave the database usable through the connections
+    /// the pool already holds open. A file-backed SQL implementation should
+    /// therefore clear the schema in SQL rather than unlink the file: the pool
+    /// keeps idle connections open, and Windows refuses to remove a file
+    /// another handle holds (`ERROR_SHARING_VIOLATION`).
     async fn reset_db(&self) -> crate::Result<()>;
 }
 

@@ -284,6 +284,23 @@ database, so there is nothing to clear between runs.
 In-memory mode is the standard choice for unit tests, embedded
 examples, and the rustdoc examples throughout this guide.
 
+## Resetting a file-backed database
+
+`reset_db` clears a file-backed database in place: it drops every user
+table and view in one `BEGIN IMMEDIATE` transaction instead of deleting
+the file. The file stays because the connection pool keeps handles open
+— Windows refuses to delete an open file (`ERROR_SHARING_VIOLATION`),
+and on POSIX the pooled connections would keep writing to the unlinked
+inode. Keeping the file also keeps its settings, such as the journal
+mode stored in its header.
+
+The reset drops the `__toasty_migrations` table along with everything
+else, so `migration reset` re-applies every migration from scratch.
+
+If another pooled connection holds a conflicting lock, the reset waits
+and retries for up to the driver's `busy_timeout` (the default is five
+seconds).
+
 ## Migrations
 
 `apply_migration` wraps each migration in `BEGIN` / `COMMIT`; a

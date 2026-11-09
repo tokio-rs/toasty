@@ -203,6 +203,11 @@ impl Pragmas {
         self.entries.insert(name.into(), Some(value.into()));
     }
 
+    /// Returns the value set for `name`, if any. Names match exactly.
+    pub(crate) fn get(&self, name: &str) -> Option<&str> {
+        self.entries.get(name).and_then(|value| value.as_deref())
+    }
+
     fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
         self.entries
             .iter()

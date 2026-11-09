@@ -1158,49 +1158,55 @@ impl Driver for Turso {
     }
 
     async fn reset_db(&self) -> Result<()> {
-        // There is no file to delete on a remote database; drop every user
-        // table instead (indexes and triggers go down with their table).
-        #[cfg(feature = "serverless")]
-        if let TursoPath::Remote { .. } = &self.path {
-            let AnyDatabase::Serverless(db) = self.database().await? else {
-                unreachable!("a Remote path always opens a serverless database");
-            };
-            let conn = AnyConn::Serverless(db.connect().map_err(classify_serverless_error)?);
-
-            // `__turso_%` covers tursodb-internal system tables (e.g.
-            // `__turso_internal_mvcc_meta`), which cannot be dropped.
-            let mut rows = conn
-                .query(
-                    "SELECT name FROM sqlite_master \
-                     WHERE type = 'table' \
-                       AND name NOT LIKE 'sqlite_%' \
-                       AND name NOT LIKE '\\_\\_turso\\_%' ESCAPE '\\'",
-                    vec![],
-                )
-                .await?;
-
-            let mut drops = vec![];
-            while let Some(row) = rows.next().await? {
-                if let TursoValue::Text(name) = row.get_value(0)? {
-                    drops.push(format!("DROP TABLE IF EXISTS \"{name}\""));
-                }
-            }
-
-            return exec_ddl(&conn, &drops).await;
-        }
-
-        // Drop the cached Database so subsequent `connect()` calls open a
-        // fresh one. For in-memory this is the only way to wipe state;
-        // for file-backed databases the file is also removed below.
-        self.database.lock().await.take();
-
+        // A remote database has no file to delete, and an embedded database
+        // is a file the pool holds open (deleting it fails on Windows with
+        // `ERROR_SHARING_VIOLATION`). Both are reset by dropping every user
+        // table; indexes and triggers go down with their table.
         if let TursoPath::File(path) = &self.path
-            && path.exists()
+            && !path.exists()
         {
-            std::fs::remove_file(path).map_err(toasty_core::Error::driver_operation_failed)?;
+            return Ok(());
         }
 
-        Ok(())
+        let conn = match self.database().await? {
+            AnyDatabase::Local(db) => {
+                AnyConn::Embedded(db.connect().map_err(classify_turso_error)?)
+            }
+            #[cfg(feature = "sync")]
+            AnyDatabase::Sync(db) => {
+                AnyConn::Embedded(db.connect().await.map_err(classify_turso_error)?)
+            }
+            #[cfg(feature = "serverless")]
+            AnyDatabase::Serverless(db) => {
+                AnyConn::Serverless(db.connect().map_err(classify_serverless_error)?)
+            }
+        };
+
+        // `sqlite_%` are SQLite's own objects; `__turso_%` covers
+        // tursodb-internal system tables (e.g. `__turso_internal_mvcc_meta`),
+        // which cannot be dropped.
+        let mut rows = conn
+            .query(
+                "SELECT name FROM sqlite_master \
+                 WHERE type = 'table' \
+                   AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' \
+                   AND name NOT LIKE '\\_\\_turso\\_%' ESCAPE '\\'",
+                vec![],
+            )
+            .await?;
+
+        let mut drops = vec![];
+        while let Some(row) = rows.next().await? {
+            if let TursoValue::Text(name) = row.get_value(0)? {
+                // Identifiers cannot be bound as parameters, so quote the name.
+                drops.push(format!(
+                    "DROP TABLE IF EXISTS \"{}\"",
+                    name.replace('"', "\"\"")
+                ));
+            }
+        }
+
+        exec_ddl(&conn, &drops).await
     }
 }
 
