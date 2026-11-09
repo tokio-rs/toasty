@@ -32,6 +32,7 @@ fn db_schema(col_types: &[(Type, &str)]) -> Schema {
                 index: i,
             },
             name: name.to_string(),
+            comment: None,
             ty: ty.clone(),
             storage_ty: DbType::Text,
             nullable: false,
@@ -45,6 +46,7 @@ fn db_schema(col_types: &[(Type, &str)]) -> Schema {
         tables: vec![Table {
             id: table_id,
             name: "t".to_string(),
+            comment: None,
             columns,
             primary_key: DbPrimaryKey {
                 columns: vec![ColumnId {
@@ -78,6 +80,7 @@ fn model_root(id: usize, field_types: &[(Type, &str)]) -> ModelRoot {
                 app: Some(name.to_string()),
                 storage: None,
             },
+            comment: None,
             ty: FieldTy::Primitive(FieldPrimitive {
                 ty: ty.clone(),
                 storage_ty: None,
@@ -97,6 +100,7 @@ fn model_root(id: usize, field_types: &[(Type, &str)]) -> ModelRoot {
     ModelRoot {
         id: model_id,
         name: Name::new("T"),
+        comment: None,
         fields,
         primary_key: AppPrimaryKey {
             fields: vec![model_id.field(0)],

@@ -27,6 +27,7 @@ Guide-level design documents for specific features. Use
 - [Design Overview](./design/README.md)
 - [Atomic Batches for DynamoDB](./design/atomic-batches.md)
 - [Completing Column Projection](./design/column-projection.md)
+- [Database Comments for Models and Fields](./design/schema-comments.md)
 - [Document and Collection Fields](./design/document-fields.md)
 - [DynamoDB Driver Error-Handling Convention](./design/ddb-error-handling.md)
 - [Enums and Embedded Structs](./design/enums-and-embedded-structs.md)

@@ -256,9 +256,13 @@ impl GenerateCommand {
         let schema = toasty::schema::db::Schema::clone(&db.schema().db);
 
         let rename_hints = collect_rename_hints(&previous_schema, &schema)?;
-        let Some(generated) =
-            migration::generate(db.driver(), &previous_schema, &schema, &rename_hints)
-        else {
+        let Some(generated) = migration::generate_with_options(
+            db.driver(),
+            &previous_schema,
+            &schema,
+            &rename_hints,
+            migration::GenerateOptions::new().schema_comments(config.migration.schema_comments),
+        ) else {
             println!(
                 "  {}",
                 style("The current schema matches the previous snapshot. No migration needed.")

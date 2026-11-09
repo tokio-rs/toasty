@@ -1,0 +1,11 @@
+error: cannot find attribute `comment` in this scope
+ --> tests/ui/schema_comment_top_level.rs:4:3
+  |
+4 | #[comment = "Use #[table(comment = ...)] instead"]
+  |   ^^^^^^^
+
+error: cannot find attribute `comment` in this scope
+ --> tests/ui/schema_comment_top_level.rs:9:7
+  |
+9 |     #[comment = "Use #[column(comment = ...)] instead"]
+  |       ^^^^^^^
