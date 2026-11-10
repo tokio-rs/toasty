@@ -3,16 +3,14 @@
 //! (see [`is_injected`]); stderr is inherited so the user sees build progress.
 
 use anyhow::{Context, Result, bail};
-use cargo_metadata::{CrateType, DependencyKind, Message, Target, TargetKind};
-use std::collections::{HashMap, HashSet};
+use cargo_metadata::{CrateType, Message, Target, TargetKind};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-/// Cargo's feature-selection flags, forwarded to every cargo invocation.
+/// Cargo's feature-selection flags, forwarded to the schema build.
 ///
 /// A model behind a feature only exists in the artifact when the feature is
-/// on, so the flags must reach the build — and `cargo metadata`, whose
-/// resolved graph is feature-dependent as well.
+/// on, so the flags must reach the build.
 #[derive(clap::Args, Debug, Default, Clone)]
 pub struct Features {
     /// Space or comma separated list of features to activate
@@ -51,13 +49,14 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    /// Runs `cargo metadata` in the current directory, with the dependency
-    /// graph resolved (see [`Metadata::links_toasty`]).
-    pub fn load(features: &Features) -> Result<Self> {
+    /// Runs `cargo metadata` in the current directory. The resolve is kept
+    /// only for its root: without it, the "current directory" package falls
+    /// back to the workspace root manifest instead of the package the user is
+    /// standing in.
+    pub fn load() -> Result<Self> {
         // `MetadataCommand` would spawn cargo itself, bypassing the scrubbing.
         let mut cmd = scrubbed_command("cargo");
         cmd.args(["metadata", "--format-version=1"]);
-        features.apply_to(&mut cmd);
 
         let output = cmd
             .stdout(Stdio::piped())
@@ -120,60 +119,6 @@ impl Metadata {
             .map(|pkg| pkg.name.as_str())
             .collect()
     }
-
-    /// Returns `true` if `toasty` is reachable from `package` through normal
-    /// dependencies, directly or transitively.
-    ///
-    /// Extraction runs the built artifact. Without `toasty` linked there is no
-    /// dump constructor, and running the artifact would run the user's `main`.
-    pub fn links_toasty(&self, package: &Package<'_>) -> bool {
-        let Some(resolve) = &self.inner.resolve else {
-            // Nothing to check against; don't block extraction.
-            return true;
-        };
-
-        let Some(toasty) = self
-            .inner
-            .packages
-            .iter()
-            .find(|pkg| pkg.name.as_str() == "toasty")
-        else {
-            return false;
-        };
-
-        let nodes: HashMap<_, _> = resolve.nodes.iter().map(|node| (&node.id, node)).collect();
-
-        let mut seen = HashSet::new();
-        let mut queue = vec![&package.0.id];
-
-        while let Some(id) = queue.pop() {
-            if *id == toasty.id {
-                return true;
-            }
-
-            if !seen.insert(id) {
-                continue;
-            }
-
-            let Some(node) = nodes.get(id) else { continue };
-
-            // Dev- and build-dependencies are not linked into the artifact.
-            queue.extend(
-                node.deps
-                    .iter()
-                    .filter(|dep| {
-                        dep.dep_kinds.is_empty()
-                            || dep
-                                .dep_kinds
-                                .iter()
-                                .any(|kind| kind.kind == DependencyKind::Normal)
-                    })
-                    .map(|dep| &dep.pkg),
-            );
-        }
-
-        false
-    }
 }
 
 /// A package entry from `cargo metadata`.
@@ -231,6 +176,45 @@ pub enum BuildTarget {
     /// Build the lib target as a `cdylib`; the artifact is loaded with
     /// `dlopen` by `toasty __load-cdylib`.
     Cdylib,
+}
+
+/// Returns `true` if `toasty` is a normal dependency of `package`, directly
+/// or transitively, under the selected features.
+///
+/// Extraction runs the built artifact. Without `toasty` linked there is no
+/// dump constructor, and running the artifact would run the user's `main`.
+/// `cargo tree` is asked rather than `cargo metadata` because `-p` and the
+/// feature flags scope it exactly like the build; only normal edges count,
+/// since build- and proc-macro dependencies are compiled for the host and
+/// never linked into the artifact.
+pub fn links_toasty(workspace_root: &Path, package: &str, features: &Features) -> Result<bool> {
+    let mut cmd = scrubbed_command("cargo");
+    cmd.current_dir(workspace_root);
+    cmd.args([
+        "tree", "-p", package, "--edges", "normal", "--prefix", "none",
+    ]);
+    features.apply_to(&mut cmd);
+
+    let output = cmd
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .output()
+        .context("failed to run `cargo tree`")?;
+
+    if !output.status.success() {
+        bail!("`cargo tree -p {package}` failed");
+    }
+
+    Ok(lists_toasty(&output.stdout))
+}
+
+/// Whether a `cargo tree --prefix none` listing names the `toasty` package.
+/// Each line is `<name> v<version> (<source>)`, so the name is matched up to
+/// the space, which keeps `toasty-core` and friends out.
+fn lists_toasty(tree: &[u8]) -> bool {
+    String::from_utf8_lossy(tree)
+        .lines()
+        .any(|line| line.starts_with("toasty "))
 }
 
 /// Builds the selected target of `package` in the `dev` profile and returns
@@ -347,12 +331,22 @@ fn scrubbed_command(program: &str) -> Command {
 /// Scrubbing them keeps builds spawned by the CLI fingerprint-identical to the
 /// user's own (running the CLI under `cargo run` would otherwise cache-bust
 /// them) and stops `RUSTUP_TOOLCHAIN` pinning the build to the CLI's
-/// toolchain. `CARGO_HOME` and `CARGO_TARGET_DIR` stay: the user's shell
-/// applies them too. `RUSTFLAGS`, `RUSTC`, and the wrappers are never set by
-/// cargo, so a value there is the user's build configuration and must survive.
+/// toolchain. Only the variables cargo sets for the crate it runs are listed;
+/// `CARGO_HOME`, `CARGO_BUILD_RUSTFLAGS`, `CARGO_NET_*`, `RUSTFLAGS`, and the
+/// like are the user's build configuration and must survive.
 fn is_injected(key: &str) -> bool {
-    key.starts_with("CARGO") && !matches!(key, "CARGO_HOME" | "CARGO_TARGET_DIR")
-        || key == "RUSTUP_TOOLCHAIN"
+    matches!(
+        key,
+        "CARGO"
+            | "CARGO_MANIFEST_DIR"
+            | "CARGO_MANIFEST_PATH"
+            | "CARGO_CRATE_NAME"
+            | "CARGO_BIN_NAME"
+            | "CARGO_PRIMARY_PACKAGE"
+            | "CARGO_TARGET_TMPDIR"
+            | "RUSTUP_TOOLCHAIN"
+    ) || key.starts_with("CARGO_PKG_")
+        || key.starts_with("CARGO_BIN_EXE_")
 }
 
 #[cfg(test)]
@@ -369,6 +363,21 @@ mod tests {
 "#;
         let path = find_artifact(messages, &BuildTarget::Bin("app".into())).unwrap();
         assert_eq!(path, PathBuf::from("/t/debug/app"));
+    }
+
+    #[test]
+    fn toasty_is_matched_by_package_name_in_a_tree_listing() {
+        // `--prefix none` prints one `<name> v<version> (<source>)` line per
+        // package; `toasty-core` and the CLI's own package must not count.
+        let tree = b"app v0.0.0 (/t)\ntoasty-core v0.11.0 (/x/toasty-core)\n\
+                     toasty-cli v0.11.0 (/x/toasty-cli)\n";
+        assert!(!lists_toasty(tree));
+
+        let tree = b"app v0.0.0 (/t)\ntoasty v0.11.0 (/x/toasty)\n\
+                     toasty-core v0.11.0 (/x/toasty-core)\n";
+        assert!(lists_toasty(tree));
+
+        assert!(!lists_toasty(b""));
     }
 
     #[test]
@@ -396,16 +405,24 @@ mod tests {
 
     #[test]
     fn only_cargo_and_rustup_injected_variables_are_scrubbed() {
-        for key in ["CARGO", "CARGO_PKG_NAME", "CARGO_MANIFEST_DIR"] {
+        for key in [
+            "CARGO",
+            "CARGO_PKG_NAME",
+            "CARGO_MANIFEST_DIR",
+            "CARGO_BIN_EXE_toasty",
+            "RUSTUP_TOOLCHAIN",
+        ] {
             assert!(is_injected(key), "{key}");
         }
-        assert!(is_injected("RUSTUP_TOOLCHAIN"));
 
-        assert!(!is_injected("CARGO_HOME"));
-        assert!(!is_injected("CARGO_TARGET_DIR"));
-
-        // Never set by cargo, so a value is the caller's.
+        // Cargo configuration the user set themselves, never injected.
         for key in [
+            "CARGO_HOME",
+            "CARGO_TARGET_DIR",
+            "CARGO_BUILD_RUSTFLAGS",
+            "CARGO_ENCODED_RUSTFLAGS",
+            "CARGO_NET_OFFLINE",
+            "CARGO_REGISTRIES_MINE_TOKEN",
             "RUSTFLAGS",
             "RUSTC",
             "RUSTC_WRAPPER",

@@ -109,15 +109,17 @@ extracting without the flag yields a schema missing those tables and a
 diff that drops them. A bin with `required-features` cannot be built at
 all until they are selected.
 
-The flags reach `cargo metadata` as well as the build. The resolved graph
-is feature-dependent, so a `toasty` dependency declared `optional` is
-absent from it — and extraction is refused as unlinked — until the feature
-enabling it is on.
+The flags reach the `cargo tree` check (see below) as well as the build,
+and both scope them to the selected package, so a `toasty` dependency
+declared `optional` is absent — and extraction is refused as unlinked —
+until the feature enabling it is on.
 
-The environment is otherwise passed through. Cargo's own variables and
-`RUSTUP_TOOLCHAIN` are scrubbed so a CLI running under `cargo run` does
-not cache-bust the user's builds or pin their toolchain, but
-`RUSTFLAGS`, `RUSTC`, and the compiler wrappers are left alone: cargo
+The environment is otherwise passed through. The variables cargo injects
+into the crate it runs (`CARGO`, `CARGO_PKG_*`, `CARGO_MANIFEST_DIR`, …)
+and `RUSTUP_TOOLCHAIN` are scrubbed so a CLI running under `cargo run`
+does not cache-bust the user's builds or pin their toolchain, but
+`RUSTFLAGS`, `CARGO_BUILD_RUSTFLAGS`, `CARGO_NET_*`, `RUSTC`, and the
+compiler wrappers are left alone: cargo
 never sets them, so a value there is the user's own, and dropping it
 would build the project differently than they build it themselves.
 
@@ -233,11 +235,14 @@ the public surface — its only caller is `toasty-cli` itself.
   profile does not strip link-time constructors."
 - **`toasty` not actually depended on.** The ctor is in `toasty`; without
   the dependency the env var has no effect and running the artifact would
-  just run the user's program. Before building anything, the CLI resolves
-  the dependency graph and refuses a package that cannot reach `toasty` at
-  all. The whole graph is walked, not just direct dependencies, so a
-  `models` crate paired with a `server` binary still extracts. Reachability
-  is not linkage, though — rustc links only what the target references, so a
+  just run the user's program. Before building anything, the CLI runs
+  `cargo tree -p <pkg> --edges normal` with the same feature flags as the
+  build and refuses a package whose listing does not name `toasty`. Only
+  normal edges count: a build- or proc-macro dependency is compiled for
+  the host and never linked into the artifact. Transitive dependencies
+  do count, so a `models` crate paired with a `server` binary still
+  extracts. Reachability is not linkage, though — rustc links only what
+  the target references, so a
   binary that declares a `toasty`-dependent crate and never names it carries
   no ctor and its `main` runs. That shape is a project bug in its own right
   (the binary cannot use its models), so the CLI does not inspect the

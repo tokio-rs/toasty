@@ -18,10 +18,6 @@ pub struct Project {
     /// The workspace root directory.
     pub workspace_root: PathBuf,
 
-    /// Whether `toasty` is reachable from the package, directly or
-    /// transitively; gates schema extraction.
-    pub links_toasty: bool,
-
     /// Bin target names declared by the package.
     pub bin_names: Vec<String>,
 
@@ -37,10 +33,9 @@ pub struct Project {
 
 impl Project {
     /// Locates the target package via `cargo metadata` and loads its
-    /// configuration. `features` shapes the resolved graph too, so an optional
-    /// `toasty` is only seen once its feature is selected.
+    /// configuration.
     pub fn locate(package: Option<&str>, features: Features) -> Result<Self> {
-        let metadata = Metadata::load(&features)?;
+        let metadata = Metadata::load()?;
         let pkg = metadata.select_package(package)?;
 
         let package_root = pkg.root();
@@ -50,7 +45,6 @@ impl Project {
             package_name: pkg.name().to_string(),
             package_root,
             workspace_root: metadata.workspace_root().to_path_buf(),
-            links_toasty: metadata.links_toasty(&pkg),
             bin_names: pkg.bin_names(),
             has_lib: pkg.has_lib(),
             config,

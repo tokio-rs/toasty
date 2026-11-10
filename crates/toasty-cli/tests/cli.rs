@@ -307,6 +307,94 @@ fn a_package_without_toasty_is_never_executed() {
 }
 
 #[test]
+fn a_build_dependency_on_toasty_does_not_count_as_linked() {
+    // A build-dependency is compiled for the host and never linked into the
+    // artifact, so the constructor is absent and `main` would run.
+    let dir = tempfile::tempdir().unwrap();
+    let marker = dir.path().join("main-ran");
+
+    fs::write(
+        dir.path().join("Cargo.toml"),
+        format!(
+            "[package]\nname = \"build-dep-toasty\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n\
+             [build-dependencies]\ntoasty = {{ path = {:?} }}\n\n[workspace]\n\n\
+             [profile.dev]\ndebug = \"line-tables-only\"\n",
+            workspace_root().join("crates/toasty"),
+        ),
+    )
+    .unwrap();
+    copy_lockfile(dir.path());
+    fs::write(
+        dir.path().join("build.rs"),
+        "fn main() { let _ = toasty::Db::builder(); }\n",
+    )
+    .unwrap();
+    fs::create_dir_all(dir.path().join("src")).unwrap();
+    fs::write(
+        dir.path().join("src/main.rs"),
+        format!(
+            "fn main() {{ std::fs::write({:?}, \"ran\").unwrap(); }}\n",
+            marker.display().to_string()
+        ),
+    )
+    .unwrap();
+
+    let output = toasty(
+        dir.path(),
+        &[
+            "migrate", "generate", "--flavor", "sqlite", "--name", "init",
+        ],
+    );
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("does not depend on `toasty`"), "{stderr}");
+    assert!(!marker.exists(), "the user's main() must not be executed");
+}
+
+#[test]
+fn the_package_in_the_current_directory_is_selected() {
+    // Without `-p`, the member the command runs from is the target, as with
+    // `cargo build`; the migration tree must land there, not at the root.
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"cli-e2e-cwd-a\", \"cli-e2e-cwd-b\"]\nresolver = \"3\"\n\n\
+         [profile.dev]\ndebug = \"line-tables-only\"\n",
+    )
+    .unwrap();
+    copy_lockfile(root);
+
+    for name in ["cli-e2e-cwd-a", "cli-e2e-cwd-b"] {
+        fs::create_dir_all(root.join(name).join("src")).unwrap();
+        fs::write(
+            root.join(name).join("Cargo.toml"),
+            // The member manifests must not each declare their own `[workspace]`.
+            manifest(name, "").replace("[workspace]\n", ""),
+        )
+        .unwrap();
+        fs::write(root.join(name).join("src/lib.rs"), MODEL).unwrap();
+    }
+
+    let output = toasty(
+        &root.join("cli-e2e-cwd-b"),
+        &[
+            "migrate", "generate", "--flavor", "sqlite", "--name", "init",
+        ],
+    );
+    assert_success(&output);
+
+    assert!(
+        root.join("cli-e2e-cwd-b/toasty/migrations/0000_init.sql")
+            .is_file()
+    );
+    assert!(!root.join("cli-e2e-cwd-a/toasty").exists());
+    assert!(!root.join("toasty").exists());
+}
+
+#[test]
 fn an_empty_schema_is_rejected_rather_than_dropping_every_table() {
     // A bin that links `toasty` but never references the models dumps zero
     // models. Generating from that writes a DROP for every existing table.
@@ -361,9 +449,9 @@ fn snapshot_stdout_is_parseable_toml() {
 }
 
 #[test]
-fn feature_selection_reaches_both_the_resolve_and_the_build() {
-    // The flags must reach `cargo metadata` as well as the build: with the
-    // feature off, the optional `toasty` is not in the resolved graph.
+fn feature_selection_reaches_the_build() {
+    // With the feature off, the optional `toasty` is not in the build and
+    // extraction must be refused; with it on, the schema comes out.
     let dir = tempfile::tempdir().unwrap();
     fs::write(
         dir.path().join("Cargo.toml"),

@@ -21,7 +21,11 @@ pub fn extract_schema(project: &Project, flavor: Flavor, bin: Option<&str>) -> R
     // Running the artifact is only safe when `toasty` is linked: its
     // constructor dumps and exits before `main`. Without it the environment
     // variable is inert and the user's program would run.
-    if !project.links_toasty {
+    if !cargo::links_toasty(
+        &project.workspace_root,
+        &project.package_name,
+        &project.features,
+    )? {
         bail!(
             "`{}` does not depend on `toasty`, directly or transitively, so it has no schema \
              to extract; select the package that does with `-p <package>`",
