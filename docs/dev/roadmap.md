@@ -122,6 +122,7 @@ the entry lands here.
 - Backends without interactive transactions — a read-only plan runs without
   one ([design](design/transaction-less-backends.md), [#1128])
 - Connection pooling improvements ([#384])
+- Per-connection passwords ([roadmap](roadmap/postgresql-password-provider.md))
 - Retry-safe transparent recovery from connection loss ([design](design/retry-safe-recovery.md), [#863])
 - New driver backends
   - MongoDB — `toasty-mongodb` ([#48])
