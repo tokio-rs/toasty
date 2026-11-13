@@ -2200,6 +2200,10 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 let base = expr.take();
                 *expr = stmt::Expr::cast(base, target_ty.clone());
             }
+            stmt::Expr::Reference(stmt::ExprReference::Column(_)) => {
+                // A bare column already stores the field's type; only
+                // columns that need a conversion are lowered with a cast.
+            }
             _ => todo!("cast_expr: cannot cast {expr:#?} to {target_ty:?}"),
         }
     }
