@@ -933,6 +933,44 @@ pub async fn delete_when_belongs_to_optional(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+#[driver_test(requires(auto_increment))]
+pub async fn delete_by_query_with_i64_key(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: i64,
+
+        #[has_many]
+        todos: toasty::Deferred<Vec<Todo>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: i64,
+
+        #[index]
+        user_id: i64,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::Deferred<User>,
+    }
+
+    let mut db = test.setup_db(models!(User, Todo)).await;
+
+    let user = User::create().exec(&mut db).await?;
+    let todo = user.todos().create().exec(&mut db).await?;
+
+    // Deleting users by query also deletes their todos
+    User::all().delete().exec(&mut db).await?;
+
+    assert_err!(User::get_by_id(&mut db, &user.id).await);
+    assert_err!(Todo::get_by_id(&mut db, &todo.id).await);
+    Ok(())
+}
+
 #[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn associate_new_user_with_todo_on_update_via_creation(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
