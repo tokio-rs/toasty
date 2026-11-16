@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A representation of a time zone."><title>TimeZone in toasty::stmt - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="toasty" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc struct"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">TimeZone</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../toasty/index.html">toasty</a><span class="version">0.11.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Time<wbr>Zone</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#the-system-time-zone" title="The system time zone">The system time zone</a></li><li><a href="#custom-time-zones" title="Custom time zones">Custom time zones</a></li><li><a href="#a-timezone-is-immutable" title="A `TimeZone` is immutable">A <code>TimeZone</code> is immutable</a></li><li><a href="#a-timezone-is-cheap-to-clone" title="A `TimeZone` is cheap to clone">A <code>TimeZone</code> is cheap to clone</a></li><li><a href="#time-zone-equality" title="Time zone equality">Time zone equality</a></li><li><a href="#dealing-with-ambiguity" title="Dealing with ambiguity">Dealing with ambiguity</a></li><li><a href="#serde-integration" title="Serde integration">Serde integration</a></li></ul><h3><a href="#implementations">Associated Constants</a></h3><ul class="block associatedconstant"><li><a href="#associatedconstant.UTC" title="UTC">UTC</a></li></ul><h3><a href="#implementations">Associated Functions</a></h3><ul class="block method"><li><a href="#method.system" title="system">system</a></li><li><a href="#method.try_system" title="try_system">try_system</a></li><li><a href="#method.get" title="get">get</a></li><li><a href="#method.fixed" title="fixed">fixed</a></li><li><a href="#method.posix" title="posix">posix</a></li><li><a href="#method.tzif" title="tzif">tzif</a></li><li><a href="#method.unknown" title="unknown">unknown</a></li></ul><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.following" title="following">following</a></li><li><a href="#method.iana_name" title="iana_name">iana_name</a></li><li><a href="#method.into_ambiguous_zoned" title="into_ambiguous_zoned">into_ambiguous_zoned</a></li><li><a href="#method.is_unknown" title="is_unknown">is_unknown</a></li><li><a href="#method.memory_usage" title="memory_usage">memory_usage</a></li><li><a href="#method.preceding" title="preceding">preceding</a></li><li><a href="#method.to_ambiguous_timestamp" title="to_ambiguous_timestamp">to_ambiguous_timestamp</a></li><li><a href="#method.to_ambiguous_zoned" title="to_ambiguous_zoned">to_ambiguous_zoned</a></li><li><a href="#method.to_datetime" title="to_datetime">to_datetime</a></li><li><a href="#method.to_fixed_offset" title="to_fixed_offset">to_fixed_offset</a></li><li><a href="#method.to_offset" title="to_offset">to_offset</a></li><li><a href="#method.to_offset_info" title="to_offset_info">to_offset_info</a></li><li><a href="#method.to_timestamp" title="to_timestamp">to_timestamp</a></li><li><a href="#method.to_zoned" title="to_zoned">to_zoned</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Assign%3CTimeZone%3E-for-TimeZone" title="Assign&#60;TimeZone&#62;">Assign&#60;TimeZone&#62;</a></li><li><a href="#impl-Clone-for-TimeZone" title="Clone">Clone</a></li><li><a href="#impl-Debug-for-TimeZone" title="Debug">Debug</a></li><li><a href="#impl-Eq-for-TimeZone" title="Eq">Eq</a></li><li><a href="#impl-Field-for-TimeZone" title="Field">Field</a></li><li><a href="#impl-IntoExpr%3CTimeZone%3E-for-TimeZone" title="IntoExpr&#60;TimeZone&#62;">IntoExpr&#60;TimeZone&#62;</a></li><li><a href="#impl-Load-for-TimeZone" title="Load">Load</a></li><li><a href="#impl-PartialEq-for-TimeZone" title="PartialEq">PartialEq</a></li><li><a href="#impl-Scalar-for-TimeZone" title="Scalar">Scalar</a></li><li><a href="#impl-StructuralPartialEq-for-TimeZone" title="StructuralPartialEq">StructuralPartialEq</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-TimeZone" title="Freeze">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-TimeZone" title="RefUnwindSafe">RefUnwindSafe</a></li><li><a href="#impl-Send-for-TimeZone" title="Send">Send</a></li><li><a href="#impl-Sync-for-TimeZone" title="Sync">Sync</a></li><li><a href="#impl-Unpin-for-TimeZone" title="Unpin">Unpin</a></li><li><a href="#impl-UnsafeUnpin-for-TimeZone" title="UnsafeUnpin">UnsafeUnpin</a></li><li><a href="#impl-UnwindSafe-for-TimeZone" title="UnwindSafe">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T" title="Any">Any</a></li><li><a href="#impl-Assign%3CArc%3CT%3E%3E-for-T" title="Assign&#60;Arc&#60;T&#62;&#62;">Assign&#60;Arc&#60;T&#62;&#62;</a></li><li><a href="#impl-Assign%3CBox%3CT%3E%3E-for-T" title="Assign&#60;Box&#60;T&#62;&#62;">Assign&#60;Box&#60;T&#62;&#62;</a></li><li><a href="#impl-Assign%3COption%3CT%3E%3E-for-T" title="Assign&#60;Option&#60;T&#62;&#62;">Assign&#60;Option&#60;T&#62;&#62;</a></li><li><a href="#impl-Assign%3CRc%3CT%3E%3E-for-T" title="Assign&#60;Rc&#60;T&#62;&#62;">Assign&#60;Rc&#60;T&#62;&#62;</a></li><li><a href="#impl-Borrow%3CT%3E-for-T" title="Borrow&#60;T&#62;">Borrow&#60;T&#62;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T" title="BorrowMut&#60;T&#62;">BorrowMut&#60;T&#62;</a></li><li><a href="#impl-CloneToUninit-for-T" title="CloneToUninit">CloneToUninit</a></li><li><a href="#impl-Equivalent%3CK%3E-for-Q" title="Equivalent&#60;K&#62;">Equivalent&#60;K&#62;</a></li><li><a href="#impl-From%3CT%3E-for-T" title="From&#60;T&#62;">From&#60;T&#62;</a></li><li><a href="#impl-Instrument-for-T" title="Instrument">Instrument</a></li><li><a href="#impl-Into%3CU%3E-for-T" title="Into&#60;U&#62;">Into&#60;U&#62;</a></li><li><a href="#impl-IntoExpr%3CArc%3CT%3E%3E-for-T" title="IntoExpr&#60;Arc&#60;T&#62;&#62;">IntoExpr&#60;Arc&#60;T&#62;&#62;</a></li><li><a href="#impl-IntoExpr%3CBox%3CT%3E%3E-for-T" title="IntoExpr&#60;Box&#60;T&#62;&#62;">IntoExpr&#60;Box&#60;T&#62;&#62;</a></li><li><a href="#impl-IntoExpr%3COption%3CT%3E%3E-for-T" title="IntoExpr&#60;Option&#60;T&#62;&#62;">IntoExpr&#60;Option&#60;T&#62;&#62;</a></li><li><a href="#impl-IntoExpr%3CRc%3CT%3E%3E-for-T" title="IntoExpr&#60;Rc&#60;T&#62;&#62;">IntoExpr&#60;Rc&#60;T&#62;&#62;</a></li><li><a href="#impl-ToOwned-for-T" title="ToOwned">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T" title="TryFrom&#60;U&#62;">TryFrom&#60;U&#62;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T" title="TryInto&#60;U&#62;">TryInto&#60;U&#62;</a></li><li><a href="#impl-WithSubscriber-for-T" title="WithSubscriber">WithSubscriber</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In toasty::<wbr>stmt</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">toasty</a>::<wbr><a href="index.html">stmt</a></div><h1>Struct <span class="struct">Time<wbr>Zone</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"></span></div><pre class="rust item-decl"><code>pub struct TimeZone { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A representation of a <a href="https://en.wikipedia.org/wiki/Time_zone">time zone</a>.</p>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A representation of a time zone."><title>TimeZone in toasty::stmt - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="toasty" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc struct"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">TimeZone</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../toasty/index.html">toasty</a><span class="version">0.11.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Time<wbr>Zone</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#the-system-time-zone" title="The system time zone">The system time zone</a></li><li><a href="#custom-time-zones" title="Custom time zones">Custom time zones</a></li><li><a href="#a-timezone-is-immutable" title="A `TimeZone` is immutable">A <code>TimeZone</code> is immutable</a></li><li><a href="#a-timezone-is-cheap-to-clone" title="A `TimeZone` is cheap to clone">A <code>TimeZone</code> is cheap to clone</a></li><li><a href="#time-zone-equality" title="Time zone equality">Time zone equality</a></li><li><a href="#dealing-with-ambiguity" title="Dealing with ambiguity">Dealing with ambiguity</a></li><li><a href="#serde-integration" title="Serde integration">Serde integration</a></li></ul><h3><a href="#implementations">Associated Constants</a></h3><ul class="block associatedconstant"><li><a href="#associatedconstant.UTC" title="UTC">UTC</a></li></ul><h3><a href="#implementations">Associated Functions</a></h3><ul class="block method"><li><a href="#method.system" title="system">system</a></li><li><a href="#method.try_system" title="try_system">try_system</a></li><li><a href="#method.get" title="get">get</a></li><li><a href="#method.fixed" title="fixed">fixed</a></li><li><a href="#method.posix" title="posix">posix</a></li><li><a href="#method.tzif" title="tzif">tzif</a></li><li><a href="#method.unknown" title="unknown">unknown</a></li></ul><h3><a href="#implementations">Methods</a></h3><ul class="block method"><li><a href="#method.following" title="following">following</a></li><li><a href="#method.iana_name" title="iana_name">iana_name</a></li><li><a href="#method.into_ambiguous_zoned" title="into_ambiguous_zoned">into_ambiguous_zoned</a></li><li><a href="#method.is_primary" title="is_primary">is_primary</a></li><li><a href="#method.is_unknown" title="is_unknown">is_unknown</a></li><li><a href="#method.location" title="location">location</a></li><li><a href="#method.memory_usage" title="memory_usage">memory_usage</a></li><li><a href="#method.preceding" title="preceding">preceding</a></li><li><a href="#method.primary_iana_name" title="primary_iana_name">primary_iana_name</a></li><li><a href="#method.to_ambiguous_timestamp" title="to_ambiguous_timestamp">to_ambiguous_timestamp</a></li><li><a href="#method.to_ambiguous_zoned" title="to_ambiguous_zoned">to_ambiguous_zoned</a></li><li><a href="#method.to_datetime" title="to_datetime">to_datetime</a></li><li><a href="#method.to_fixed_offset" title="to_fixed_offset">to_fixed_offset</a></li><li><a href="#method.to_offset" title="to_offset">to_offset</a></li><li><a href="#method.to_offset_info" title="to_offset_info">to_offset_info</a></li><li><a href="#method.to_timestamp" title="to_timestamp">to_timestamp</a></li><li><a href="#method.to_zoned" title="to_zoned">to_zoned</a></li></ul><h3><a href="#trait-implementations">Trait Implementations</a></h3><ul class="block trait-implementation"><li><a href="#impl-Assign%3CTimeZone%3E-for-TimeZone" title="Assign&#60;TimeZone&#62;">Assign&#60;TimeZone&#62;</a></li><li><a href="#impl-Clone-for-TimeZone" title="Clone">Clone</a></li><li><a href="#impl-Debug-for-TimeZone" title="Debug">Debug</a></li><li><a href="#impl-Eq-for-TimeZone" title="Eq">Eq</a></li><li><a href="#impl-Field-for-TimeZone" title="Field">Field</a></li><li><a href="#impl-IntoExpr%3CTimeZone%3E-for-TimeZone" title="IntoExpr&#60;TimeZone&#62;">IntoExpr&#60;TimeZone&#62;</a></li><li><a href="#impl-Load-for-TimeZone" title="Load">Load</a></li><li><a href="#impl-PartialEq-for-TimeZone" title="PartialEq">PartialEq</a></li><li><a href="#impl-Scalar-for-TimeZone" title="Scalar">Scalar</a></li><li><a href="#impl-StructuralPartialEq-for-TimeZone" title="StructuralPartialEq">StructuralPartialEq</a></li></ul><h3><a href="#synthetic-implementations">Auto Trait Implementations</a></h3><ul class="block synthetic-implementation"><li><a href="#impl-Freeze-for-TimeZone" title="Freeze">Freeze</a></li><li><a href="#impl-RefUnwindSafe-for-TimeZone" title="RefUnwindSafe">RefUnwindSafe</a></li><li><a href="#impl-Send-for-TimeZone" title="Send">Send</a></li><li><a href="#impl-Sync-for-TimeZone" title="Sync">Sync</a></li><li><a href="#impl-Unpin-for-TimeZone" title="Unpin">Unpin</a></li><li><a href="#impl-UnsafeUnpin-for-TimeZone" title="UnsafeUnpin">UnsafeUnpin</a></li><li><a href="#impl-UnwindSafe-for-TimeZone" title="UnwindSafe">UnwindSafe</a></li></ul><h3><a href="#blanket-implementations">Blanket Implementations</a></h3><ul class="block blanket-implementation"><li><a href="#impl-Any-for-T" title="Any">Any</a></li><li><a href="#impl-Assign%3CArc%3CT%3E%3E-for-T" title="Assign&#60;Arc&#60;T&#62;&#62;">Assign&#60;Arc&#60;T&#62;&#62;</a></li><li><a href="#impl-Assign%3CBox%3CT%3E%3E-for-T" title="Assign&#60;Box&#60;T&#62;&#62;">Assign&#60;Box&#60;T&#62;&#62;</a></li><li><a href="#impl-Assign%3COption%3CT%3E%3E-for-T" title="Assign&#60;Option&#60;T&#62;&#62;">Assign&#60;Option&#60;T&#62;&#62;</a></li><li><a href="#impl-Assign%3CRc%3CT%3E%3E-for-T" title="Assign&#60;Rc&#60;T&#62;&#62;">Assign&#60;Rc&#60;T&#62;&#62;</a></li><li><a href="#impl-Borrow%3CT%3E-for-T" title="Borrow&#60;T&#62;">Borrow&#60;T&#62;</a></li><li><a href="#impl-BorrowMut%3CT%3E-for-T" title="BorrowMut&#60;T&#62;">BorrowMut&#60;T&#62;</a></li><li><a href="#impl-CloneToUninit-for-T" title="CloneToUninit">CloneToUninit</a></li><li><a href="#impl-Equivalent%3CK%3E-for-Q" title="Equivalent&#60;K&#62;">Equivalent&#60;K&#62;</a></li><li><a href="#impl-From%3CT%3E-for-T" title="From&#60;T&#62;">From&#60;T&#62;</a></li><li><a href="#impl-Instrument-for-T" title="Instrument">Instrument</a></li><li><a href="#impl-Into%3CU%3E-for-T" title="Into&#60;U&#62;">Into&#60;U&#62;</a></li><li><a href="#impl-IntoExpr%3CArc%3CT%3E%3E-for-T" title="IntoExpr&#60;Arc&#60;T&#62;&#62;">IntoExpr&#60;Arc&#60;T&#62;&#62;</a></li><li><a href="#impl-IntoExpr%3CBox%3CT%3E%3E-for-T" title="IntoExpr&#60;Box&#60;T&#62;&#62;">IntoExpr&#60;Box&#60;T&#62;&#62;</a></li><li><a href="#impl-IntoExpr%3COption%3CT%3E%3E-for-T" title="IntoExpr&#60;Option&#60;T&#62;&#62;">IntoExpr&#60;Option&#60;T&#62;&#62;</a></li><li><a href="#impl-IntoExpr%3CRc%3CT%3E%3E-for-T" title="IntoExpr&#60;Rc&#60;T&#62;&#62;">IntoExpr&#60;Rc&#60;T&#62;&#62;</a></li><li><a href="#impl-ToOwned-for-T" title="ToOwned">ToOwned</a></li><li><a href="#impl-TryFrom%3CU%3E-for-T" title="TryFrom&#60;U&#62;">TryFrom&#60;U&#62;</a></li><li><a href="#impl-TryInto%3CU%3E-for-T" title="TryInto&#60;U&#62;">TryInto&#60;U&#62;</a></li><li><a href="#impl-WithSubscriber-for-T" title="WithSubscriber">WithSubscriber</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In toasty::<wbr>stmt</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">toasty</a>::<wbr><a href="index.html">stmt</a></div><h1>Struct <span class="struct">Time<wbr>Zone</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"></span></div><pre class="rust item-decl"><code>pub struct TimeZone { <span class="comment">/* private fields */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A representation of a <a href="https://en.wikipedia.org/wiki/Time_zone">time zone</a>.</p>
 <p>A time zone is a set of rules for determining the civil time, via an offset
 from UTC, in a particular geographic region. In many cases, the offset
 in a particular time zone can vary over the course of a year through
@@ -84,11 +84,15 @@ rules.</p>
 <p>The equality semantics are as follows:</p>
 <ul>
 <li>Two fixed offset time zones are equal when their offsets are equal.</li>
-<li>Two POSIX time zones are equal when their original rule strings are
-byte-for-byte identical.</li>
-<li>Two IANA time zones are equal when their identifiers are equal <em>and</em>
-checksums of their rules are equal.</li>
-<li>In all other cases, time zones are unequal.</li>
+<li>Two POSIX time zones are equal when their rule strings parse to identical
+rules in memory.</li>
+<li>Two IANA time zones are equal when their primary identifiers are equal
+and their underlying checksums of the TZif data are equivalent. If a
+primary identifier is unavailable, then the time zone’s IANA identifier
+is used instead.</li>
+<li>Two TZif time zones whose <code>iana_name()</code> is <code>None</code> are equivalent only
+when their underlying checksums of the TZif data are equivalent. * In all
+other cases, time zones are unequal.</li>
 </ul>
 <p>Time zone equality is, for example, used in APIs like <a href="struct.Zoned.html#method.since" title="method toasty::stmt::Zoned::since"><code>Zoned::since</code></a>
 when asking for spans with calendar units. Namely, since days can be of
@@ -374,6 +378,62 @@ then this returns the canonicalized name for that time zone.</p>
 
 <span class="kw">let </span>tz = TimeZone::get(<span class="string">"america/NEW_YORK"</span>)<span class="question-mark">?</span>;
 <span class="macro">assert_eq!</span>(tz.iana_name(), <span class="prelude-val">Some</span>(<span class="string">"America/New_York"</span>));
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.primary_iana_name" class="method"><h4 class="code-header">pub fn <a href="#method.primary_iana_name" class="fn">primary_iana_name</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;&amp;<a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.str.html">str</a>&gt;</h4></section></summary><div class="docblock"><p>When this time zone was loaded from an IANA time zone database entry,
+then this returns the primary name for that time zone.</p>
+<p>This follows the same <a href="https://tc39.es/ecma402/#sup-availablenamedtimezoneidentifiers">rules as ECMAScript</a>. In effect, there is
+at least one primary time zone identifier for each ISO 3166 country
+code.</p>
+<h5 id="example-5"><a class="doc-anchor" href="#example-5">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::tz::TimeZone;
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"Asia/Calcutta"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(tz.primary_iana_name(), <span class="prelude-val">Some</span>(<span class="string">"Asia/Kolkata"</span>));
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"Europe/Prague"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(tz.primary_iana_name(), <span class="prelude-val">Some</span>(<span class="string">"Europe/Prague"</span>));
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"Asia/Kolkata"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(tz.primary_iana_name(), <span class="prelude-val">Some</span>(<span class="string">"Asia/Kolkata"</span>));
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"Atlantic/Jan_Mayen"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(tz.primary_iana_name(), <span class="prelude-val">Some</span>(<span class="string">"Arctic/Longyearbyen"</span>));
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.is_primary" class="method"><h4 class="code-header">pub fn <a href="#method.is_primary" class="fn">is_primary</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns true when this time zone is “primary.”</p>
+<p>A time zone is primary when it is the preferred identifier according
+to the <a href="https://tc39.es/ecma402/#sup-availablenamedtimezoneidentifiers">ECMAScript rules</a>. Specifically, a time zone is
+primary precisely when its IANA time zone identifier is equivalent to
+its primary IANA time zone identifier.</p>
+<h5 id="example-6"><a class="doc-anchor" href="#example-6">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::tz::TimeZone;
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"Asia/Calcutta"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert!</span>(!tz.is_primary());
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"Asia/Kolkata"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert!</span>(tz.is_primary());
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"Europe/Berlin"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert!</span>(tz.is_primary());
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"Europe/Copenhagen"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert!</span>(tz.is_primary());
+
+<span class="kw">let </span>tz1 = TimeZone::get(<span class="string">"Asia/Calcutta"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>tz2 = TimeZone::get(<span class="string">"Asia/Kolkata"</span>)<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(tz1, tz2);
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.location" class="method"><h4 class="code-header">pub fn <a href="#method.location" class="fn">location</a>(&amp;self) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;TimeZoneLocation&gt;</h4></section></summary><div class="docblock"><p>Returns geographical location information corresponding to this
+time zone’s primary time zone identifier.</p>
+<h5 id="example-7"><a class="doc-anchor" href="#example-7">§</a>Example</h5>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::tz::TimeZone;
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"Europe/Copenhagen"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>loc = tz.location().unwrap();
+<span class="macro">assert_eq!</span>(loc.country(), <span class="string">"DK"</span>);
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"EuRoPe/BeRlIn"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>loc = tz.location().unwrap();
+<span class="macro">assert_eq!</span>(loc.country(), <span class="string">"DE"</span>);
+
+<span class="kw">let </span>tz = TimeZone::get(<span class="string">"asia/calcutta"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>loc = tz.location().unwrap();
+<span class="macro">assert_eq!</span>(loc.country(), <span class="string">"IN"</span>);
 </code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.is_unknown" class="method"><h4 class="code-header">pub fn <a href="#method.is_unknown" class="fn">is_unknown</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.98.1/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns true if and only if this time zone is unknown.</p>
 <p>This has the special internal identifier of <code>Etc/Unknown</code>, and this
 is what will be used when converting a <code>Zoned</code> to a string.</p>
@@ -383,7 +443,7 @@ guaranteed to never be an IANA time zone identifier.</p>
 <p>An unknown time zone can be created via <a href="struct.TimeZone.html#method.unknown" title="associated function toasty::stmt::TimeZone::unknown"><code>TimeZone::unknown</code></a>. It is
 also returned by <a href="struct.TimeZone.html#method.system" title="associated function toasty::stmt::TimeZone::system"><code>TimeZone::system</code></a> when a system configured time
 zone could not be found.</p>
-<h5 id="example-5"><a class="doc-anchor" href="#example-5">§</a>Example</h5>
+<h5 id="example-8"><a class="doc-anchor" href="#example-8">§</a>Example</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::tz::TimeZone;
 
 <span class="kw">let </span>tz = TimeZone::unknown();
@@ -396,7 +456,7 @@ one civil datetime corresponding to that instant.</p>
 <p>Note that this is considered a lower level routine. Consider working
 with zoned datetimes instead, and use <a href="struct.Zoned.html#method.datetime" title="method toasty::stmt::Zoned::datetime"><code>Zoned::datetime</code></a> to get its
 civil time if necessary.</p>
-<h5 id="example-6"><a class="doc-anchor" href="#example-6">§</a>Example</h5>
+<h5 id="example-9"><a class="doc-anchor" href="#example-9">§</a>Example</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{tz::TimeZone, Timestamp};
 
 <span class="kw">let </span>tz = TimeZone::get(<span class="string">"Europe/Rome"</span>)<span class="question-mark">?</span>;
@@ -421,7 +481,7 @@ create a civil datetime from a timestamp.</p>
 <p>This also returns whether this timestamp is considered to be in
 “daylight saving time,” as well as the abbreviation for the time zone
 at this time.</p>
-<h5 id="example-7"><a class="doc-anchor" href="#example-7">§</a>Example</h5>
+<h5 id="example-10"><a class="doc-anchor" href="#example-10">§</a>Example</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{tz::{<span class="self">self</span>, TimeZone}, Timestamp};
 
 <span class="kw">let </span>tz = TimeZone::get(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
@@ -446,7 +506,7 @@ time status and a time zone abbreviation.</p>
 <p>This is like <a href="struct.TimeZone.html#method.to_offset" title="method toasty::stmt::TimeZone::to_offset"><code>TimeZone::to_offset</code></a>, but returns the aforementioned
 extra data in addition to the offset. This data may, in some cases, be
 more expensive to compute.</p>
-<h5 id="example-8"><a class="doc-anchor" href="#example-8">§</a>Example</h5>
+<h5 id="example-11"><a class="doc-anchor" href="#example-11">§</a>Example</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{tz::{<span class="self">self</span>, Dst, TimeZone}, Timestamp};
 
 <span class="kw">let </span>tz = TimeZone::get(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
@@ -484,7 +544,7 @@ specify a timestamp. This is sometimes required for interoperating with
 other datetime systems that need to distinguish between time zones that
 are fixed and time zones that are based on rules such as those found in
 the IANA time zone database.</p>
-<h5 id="example-9"><a class="doc-anchor" href="#example-9">§</a>Example</h5>
+<h5 id="example-12"><a class="doc-anchor" href="#example-12">§</a>Example</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::tz::{Offset, TimeZone};
 
 <span class="kw">let </span>tz = TimeZone::get(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
@@ -525,7 +585,7 @@ the
 <a href="crate::tz::Disambiguation::Compatible"><code>Disambiguation::Compatible</code></a>
 strategy. That in, the case of a gap, the time after the gap is used.
 In the case of a fold, the first repetition of the clock time is used.</p>
-<h5 id="example-10"><a class="doc-anchor" href="#example-10">§</a>Example</h5>
+<h5 id="example-13"><a class="doc-anchor" href="#example-13">§</a>Example</h5>
 <p>This example shows how disambiguation works:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, tz::TimeZone};
@@ -558,7 +618,7 @@ backward out of daylight saving time.</li>
 <p>Unlike <a href="struct.TimeZone.html#method.to_zoned" title="method toasty::stmt::TimeZone::to_zoned"><code>TimeZone::to_zoned</code></a>, this method does not do any automatic
 disambiguation. Instead, callers are expected to use the methods on
 [<code>AmbiguousZoned</code>] to resolve any ambiguity, if it occurs.</p>
-<h5 id="example-11"><a class="doc-anchor" href="#example-11">§</a>Example</h5>
+<h5 id="example-14"><a class="doc-anchor" href="#example-14">§</a>Example</h5>
 <p>This example shows how to return an error when the civil datetime given
 is ambiguous:</p>
 
@@ -582,7 +642,7 @@ is ambiguous:</p>
 this time zone, and does so by assuming ownership of this <code>TimeZone</code>.</p>
 <p>This is identical to <a href="struct.TimeZone.html#method.to_ambiguous_zoned" title="method toasty::stmt::TimeZone::to_ambiguous_zoned"><code>TimeZone::to_ambiguous_zoned</code></a>, but it avoids
 a <code>TimeZone::clone()</code> call. (Which are cheap, but not completely free.)</p>
-<h5 id="example-12"><a class="doc-anchor" href="#example-12">§</a>Example</h5>
+<h5 id="example-15"><a class="doc-anchor" href="#example-15">§</a>Example</h5>
 <p>This example shows how to create a <code>Zoned</code> value from a <code>TimeZone</code>
 and a <code>DateTime</code> without cloning the <code>TimeZone</code>:</p>
 
@@ -618,7 +678,7 @@ method is that it never requires cloning or consuming ownership of a
 <code>TimeZone</code>, and it doesn’t require construction of <code>Zoned</code> which has
 a small but non-zero cost. (This is partially because a <code>Zoned</code> value
 contains a <code>TimeZone</code>, but of course, a <code>Timestamp</code> does not.)</p>
-<h5 id="example-13"><a class="doc-anchor" href="#example-13">§</a>Example</h5>
+<h5 id="example-16"><a class="doc-anchor" href="#example-16">§</a>Example</h5>
 <p>This example shows how disambiguation works:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, tz::TimeZone};
@@ -659,7 +719,7 @@ ownership of a <code>TimeZone</code>, and it doesn’t require construction of
 <code>Zoned</code> which has a small but non-zero cost. (This is partially because
 a <code>Zoned</code> value contains a <code>TimeZone</code>, but of course, a <code>Timestamp</code>
 does not.)</p>
-<h5 id="example-14"><a class="doc-anchor" href="#example-14">§</a>Example</h5>
+<h5 id="example-17"><a class="doc-anchor" href="#example-17">§</a>Example</h5>
 <p>This example shows how to return an error when the civil datetime given
 is ambiguous:</p>
 

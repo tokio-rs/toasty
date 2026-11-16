@@ -1665,7 +1665,35 @@ first, and then the smaller units. Because months vary in length,
 their meaning can change depending on how the span is added. In this
 case, adding one month to <code>2024-03-02</code> corresponds to 31 days, but
 subtracting one month from <code>2024-05-01</code> corresponds to 30 days.</p>
-</div></details><details class="toggle method-toggle" open><summary><section id="method.since" class="method"><h4 class="code-header">pub fn <a href="#method.since" class="fn">since</a>&lt;'a, A&gt;(&amp;self, other: A) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Span, Error&gt;<div class="where">where
+<h5 id="example-two-different-time-zones-results-in-an-error"><a class="doc-anchor" href="#example-two-different-time-zones-results-in-an-error">§</a>Example: two different time zones results in an error</h5>
+<p>When calendar units are requested and the time zones are distinct,
+then an error occurs:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, Unit, ToSpan};
+
+<span class="kw">let </span>zdt1 = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">2</span>).at(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/New_York"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt2 = date(<span class="number">2024</span>, <span class="number">5</span>, <span class="number">1</span>).at(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"America/Los_Angeles"</span>)<span class="question-mark">?</span>;
+
+<span class="macro">assert_eq!</span>(
+    zdt1.until((Unit::Month, <span class="kw-2">&amp;</span>zdt2)).unwrap_err().to_string(),
+    <span class="string">"computing the span between zoned datetimes, with month units, \
+     requires that the time zones are equivalent, \
+     but the zoned datetimes have distinct time zones"</span>,
+);
+</code></pre></div>
+<p>However, even when the time zone identifiers are not precisely
+equivalent, it’s still possible for this to succeed. For example,
+[<code>TimeZone</code>] equality uses the concept of primary identifiers. So if
+the two time zones have the same primary identifier, then this
+operation still works:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>jiff::{civil::date, Unit, ToSpan};
+
+<span class="kw">let </span>zdt1 = date(<span class="number">2024</span>, <span class="number">3</span>, <span class="number">2</span>).at(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"Asia/Calcutta"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>zdt2 = date(<span class="number">2024</span>, <span class="number">5</span>, <span class="number">1</span>).at(<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>).in_tz(<span class="string">"Asia/Kolkata"</span>)<span class="question-mark">?</span>;
+<span class="kw">let </span>span = zdt1.until((Unit::Month, <span class="kw-2">&amp;</span>zdt2))<span class="question-mark">?</span>;
+<span class="macro">assert_eq!</span>(span, <span class="number">1</span>.month().days(<span class="number">29</span>).fieldwise());
+</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.since" class="method"><h4 class="code-header">pub fn <a href="#method.since" class="fn">since</a>&lt;'a, A&gt;(&amp;self, other: A) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.98.1/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Span, Error&gt;<div class="where">where
     A: <a class="trait" href="https://doc.rust-lang.org/1.98.1/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;ZonedDifference&lt;'a&gt;&gt;,</div></h4></section></summary><div class="docblock"><p>This routine is identical to <a href="struct.Zoned.html#method.until" title="method toasty_core::stmt::Zoned::until"><code>Zoned::until</code></a>, but the order of the
 parameters is flipped.</p>
 <h5 id="errors-8"><a class="doc-anchor" href="#errors-8">§</a>Errors</h5>
