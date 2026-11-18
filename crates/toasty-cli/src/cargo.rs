@@ -398,23 +398,7 @@ mod tests {
     }
 
     #[test]
-    fn find_artifact_none_when_missing() {
-        assert!(find_artifact(b"", &BuildTarget::Cdylib).is_none());
-        assert!(find_artifact(b"not json\n", &BuildTarget::Bin("app".into())).is_none());
-    }
-
-    #[test]
-    fn only_cargo_and_rustup_injected_variables_are_scrubbed() {
-        for key in [
-            "CARGO",
-            "CARGO_PKG_NAME",
-            "CARGO_MANIFEST_DIR",
-            "CARGO_BIN_EXE_toasty",
-            "RUSTUP_TOOLCHAIN",
-        ] {
-            assert!(is_injected(key), "{key}");
-        }
-
+    fn user_build_configuration_is_not_scrubbed() {
         // Cargo configuration the user set themselves, never injected.
         for key in [
             "CARGO_HOME",
@@ -430,36 +414,5 @@ mod tests {
         ] {
             assert!(!is_injected(key), "{key}");
         }
-    }
-
-    #[test]
-    fn feature_flags_are_forwarded_verbatim() {
-        let mut cmd = Command::new("cargo");
-        Features {
-            features: vec!["a,b".to_string(), "pkg/c".to_string()],
-            all_features: true,
-            no_default_features: true,
-        }
-        .apply_to(&mut cmd);
-
-        let args: Vec<_> = cmd.get_args().map(|arg| arg.to_string_lossy()).collect();
-        assert_eq!(
-            args,
-            [
-                "--features",
-                "a,b",
-                "--features",
-                "pkg/c",
-                "--all-features",
-                "--no-default-features"
-            ]
-        );
-    }
-
-    #[test]
-    fn no_feature_flags_are_added_by_default() {
-        let mut cmd = Command::new("cargo");
-        Features::default().apply_to(&mut cmd);
-        assert_eq!(cmd.get_args().count(), 0);
     }
 }

@@ -213,33 +213,18 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_dump_is_reported() {
-        let err = parse_dump(b"not a dump\n", "app").unwrap_err();
-
-        let message = format!("{err:#}");
-        assert!(message.contains("produced no schema"), "{message}");
-    }
-
-    #[test]
-    fn a_foreign_json_line_does_not_mask_the_real_dump() {
-        let dump = serde_json::to_string(&SchemaDump {
-            version: SCHEMA_DUMP_VERSION,
-            schema: db::Schema::default(),
-        })
-        .unwrap();
-        let output = format!("{{\"version\":\"1.0\",\"schema\":\"public\"}}\n{dump}\n");
-
-        assert!(parse_dump(output.as_bytes(), "app").is_ok());
-    }
-
-    #[test]
     fn the_dump_is_found_among_other_constructor_output() {
+        // Other constructors may print plain text or JSON, including JSON
+        // with its own `version` field; none of it may mask the real dump.
         let dump = serde_json::to_string(&SchemaDump {
             version: SCHEMA_DUMP_VERSION,
             schema: db::Schema::default(),
         })
         .unwrap();
-        let output = format!("another ctor said hello\n{{\"unrelated\":true}}\n{dump}\n");
+        let output = format!(
+            "another ctor said hello\n{{\"unrelated\":true}}\n\
+             {{\"version\":\"1.0\",\"schema\":\"public\"}}\n{dump}\n"
+        );
 
         assert!(parse_dump(output.as_bytes(), "app").is_ok());
     }

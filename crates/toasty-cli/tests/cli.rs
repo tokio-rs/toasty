@@ -133,21 +133,43 @@ fn generate_and_apply_bin_package() {
     );
 
     // Apply the migration to a SQLite database, then confirm idempotency.
+    // `apply` must not recreate `Toasty.toml`; that would fail in a read-only
+    // checkout.
+    fs::remove_file(dir.path().join("Toasty.toml")).unwrap();
     let url = format!("sqlite:{}", dir.path().join("app.db").display());
     let output = toasty(dir.path(), &["migrate", "apply", "--url", &url]);
     let stdout = assert_success(&output);
     assert!(stdout.contains("Applied: 0000_init.sql"), "{stdout}");
     assert!(dir.path().join("app.db").is_file());
+    assert!(!dir.path().join("Toasty.toml").exists());
 
     let output = toasty(dir.path(), &["migrate", "apply", "--url", &url]);
     let stdout = assert_success(&output);
     assert!(stdout.contains("already applied"), "{stdout}");
+
+    // Progress goes to stderr, so `snapshot` stdout parses as TOML.
+    let output = toasty(dir.path(), &["migrate", "snapshot", "--flavor", "sqlite"]);
+    let stdout = assert_success(&output);
+    let snapshot: toml::Value = toml::from_str(&stdout)
+        .unwrap_or_else(|err| panic!("stdout is not valid TOML: {err}\n---\n{stdout}"));
+    let tables = snapshot["schema"]["tables"].as_array().unwrap();
+    assert_eq!(tables.len(), 1);
+    assert_eq!(tables[0]["name"].as_str(), Some("users"));
 }
 
 #[test]
 fn generate_lib_package_via_cdylib() {
     let dir = tempfile::tempdir().unwrap();
     scaffold_project(dir.path(), false);
+
+    // The constructor cannot see `Db::builder().table_name_prefix(..)`, so
+    // `Toasty.toml` carries the prefix, through `__load-cdylib` here.
+    fs::write(
+        dir.path().join("Toasty.toml"),
+        "[migration]\npath = \"toasty\"\nprefix_style = \"Sequential\"\n\
+         table_name_prefix = \"svc_\"\n",
+    )
+    .unwrap();
 
     let output = toasty(
         dir.path(),
@@ -164,33 +186,8 @@ fn generate_lib_package_via_cdylib() {
     assert!(stdout.contains("0000_init.sql"), "{stdout}");
 
     let sql = fs::read_to_string(dir.path().join("toasty/migrations/0000_init.sql")).unwrap();
-    assert!(sql.contains("CREATE TABLE \"users\""), "{sql}");
-    assert!(sql.contains("BIGINT"), "{sql}");
-}
-
-#[test]
-fn table_name_prefix_reaches_the_dumper() {
-    // The constructor cannot see `Db::builder().table_name_prefix(..)`, so
-    // `Toasty.toml` carries the prefix.
-    let dir = tempfile::tempdir().unwrap();
-    scaffold_project(dir.path(), true);
-    fs::write(
-        dir.path().join("Toasty.toml"),
-        "[migration]\npath = \"toasty\"\nprefix_style = \"Sequential\"\n\
-         table_name_prefix = \"svc_\"\n",
-    )
-    .unwrap();
-
-    let output = toasty(
-        dir.path(),
-        &[
-            "migrate", "generate", "--flavor", "sqlite", "--name", "init",
-        ],
-    );
-    assert_success(&output);
-
-    let sql = fs::read_to_string(dir.path().join("toasty/migrations/0000_init.sql")).unwrap();
     assert!(sql.contains("CREATE TABLE \"svc_users\""), "{sql}");
+    assert!(sql.contains("BIGINT"), "{sql}");
 }
 
 #[test]
@@ -241,32 +238,6 @@ fn schema_is_extracted_through_a_transitive_toasty_dependency() {
 
     let sql = fs::read_to_string(root.join("server/toasty/migrations/0000_init.sql")).unwrap();
     assert!(sql.contains("CREATE TABLE \"users\""), "{sql}");
-}
-
-#[test]
-fn read_only_commands_do_not_write_to_the_source_tree() {
-    // `migrate apply` must not create `Toasty.toml`; that would fail in a
-    // read-only checkout.
-    let dir = tempfile::tempdir().unwrap();
-    scaffold_project(dir.path(), true);
-
-    let output = toasty(
-        dir.path(),
-        &[
-            "migrate", "generate", "--flavor", "sqlite", "--name", "init",
-        ],
-    );
-    assert_success(&output);
-
-    let config = dir.path().join("Toasty.toml");
-    assert!(config.is_file(), "generate should create the config");
-    fs::remove_file(&config).unwrap();
-
-    let url = format!("sqlite:{}", dir.path().join("app.db").display());
-    let output = toasty(dir.path(), &["migrate", "apply", "--url", &url]);
-    assert_success(&output);
-
-    assert!(!config.exists(), "apply must not write Toasty.toml");
 }
 
 #[test]
@@ -430,22 +401,6 @@ fn an_empty_schema_is_rejected_rather_than_dropping_every_table() {
         !dir.path().join("toasty/migrations/0001_oops.sql").exists(),
         "no migration should be written"
     );
-}
-
-#[test]
-fn snapshot_stdout_is_parseable_toml() {
-    let dir = tempfile::tempdir().unwrap();
-    scaffold_project(dir.path(), true);
-
-    let output = toasty(dir.path(), &["migrate", "snapshot", "--flavor", "sqlite"]);
-    let stdout = assert_success(&output);
-
-    let snapshot: toml::Value = toml::from_str(&stdout)
-        .unwrap_or_else(|err| panic!("stdout is not valid TOML: {err}\n---\n{stdout}"));
-
-    let tables = snapshot["schema"]["tables"].as_array().unwrap();
-    assert_eq!(tables.len(), 1);
-    assert_eq!(tables[0]["name"].as_str(), Some("users"));
 }
 
 #[test]
