@@ -79,6 +79,6 @@ async fn auto_i64_key_uses_sqlite_integer_storage_type() {
 
     let id = &db.schema().db.tables[0].columns[0];
 
-    assert_eq!(id.storage_ty, toasty::schema::db::Type::Integer(4));
+    assert_eq!(id.storage_ty, toasty::schema::db::Type::Integer(8));
     assert!(id.auto_increment);
 }

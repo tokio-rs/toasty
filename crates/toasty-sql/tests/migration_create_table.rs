@@ -87,7 +87,7 @@ fn create_single_table_sqlite() {
     assert_eq!(sql.len(), 1);
     assert_eq!(
         sql[0],
-        "CREATE TABLE \"users\" (\n    \"id\" BIGINT NOT NULL,\n    \"name\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);"
+        "CREATE TABLE \"users\" (\n    \"id\" INTEGER NOT NULL,\n    \"name\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);"
     );
 }
 
@@ -152,7 +152,7 @@ fn create_table_with_nullable_column() {
 fn create_table_with_auto_increment_sqlite() {
     let from = Schema::default();
 
-    let mut id_col = make_column(0, 0, "id", Type::Integer(4));
+    let mut id_col = make_column(0, 0, "id", Type::Integer(8));
     id_col.auto_increment = true;
 
     let to = Schema {

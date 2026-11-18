@@ -196,6 +196,6 @@ fn rename_without_hint_is_drop_and_create() {
     assert_eq!(sql[0], "DROP TABLE \"users\";");
     assert_eq!(
         sql[1],
-        "CREATE TABLE \"accounts\" (\n    \"id\" BIGINT NOT NULL,\n    \"name\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);"
+        "CREATE TABLE \"accounts\" (\n    \"id\" INTEGER NOT NULL,\n    \"name\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);"
     );
 }

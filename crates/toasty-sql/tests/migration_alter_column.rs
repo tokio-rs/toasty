@@ -657,7 +657,7 @@ fn alter_column_change_nullability_sqlite() {
         sql,
         vec![
             "PRAGMA foreign_keys = OFF;",
-            "CREATE TABLE \"_toasty_new_users\" (\n    \"id\" BIGINT NOT NULL,\n    \"email\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);",
+            "CREATE TABLE \"_toasty_new_users\" (\n    \"id\" INTEGER NOT NULL,\n    \"email\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);",
             "INSERT INTO \"_toasty_new_users\" (\"id\", \"email\") SELECT \"id\", \"email\" FROM \"users\";",
             "DROP TABLE \"users\";",
             "ALTER TABLE \"_toasty_new_users\" RENAME TO \"users\";",
@@ -699,7 +699,7 @@ fn alter_column_change_type_sqlite() {
         sql,
         vec![
             "PRAGMA foreign_keys = OFF;",
-            "CREATE TABLE \"_toasty_new_users\" (\n    \"id\" BIGINT NOT NULL,\n    \"value\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);",
+            "CREATE TABLE \"_toasty_new_users\" (\n    \"id\" INTEGER NOT NULL,\n    \"value\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);",
             "INSERT INTO \"_toasty_new_users\" (\"id\", \"value\") SELECT \"id\", \"value\" FROM \"users\";",
             "DROP TABLE \"users\";",
             "ALTER TABLE \"_toasty_new_users\" RENAME TO \"users\";",
@@ -745,7 +745,7 @@ fn alter_column_change_nullability_with_table_rename_sqlite() {
         vec![
             "ALTER TABLE \"users\" RENAME TO \"accounts\";",
             "PRAGMA foreign_keys = OFF;",
-            "CREATE TABLE \"_toasty_new_accounts\" (\n    \"id\" BIGINT NOT NULL,\n    \"email\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);",
+            "CREATE TABLE \"_toasty_new_accounts\" (\n    \"id\" INTEGER NOT NULL,\n    \"email\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);",
             "INSERT INTO \"_toasty_new_accounts\" (\"id\", \"email\") SELECT \"id\", \"email\" FROM \"accounts\";",
             "DROP TABLE \"accounts\";",
             "ALTER TABLE \"_toasty_new_accounts\" RENAME TO \"accounts\";",
@@ -801,7 +801,7 @@ fn alter_column_rename_and_change_type_sqlite() {
         sql,
         vec![
             "PRAGMA foreign_keys = OFF;",
-            "CREATE TABLE \"_toasty_new_users\" (\n    \"id\" BIGINT NOT NULL,\n    \"full_name\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);",
+            "CREATE TABLE \"_toasty_new_users\" (\n    \"id\" INTEGER NOT NULL,\n    \"full_name\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);",
             "INSERT INTO \"_toasty_new_users\" (\"id\", \"full_name\") SELECT \"id\", \"name\" FROM \"users\";",
             "DROP TABLE \"users\";",
             "ALTER TABLE \"_toasty_new_users\" RENAME TO \"users\";",
