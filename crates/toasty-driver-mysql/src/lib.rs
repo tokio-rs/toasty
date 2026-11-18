@@ -20,12 +20,8 @@ mod value;
 pub(crate) use value::Value;
 
 use async_trait::async_trait;
-use sqlx_core::{
-    connection::{ConnectOptions as _, Connection as SqlxConnection},
-    row::Row,
-    sql_str::AssertSqlSafe,
-};
-use sqlx_mysql::{MySqlArguments, MySqlConnectOptions, MySqlConnection, MySqlDatabaseError};
+use sqlx::mysql::{MySqlArguments, MySqlConnectOptions, MySqlConnection, MySqlDatabaseError};
+use sqlx::{AssertSqlSafe, ConnectOptions as _, Connection as SqlxConnection, Row};
 use std::{borrow::Cow, cell::Cell, sync::Arc};
 use toasty_core::{
     Result, Schema,
@@ -55,12 +51,12 @@ enum SqlReturn {
 /// Transport and protocol failures become `ConnectionLost`. MySQL
 /// errors with numbers that Toasty understands become typed errors.
 /// Everything else becomes `DriverOperationFailed`.
-fn classify_mysql_error(e: sqlx_core::Error) -> toasty_core::Error {
+fn classify_mysql_error(e: sqlx::Error) -> toasty_core::Error {
     match e {
-        error @ (sqlx_core::Error::Io(_)
-        | sqlx_core::Error::Protocol(_)
-        | sqlx_core::Error::WorkerCrashed) => toasty_core::Error::connection_lost(error),
-        sqlx_core::Error::Database(database_error) => {
+        error @ (sqlx::Error::Io(_) | sqlx::Error::Protocol(_) | sqlx::Error::WorkerCrashed) => {
+            toasty_core::Error::connection_lost(error)
+        }
+        sqlx::Error::Database(database_error) => {
             let mysql_error = database_error
                 .try_downcast_ref::<MySqlDatabaseError>()
                 .expect("SQLx returned a non-MySQL database error from a MySQL connection");
@@ -70,7 +66,7 @@ fn classify_mysql_error(e: sqlx_core::Error) -> toasty_core::Error {
             match number {
                 1213 => toasty_core::Error::serialization_failure(message),
                 1792 => toasty_core::Error::read_only_transaction(message),
-                _ => toasty_core::Error::driver_operation_failed(sqlx_core::Error::Database(
+                _ => toasty_core::Error::driver_operation_failed(sqlx::Error::Database(
                     database_error,
                 )),
             }
@@ -80,7 +76,7 @@ fn classify_mysql_error(e: sqlx_core::Error) -> toasty_core::Error {
 }
 
 /// Classifies a SQLx error and records whether the connection is still usable.
-fn record_mysql_err(valid: &Cell<bool>, e: sqlx_core::Error) -> toasty_core::Error {
+fn record_mysql_err(valid: &Cell<bool>, e: sqlx::Error) -> toasty_core::Error {
     let err = classify_mysql_error(e);
     if err.is_connection_lost() {
         valid.set(false);
@@ -207,15 +203,15 @@ impl Driver for MySQL {
 
         let dbname = format!("`{}`", dbname.replace('`', "``"));
 
-        sqlx_core::raw_sql::raw_sql(AssertSqlSafe(format!("DROP DATABASE IF EXISTS {dbname}")))
+        sqlx::raw_sql(AssertSqlSafe(format!("DROP DATABASE IF EXISTS {dbname}")))
             .execute(&mut conn)
             .await
             .map_err(classify_mysql_error)?;
-        sqlx_core::raw_sql::raw_sql(AssertSqlSafe(format!("CREATE DATABASE {dbname}")))
+        sqlx::raw_sql(AssertSqlSafe(format!("CREATE DATABASE {dbname}")))
             .execute(&mut conn)
             .await
             .map_err(classify_mysql_error)?;
-        sqlx_core::raw_sql::raw_sql(AssertSqlSafe(format!("USE {dbname}")))
+        sqlx::raw_sql(AssertSqlSafe(format!("USE {dbname}")))
             .execute(&mut conn)
             .await
             .map_err(classify_mysql_error)?;
@@ -258,7 +254,7 @@ impl Connection {
         log: &mut QueryLog<'_>,
     ) -> Result<ExecResponse> {
         if matches!(ret, SqlReturn::Count | SqlReturn::LastInsertId(_)) {
-            let result = sqlx_core::query::query_with(AssertSqlSafe(sql_as_str), args)
+            let result = sqlx::query_with(AssertSqlSafe(sql_as_str), args)
                 .execute(&mut self.conn)
                 .await
                 .map_err(|e| record_mysql_err(&self.valid, e))?;
@@ -274,7 +270,7 @@ impl Connection {
             return Ok(ExecResponse::count(result.rows_affected()));
         }
 
-        let rows = sqlx_core::query::query_with(AssertSqlSafe(sql_as_str), args)
+        let rows = sqlx::query_with(AssertSqlSafe(sql_as_str), args)
             .fetch_all(&mut self.conn)
             .await
             .map_err(|e| record_mysql_err(&self.valid, e))?;
@@ -328,7 +324,7 @@ impl Connection {
         let serializer = serializer(self.capability, schema);
         let statement = serializer.serialize(&sql::Statement::create_table(table, self.capability));
 
-        sqlx_core::query::query(AssertSqlSafe(statement))
+        sqlx::query(AssertSqlSafe(statement))
             .execute(&mut self.conn)
             .await
             .map_err(|e| record_mysql_err(&self.valid, e))?;
@@ -339,7 +335,7 @@ impl Connection {
             }
 
             let statement = serializer.serialize(&sql::Statement::create_index(index));
-            sqlx_core::query::query(AssertSqlSafe(statement))
+            sqlx::query(AssertSqlSafe(statement))
                 .execute(&mut self.conn)
                 .await
                 .map_err(|e| record_mysql_err(&self.valid, e))?;
@@ -426,7 +422,7 @@ impl toasty_core::driver::Connection for Connection {
                     )));
                 }
                 let statement = serializer(self.capability, &schema.db).serialize_transaction(&op);
-                sqlx_core::raw_sql::raw_sql(AssertSqlSafe(statement))
+                sqlx::raw_sql(AssertSqlSafe(statement))
                     .execute(&mut self.conn)
                     .await
                     .map_err(|e| record_mysql_err(&self.valid, e))?;
@@ -487,7 +483,7 @@ impl toasty_core::driver::Connection for Connection {
     async fn applied_migrations(
         &mut self,
     ) -> Result<Vec<toasty_core::schema::db::AppliedMigration>> {
-        sqlx_core::query::query(
+        sqlx::query(
             "CREATE TABLE IF NOT EXISTS __toasty_migrations (
                 id BIGINT UNSIGNED PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -498,7 +494,7 @@ impl toasty_core::driver::Connection for Connection {
         .await
         .map_err(|e| record_mysql_err(&self.valid, e))?;
 
-        let ids = sqlx_core::query_scalar::query_scalar::<sqlx_mysql::MySql, u64>(
+        let ids = sqlx::query_scalar::<sqlx::mysql::MySql, u64>(
             "SELECT id FROM __toasty_migrations ORDER BY applied_at",
         )
         .fetch_all(&mut self.conn)
@@ -518,7 +514,7 @@ impl toasty_core::driver::Connection for Connection {
         migration: &toasty_core::schema::db::Migration,
     ) -> Result<()> {
         tracing::info!(id, name, "applying migration");
-        sqlx_core::query::query(
+        sqlx::query(
             "CREATE TABLE IF NOT EXISTS __toasty_migrations (
                 id BIGINT UNSIGNED PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -536,7 +532,7 @@ impl toasty_core::driver::Connection for Connection {
             .map_err(|e| record_mysql_err(&self.valid, e))?;
 
         for statement in migration.statements() {
-            if let Err(error) = sqlx_core::raw_sql::raw_sql(AssertSqlSafe(statement))
+            if let Err(error) = sqlx::raw_sql(AssertSqlSafe(statement))
                 .execute(&mut *transaction)
                 .await
             {
@@ -549,7 +545,7 @@ impl toasty_core::driver::Connection for Connection {
             }
         }
 
-        if let Err(error) = sqlx_core::query::query(
+        if let Err(error) = sqlx::query(
             "INSERT INTO __toasty_migrations (id, name, applied_at) VALUES (?, ?, NOW())",
         )
         .bind(id)

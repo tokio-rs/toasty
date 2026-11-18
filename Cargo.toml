@@ -140,8 +140,7 @@ bigdecimal = "0.4.10"
 rusqlite = { version = "0.40", features = ["bundled"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-sqlx-core = { version = "=0.9.0", default-features = false, features = ["_rt-tokio"] }
-sqlx-mysql = { version = "=0.9.0", default-features = false, features = ["rsa", "time"] }
+sqlx = { version = "0.9.1", default-features = false, features = ["runtime-tokio", "mysql", "mysql-rsa", "time"] }
 syn = { version = "3.0.0", features = ["full", "extra-traits", "visit-mut"] }
 time = "0.3.47"
 toml = "1.1.0"

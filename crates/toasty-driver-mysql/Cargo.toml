@@ -15,8 +15,8 @@ documentation = "https://docs.rs/toasty-driver-mysql"
 
 [features]
 default = ["rustls"]
-native-tls = ["sqlx-core/_tls-native-tls"]
-rustls = ["sqlx-core/_tls-rustls-ring-webpki"]
+native-tls = ["sqlx/tls-native-tls"]
+rustls = ["sqlx/tls-rustls-ring-webpki"]
 rust_decimal = ["dep:rust_decimal", "toasty-core/rust_decimal", "toasty-sql/rust_decimal"]
 bigdecimal = ["dep:bigdecimal", "toasty-core/bigdecimal", "toasty-sql/bigdecimal"]
 jiff = ["dep:jiff", "toasty-core/jiff", "toasty-sql/jiff"]
@@ -29,8 +29,7 @@ toasty-sql.workspace = true
 rust_decimal = { workspace = true, optional = true }
 bigdecimal = { workspace = true, optional = true }
 jiff = { workspace = true, optional = true }
-sqlx-core.workspace = true
-sqlx-mysql.workspace = true
+sqlx.workspace = true
 time.workspace = true
 tokio.workspace = true
 tracing.workspace = true
