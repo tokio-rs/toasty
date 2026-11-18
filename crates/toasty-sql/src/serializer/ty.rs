@@ -6,10 +6,19 @@ impl ToSql for &db::Type {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
         match self {
             db::Type::Boolean => fmt!(f, "BOOLEAN"),
-            db::Type::Integer(1..=2) => fmt!(f, "SMALLINT"),
-            db::Type::Integer(3..=4) => fmt!(f, "INTEGER"),
-            db::Type::Integer(5..=8) => fmt!(f, "BIGINT"),
-            db::Type::Integer(_) => todo!(),
+            db::Type::Integer(size) => match f.serializer.dialect {
+                // SQLite stores every integer as a signed 64-bit value, so the
+                // declared name doesn't change storage. `INTEGER` is also the
+                // only spelling SQLite accepts for `INTEGER PRIMARY KEY`,
+                // which `AUTOINCREMENT` requires.
+                Dialect::Sqlite => fmt!(f, "INTEGER"),
+                _ => match size {
+                    1..=2 => fmt!(f, "SMALLINT"),
+                    3..=4 => fmt!(f, "INTEGER"),
+                    5..=8 => fmt!(f, "BIGINT"),
+                    _ => todo!("Unsupported integer size: {}", size),
+                },
+            },
             db::Type::UnsignedInteger(size) => {
                 match f.serializer.dialect {
                     Dialect::Mysql | Dialect::MariaDb => match size {
@@ -29,7 +38,7 @@ impl ToSql for &db::Type {
                         }
                     }
                     Dialect::Sqlite => {
-                        // SQLite uses INTEGER for all integer types
+                        // Same as signed integers: SQLite has one integer type.
                         fmt!(f, "INTEGER")
                     }
                 }

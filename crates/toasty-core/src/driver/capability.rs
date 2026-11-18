@@ -690,7 +690,7 @@ impl Capability {
         upsert_targeted_ignore: true,
         primary_key_ne_predicate: true,
         auto_increment: true,
-        max_auto_increment_integer_width: Some(4),
+        max_auto_increment_integer_width: None,
         bigdecimal_implemented: false,
         bool_key_type: true,
         max_identifier_length: None,
