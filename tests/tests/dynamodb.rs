@@ -7,8 +7,10 @@ use aws_sdk_dynamodb::config::Credentials;
 use std::sync::{Arc, OnceLock};
 use toasty::Result;
 use toasty::models;
+use toasty_core::driver::ConnectContext;
+use toasty_core::schema::db::Migration;
 use toasty_driver_dynamodb::DynamoDb;
-use toasty_driver_integration_suite::Test;
+use toasty_driver_integration_suite::{Setup, Test};
 
 struct DynamoDbSetup {
     client: OnceLock<Client>,
@@ -102,6 +104,50 @@ toasty_driver_integration_suite::generate_driver_tests!(DynamoDbSetup::new(),
     test_connection_pool: false,
     transaction_lock_mode: false,
 );
+
+#[test]
+fn migrations_return_unsupported_feature() {
+    let mut test = Test::new(Arc::new(DynamoDbSetup::new()));
+    test.run(async move |t: &mut Test| -> Result<()> {
+        #[derive(Debug, toasty::Model)]
+        struct Item {
+            #[key]
+            id: uuid::Uuid,
+        }
+
+        let db = t.setup_db(models!(Item)).await;
+
+        static MIGRATIONS: toasty::migration::MigrationSet =
+            toasty::migration::MigrationSet::new(&[]);
+        let err = MIGRATIONS.apply(&db).await.unwrap_err();
+        assert!(
+            err.is_unsupported_feature(),
+            "expected UnsupportedFeature, got: {err}"
+        );
+
+        let driver = DynamoDbSetup::new().driver();
+        let mut conn = driver.connect(&ConnectContext::default()).await?;
+
+        let Err(err) = conn.applied_migrations().await else {
+            panic!("expected applied_migrations to fail");
+        };
+        assert!(
+            err.is_unsupported_feature(),
+            "expected UnsupportedFeature, got: {err}"
+        );
+
+        let err = conn
+            .apply_migration(1, "init", &Migration::new_sql(String::new()))
+            .await
+            .unwrap_err();
+        assert!(
+            err.is_unsupported_feature(),
+            "expected UnsupportedFeature, got: {err}"
+        );
+
+        Ok(())
+    });
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DynamoDB 1 MB response boundary tests.

@@ -213,7 +213,9 @@ impl toasty_core::driver::Connection for Connection {
     async fn applied_migrations(
         &mut self,
     ) -> Result<Vec<toasty_core::schema::db::AppliedMigration>> {
-        todo!("DynamoDB migrations are not yet implemented")
+        Err(Error::unsupported_feature(
+            "migrations are not supported by the DynamoDB driver",
+        ))
     }
 
     async fn apply_migration(
@@ -222,7 +224,9 @@ impl toasty_core::driver::Connection for Connection {
         _name: &str,
         _migration: &toasty_core::schema::db::Migration,
     ) -> Result<()> {
-        todo!("DynamoDB migrations are not yet implemented")
+        Err(Error::unsupported_feature(
+            "migrations are not supported by the DynamoDB driver",
+        ))
     }
 }
 
