@@ -26,6 +26,11 @@ macro_rules! impl_numeric {
                     stmt::Value::from(1 as $t)
                 }
             }
+            impl Numeric for Option<$t> {
+                fn one() -> stmt::Value {
+                    stmt::Value::from(1 as $t)
+                }
+            }
         )*
     };
 }
