@@ -26,7 +26,7 @@ pub mod tag {
 /// Asserts that a Rust field type can carry an auto-generated value of the
 /// given strategy.
 ///
-/// Macro-generated code emits a `_check::<FieldType>()` call where `_check`
+/// Macro-generated code emits a `check::<FieldType>` reference where `check`
 /// is bounded by `AutoCompatible<Tag>`. The bound is checked against the
 /// resolved field type, so type aliases and newtype embeds compose naturally.
 #[diagnostic::on_unimplemented(

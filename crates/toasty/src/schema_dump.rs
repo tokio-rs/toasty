@@ -6,7 +6,7 @@
 //! by `#[derive(Model)]`, lowers the schema for that flavor, writes it to
 //! stdout as JSON, and exits. It only exists in `debug_assertions` builds.
 
-use toasty_core::{driver::Capability, schema::db};
+use toasty_core::schema::db;
 
 /// Environment variable that triggers the schema dump. Its value names the
 /// flavor to lower the schema for (e.g. `sqlite`, `postgresql`, `mysql`).
@@ -37,6 +37,7 @@ pub struct SchemaDump {
 mod dump {
     use super::*;
     use crate::schema::DiscoverItem;
+    use toasty_core::driver::Capability;
     use toasty_core::schema::app::ModelSet;
 
     /// Flavor names accepted in [`DUMP_SCHEMA_ENV`]; the CLI's `Flavor::as_str`

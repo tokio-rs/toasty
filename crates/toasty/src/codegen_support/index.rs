@@ -22,7 +22,7 @@
 
 /// Asserts that a Rust field type can serve as a single index column.
 ///
-/// Macro-generated code emits a `_check::<FieldType>()` call bounded by
+/// Macro-generated code emits a `check::<FieldType>` reference bounded by
 /// `IndexableField`. The Rust type checker — not the macro — resolves the field
 /// type, so type aliases and newtype embeds are handled correctly.
 #[diagnostic::on_unimplemented(

@@ -50,6 +50,15 @@ pub(super) struct StatementInfo {
     /// Whether cursor pagination resumed this query after an earlier page.
     pub(super) has_pagination_cursor: bool,
 
+    /// Per-parent row cap from `.include(...).limit(n)`, applied by
+    /// `NestedMerge`. A `LIMIT` on [`Self::stmt`] would cap the whole batch.
+    pub(super) per_parent_limit: Option<usize>,
+
+    /// Per-parent rows to skip from `.include(...).offset(n)`, applied by
+    /// `NestedMerge` before [`Self::per_parent_limit`]. An `OFFSET` on
+    /// [`Self::stmt`] would skip rows from the whole batch.
+    pub(super) per_parent_offset: Option<usize>,
+
     /// Ordering edges: statements that must execute, to the degree the
     /// [`DepKind`] demands, before this one.
     ///
@@ -138,6 +147,8 @@ impl StatementInfo {
         StatementInfo {
             stmt: None,
             has_pagination_cursor: false,
+            per_parent_limit: None,
+            per_parent_offset: None,
             deps,
             args: vec![],
             back_refs: HashMap::new(),
