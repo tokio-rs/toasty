@@ -54,7 +54,7 @@ the entry lands here.
 - Field-to-field comparison
 - Arithmetic in predicates (add, subtract, multiply, divide, modulo)
 - Conditional expressions — `CASE WHEN ... THEN ... ELSE ... END`
-- `DISTINCT` / `DISTINCT ON` ([#425])
+- `DISTINCT` / `DISTINCT ON` ([#425], [latest-per-group](roadmap/distinct-on.md))
 - Aggregates — `COUNT`, `SUM`, `AVG`, `MIN`, `MAX`, `GROUP BY`, `HAVING` ([#421])
 - Subquery comparisons (`ALL` / `ANY` / `SOME`)
 - Recursive queries / CTEs ([#420])
