@@ -80,6 +80,7 @@ fn root(id: ModelId, name: &str) -> Model {
             unique: true,
             primary_key: true,
         }],
+        referenced_fields: vec![],
         version_field: None,
     })
 }
