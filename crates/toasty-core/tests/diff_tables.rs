@@ -13,6 +13,7 @@ fn make_table(id: usize, name: &str, num_columns: usize) -> Table {
                 index: i,
             },
             name: format!("col{}", i),
+            comment: None,
             ty: stmt::Type::String,
             storage_ty: Type::Text,
             nullable: false,
@@ -25,6 +26,7 @@ fn make_table(id: usize, name: &str, num_columns: usize) -> Table {
     Table {
         id: TableId(id),
         name: name.to_string(),
+        comment: None,
         columns,
         primary_key: PrimaryKey {
             columns: vec![],
