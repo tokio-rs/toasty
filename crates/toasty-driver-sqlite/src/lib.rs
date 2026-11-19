@@ -30,7 +30,7 @@ use std::{
     borrow::Cow,
     path::{Path, PathBuf},
     sync::Arc,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use toasty_core::{
     Result, Schema,
@@ -254,6 +254,128 @@ impl Sqlite {
         self.pragmas.set(key, value);
         self
     }
+
+    /// Drops every table and view in the database file at `path`.
+    ///
+    /// The file itself is kept. The pool holds connections open, so removing
+    /// the file fails on Windows with `ERROR_SHARING_VIOLATION`, and on POSIX
+    /// the pooled connections would keep writing to the unlinked file (and
+    /// leave `-wal`/`-shm` sidecars behind).
+    fn reset_file_database(&self, path: &Path) -> Result<()> {
+        let connection =
+            RusqliteConnection::open(path).map_err(toasty_core::Error::driver_operation_failed)?;
+        connection
+            .busy_timeout(self.busy_timeout)
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        let query_log = QueryLogConfig::default();
+
+        // Apply the configured pragmas before reading `sqlite_master`: an
+        // encrypted database (SQLCipher `key`) rejects reads until its key is
+        // set, and `journal_mode` and friends persist in the database file.
+        self.pragmas.apply(&connection, &query_log)?;
+
+        // Foreign keys must be disabled outside a transaction: SQLite ignores
+        // the pragma inside one, and with it on, dropping a table another
+        // table references is rejected.
+        connection
+            .execute_batch("PRAGMA foreign_keys = OFF")
+            .map_err(toasty_core::Error::driver_operation_failed)?;
+
+        let result = self.drop_all_user_objects(&connection);
+
+        // Undo the override above so the file keeps the configuration the
+        // other pooled connections were opened with.
+        let restore_foreign_keys = match self.pragmas.get("foreign_keys") {
+            Some(value) => connection.execute_batch(&format!("PRAGMA foreign_keys = {value}")),
+            None => Ok(()),
+        };
+
+        result.and(restore_foreign_keys.map_err(toasty_core::Error::driver_operation_failed))
+    }
+
+    /// Runs the `DROP TABLE`/`DROP VIEW` pass, retrying while another pooled
+    /// connection holds a lock.
+    fn drop_all_user_objects(&self, connection: &RusqliteConnection) -> Result<()> {
+        let deadline = Instant::now() + self.busy_timeout;
+        let mut delay = Duration::from_millis(10);
+
+        loop {
+            match drop_user_objects(connection) {
+                Ok(()) => return Ok(()),
+                Err(err) if is_busy(&err) && Instant::now() < deadline => {
+                    std::thread::sleep(delay);
+                    delay = (delay * 2).min(Duration::from_millis(250));
+                }
+                Err(err) => return Err(toasty_core::Error::driver_operation_failed(err)),
+            }
+        }
+    }
+}
+
+/// Returns `true` when `err` means "another connection is using the database",
+/// which `reset_db` retries until the driver's busy timeout elapses.
+fn is_busy(err: &rusqlite::Error) -> bool {
+    matches!(
+        err.sqlite_error_code(),
+        Some(rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked)
+    )
+}
+
+/// Drops every object the application owns, leaving an empty database.
+///
+/// Returns a raw `rusqlite` error so the caller can retry on `SQLITE_BUSY`.
+fn drop_user_objects(connection: &RusqliteConnection) -> rusqlite::Result<()> {
+    connection.execute_batch("BEGIN IMMEDIATE")?;
+
+    // Collect the names before dropping any: SQLite forbids modifying the
+    // schema while a `sqlite_master` query is still stepping.
+    //
+    // `sqlite_*` are SQLite's own objects (`sqlite_sequence` included).
+    // `_toasty_new_*` can only be left behind by an interrupted table rebuild.
+    let objects = (|| -> rusqlite::Result<Vec<(String, String)>> {
+        let mut statement = connection.prepare(
+            "SELECT type, name FROM sqlite_master \
+             WHERE type IN ('table', 'view') \
+               AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' \
+               AND name NOT LIKE '\\_toasty\\_new\\_%' ESCAPE '\\' \
+             ORDER BY type = 'table', (sql LIKE 'CREATE VIRTUAL TABLE%') DESC",
+        )?;
+
+        let rows = statement.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get(1)?)))?;
+
+        rows.collect()
+    })();
+
+    let objects = match objects {
+        Ok(objects) => objects,
+        Err(err) => {
+            let _ = connection.execute_batch("ROLLBACK");
+            return Err(err);
+        }
+    };
+
+    for (kind, name) in objects {
+        let kind = if kind == "view" { "VIEW" } else { "TABLE" };
+        // Identifiers cannot be bound as parameters, so quote the name.
+        // `IF EXISTS` makes dropping a virtual table's shadow tables after the
+        // virtual table itself a no-op.
+        let name = name.replace('"', "\"\"");
+        if let Err(err) = connection.execute_batch(&format!("DROP {kind} IF EXISTS \"{name}\"")) {
+            let _ = connection.execute_batch("ROLLBACK");
+            return Err(err);
+        }
+    }
+
+    match connection.execute_batch("COMMIT") {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            // A failed COMMIT can leave the transaction open; roll it back so
+            // a retry can start a new one.
+            let _ = connection.execute_batch("ROLLBACK");
+            Err(err)
+        }
+    }
 }
 
 #[async_trait]
@@ -304,10 +426,12 @@ impl Driver for Sqlite {
     async fn reset_db(&self) -> toasty_core::Result<()> {
         match &self.source {
             Source::File(path) => {
-                // Delete the file and recreate it
+                // The pool keeps connections to the file open, so deleting it
+                // fails on Windows (`ERROR_SHARING_VIOLATION`) and, on POSIX,
+                // leaves pooled connections writing to an unlinked inode.
+                // Drop the schema in place instead.
                 if path.exists() {
-                    std::fs::remove_file(path)
-                        .map_err(toasty_core::Error::driver_operation_failed)?;
+                    self.reset_file_database(path)?;
                 }
             }
             Source::InMemory => {

@@ -163,3 +163,25 @@ async fn a_failing_secret_pragma_does_not_leak_its_value() {
 
     assert!(!err.contains("a passphrase"), "passphrase leaked: {err}");
 }
+
+/// `reset_db` clears the schema in place, so the database file (and the
+/// journal mode stored in its header) survives. Deleting the file fails on
+/// Windows while the pool holds it open, and on POSIX a recreated file would
+/// silently fall back to the default rollback-journal mode.
+#[tokio::test]
+async fn reset_db_keeps_the_file_and_its_journal_mode() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("app.db");
+
+    let db = build(Sqlite::open(&path).journal_mode(JournalMode::Wal))
+        .await
+        .unwrap();
+    db.push_schema().await.unwrap();
+    db.reset_db().await.unwrap();
+
+    // Close the writer so the pool drops its handles before the file is reopened.
+    drop(db);
+
+    let mut db = build(Sqlite::open(&path)).await.unwrap();
+    assert_eq!(read(&mut db, "journal_mode").await, "wal");
+}
