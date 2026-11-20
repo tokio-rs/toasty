@@ -316,11 +316,24 @@ impl Expand<'_> {
     /// Generate the `Load::reload` trait method implementation for a root model.
     pub(super) fn expand_reload_trait_method(&self) -> TokenStream {
         let toasty = &self.toasty;
+        let model_ident = &self.model.ident;
         let reload_arms = self.expand_reload_match_arms();
 
         quote! {
             fn reload(target: &mut Self, value: #toasty::core::stmt::Value) -> #toasty::Result<()> {
-                for (field, value) in value.into_sparse_record().into_iter() {
+                let record = match value {
+                    #toasty::core::stmt::Value::SparseRecord(record) => record,
+                    // The update matched no row, e.g. it was deleted after
+                    // this instance was loaded.
+                    #toasty::core::stmt::Value::Null => {
+                        return Err(#toasty::Error::record_not_found(stringify!(#model_ident)));
+                    }
+                    value => {
+                        return Err(#toasty::Error::type_conversion(value, stringify!(#model_ident)));
+                    }
+                };
+
+                for (field, value) in record.into_iter() {
                     match field {
                         #reload_arms
                         _ => todo!("handle unknown field id in reload after update"),
