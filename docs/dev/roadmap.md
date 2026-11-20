@@ -111,6 +111,7 @@ the entry lands here.
 ## Migrations
 
 - Schema migration system ([#190])
+- Schema DDL capabilities ([design](design/schema-ddl-capabilities.md), [roadmap](roadmap/schema-ddl-capabilities.md))
 - `toasty-cli` for schema management ([design](design/standalone-cli.md), [#190])
 - Schema lock file for tracking applied migrations ([#136])
 
