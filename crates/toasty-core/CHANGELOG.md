@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.11.0...toasty-core-v0.12.0) - 2026-11-20
+
+### Added
+
+- let a read-only plan run without interactive transactions ([#1302](https://github.com/tokio-rs/toasty/pull/1302))
+
+### Fixed
+
+- *(sqlite)* store auto-increment integer keys at their full width ([#1339](https://github.com/tokio-rs/toasty/pull/1339))
+- *(core)* split migration breakpoints regardless of line ending ([#1311](https://github.com/tokio-rs/toasty/pull/1311))
+- *(engine)* exclude absent keys from relation membership ([#1271](https://github.com/tokio-rs/toasty/pull/1271))
+
+### Other
+
+- bind PostgreSQL batch inserts as unnest arrays ([#1103](https://github.com/tokio-rs/toasty/pull/1103))
 ## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.10.0...toasty-core-v0.11.0) - 2026-09-24
 
 ### Added
