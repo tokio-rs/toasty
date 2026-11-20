@@ -51,3 +51,21 @@ pub async fn count_with_filter(t: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+#[driver_test(requires(sql), scenario(crate::scenarios::two_models))]
+pub async fn count_with_contradictory_filter(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    toasty::create!(User::[{ name: "a" }]).exec(&mut db).await?;
+
+    t.log().clear();
+    let name = User::fields().name();
+    let count = User::filter(name.clone().eq("a").and(name.eq("b")))
+        .count()
+        .exec(&mut db)
+        .await?;
+    assert_eq!(count, 0);
+    assert!(t.log().is_empty());
+
+    Ok(())
+}
