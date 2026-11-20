@@ -30,6 +30,13 @@ impl Simplify<'_> {
             return false;
         };
 
+        // An aggregate without `GROUP BY` yields exactly one row even when no
+        // row matches (`SELECT COUNT(*) ... WHERE false` is `0`), so it is
+        // never empty.
+        if returning_has_aggregate(&select.returning) {
+            return false;
+        }
+
         // SQL-style predicates retain only true rows. A constant NULL
         // comparison (for example, a cleared relation key) also matches none.
         if select.filter.is_false() || select.filter.as_expr().is_value_null() {
@@ -82,4 +89,12 @@ impl Simplify<'_> {
             _ => false,
         }
     }
+}
+
+fn returning_has_aggregate(returning: &stmt::Returning) -> bool {
+    let mut found = false;
+    stmt::visit::for_each_expr(returning, |expr| {
+        found |= matches!(expr, stmt::Expr::Func(stmt::ExprFunc::Count(_)));
+    });
+    found
 }

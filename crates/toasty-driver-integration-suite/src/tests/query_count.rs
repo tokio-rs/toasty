@@ -51,3 +51,27 @@ pub async fn count_with_filter(t: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+#[driver_test(requires(sql), scenario(crate::scenarios::two_models))]
+pub async fn count_with_filter_that_folds_to_false(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    toasty::create!(User::[
+        { name: "a" },
+        { name: "b" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // `name == "a" AND name == "b"` is folded to `false` before it reaches the
+    // driver. An aggregate without `GROUP BY` still yields one row, so the
+    // count is `0` rather than an empty result.
+    let name = User::fields().name();
+    let count = User::filter(name.clone().eq("a").and(name.eq("b")))
+        .count()
+        .exec(&mut db)
+        .await?;
+    assert_eq!(count, 0);
+
+    Ok(())
+}

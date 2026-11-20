@@ -15,6 +15,25 @@ fn null_filter_query_is_empty() {
 }
 
 #[test]
+fn count_star_over_false_filter_is_not_empty() {
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
+
+    // `SELECT COUNT(*) ... WHERE false` still yields one row (`0`), so it must
+    // not collapse to an empty `VALUES`.
+    let mut query = Query::new_select(
+        stmt::Source::table(toasty_core::schema::db::TableId(0)),
+        stmt::Expr::from(false),
+    );
+    *query.returning_mut_unwrap() = stmt::Returning::Project(stmt::Expr::count_star());
+
+    assert!(!simplify.stmt_query_is_empty(&query));
+
+    simplify.simplify_stmt_query_when_empty(&mut query);
+    assert!(matches!(query.body, stmt::ExprSet::Select(_)));
+}
+
+#[test]
 fn empty_values_query_is_empty() {
     let schema = test_schema();
     let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
