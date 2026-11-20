@@ -651,6 +651,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // First, run the default visitor to lower sub-expressions
         self.visit_expr_mut(&mut node.expr);
 
+        // A field of an embedded struct lowers to a projection into the
+        // embed's record. Collapse it so the cast handling below sees the
+        // field's decode cast.
+        node.expr = collapse_projections(node.expr.take());
+
         // An embedded newtype field lowers to a single-element record,
         // one layer per newtype in the chain. Unwrap them so the ordering
         // applies to the underlying column — otherwise the eq synthesis

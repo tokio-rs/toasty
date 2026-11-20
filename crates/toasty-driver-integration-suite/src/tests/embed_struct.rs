@@ -1266,6 +1266,45 @@ pub async fn embedded_struct_with_jiff_fields(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Tests ordering by a timestamp field inside an embedded struct.
+#[driver_test(requires(sql))]
+pub async fn order_by_embedded_timestamp(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct Schedule {
+        starts_at: jiff::Timestamp,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Event {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        schedule: Schedule,
+    }
+
+    let mut db = t.setup_db(models!(Event)).await;
+
+    for secs in [1_700_000_200, 1_700_000_000, 1_700_000_100] {
+        Event::create()
+            .schedule(Schedule {
+                starts_at: jiff::Timestamp::from_second(secs).unwrap(),
+            })
+            .exec(&mut db)
+            .await?;
+    }
+
+    let events = Event::all()
+        .order_by(Event::fields().schedule().starts_at().asc())
+        .exec(&mut db)
+        .await?;
+    let secs: Vec<i64> = events
+        .iter()
+        .map(|e| e.schedule.starts_at.as_second())
+        .collect();
+    assert_eq!(secs, [1_700_000_000, 1_700_000_100, 1_700_000_200]);
+    Ok(())
+}
+
 /// Tests a unit enum embedded as a field inside an embedded struct (enum-in-struct nesting).
 /// The struct flattens to columns including the enum's discriminant column.
 #[driver_test]
