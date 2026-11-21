@@ -4,8 +4,8 @@
 //!
 //! `TOASTY_TEST_MARIADB_URL` must point at MariaDB 11.8 or later.
 
-use sqlx_core::sql_str::AssertSqlSafe;
-use sqlx_mysql::MySqlPool;
+use sqlx::AssertSqlSafe;
+use sqlx::mysql::MySqlPool;
 use toasty_driver_mysql::MariaDB;
 use tokio::sync::OnceCell;
 
@@ -35,7 +35,7 @@ impl toasty_driver_integration_suite::Setup for MariaDbSetup {
             })
             .await;
         let sql = format!("DROP TABLE IF EXISTS `{}`", name);
-        sqlx_core::query::query(AssertSqlSafe(sql))
+        sqlx::query(AssertSqlSafe(sql))
             .execute(pool)
             .await
             .expect("Failed to drop table");

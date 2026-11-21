@@ -1,8 +1,5 @@
-use sqlx_core::{
-    arguments::Arguments, column::Column as _, decode::Decode, row::Row, type_info::TypeInfo as _,
-    value::ValueRef as _,
-};
-use sqlx_mysql::{MySql, MySqlArguments, MySqlColumn, MySqlRow, types::MySqlTime};
+use sqlx::mysql::{MySql, MySqlArguments, MySqlColumn, MySqlRow, types::MySqlTime};
+use sqlx::{Arguments, Column as _, Decode, Row, TypeInfo as _, ValueRef as _};
 use toasty_core::stmt::{self, Value as CoreValue};
 
 #[derive(Debug)]
@@ -26,7 +23,7 @@ impl Value {
         row: &MySqlRow,
         column: &MySqlColumn,
         ty: &stmt::Type,
-    ) -> Result<Self, sqlx_core::Error> {
+    ) -> Result<Self, sqlx::Error> {
         if row.try_get_raw(i)?.is_null() {
             return Ok(Self(CoreValue::Null));
         }
@@ -96,7 +93,7 @@ impl Value {
         i: usize,
         row: &MySqlRow,
         column: &MySqlColumn,
-    ) -> Result<Self, sqlx_core::Error> {
+    ) -> Result<Self, sqlx::Error> {
         if row.try_get_raw(i)?.is_null() {
             return Ok(Self(CoreValue::Null));
         }
@@ -124,10 +121,10 @@ impl Value {
     }
 
     /// Adds an owned Toasty value to SQLx's MySQL argument buffer.
-    pub(crate) fn add_to(self, args: &mut MySqlArguments) -> Result<(), sqlx_core::Error> {
+    pub(crate) fn add_to(self, args: &mut MySqlArguments) -> Result<(), sqlx::Error> {
         macro_rules! add {
             ($value:expr) => {
-                Arguments::add(args, $value).map_err(sqlx_core::Error::Encode)
+                Arguments::add(args, $value).map_err(sqlx::Error::Encode)
             };
         }
 
@@ -174,14 +171,14 @@ fn decode<'r, T>(
     row: &'r MySqlRow,
     i: usize,
     constructor: impl FnOnce(T) -> CoreValue,
-) -> Result<CoreValue, sqlx_core::Error>
+) -> Result<CoreValue, sqlx::Error>
 where
     T: Decode<'r, MySql>,
 {
     row.try_get_unchecked(i).map(constructor)
 }
 
-fn decode_string(row: &MySqlRow, i: usize, mysql_ty: &str) -> Result<CoreValue, sqlx_core::Error> {
+fn decode_string(row: &MySqlRow, i: usize, mysql_ty: &str) -> Result<CoreValue, sqlx::Error> {
     match mysql_ty {
         "DATE" => row
             .try_get_unchecked::<time::Date, _>(i)
@@ -200,7 +197,7 @@ fn decode_string(row: &MySqlRow, i: usize, mysql_ty: &str) -> Result<CoreValue, 
     }
 }
 
-fn decode_uuid(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx_core::Error> {
+fn decode_uuid(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx::Error> {
     row.try_get_unchecked::<Vec<u8>, _>(i).map(|bytes| {
         let uuid = uuid::Uuid::from_slice(&bytes).or_else(|_| {
             let value = std::str::from_utf8(&bytes).expect("invalid UTF-8 in MySQL UUID value");
@@ -214,12 +211,12 @@ fn decode_json(
     row: &MySqlRow,
     i: usize,
     constructor: impl FnOnce(&[u8]) -> CoreValue,
-) -> Result<CoreValue, sqlx_core::Error> {
+) -> Result<CoreValue, sqlx::Error> {
     row.try_get_unchecked::<Vec<u8>, _>(i)
         .map(|bytes| constructor(&bytes))
 }
 
-fn infer_bytes(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx_core::Error> {
+fn infer_bytes(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx::Error> {
     row.try_get_unchecked::<Vec<u8>, _>(i).map(|bytes| {
         String::from_utf8(bytes)
             .map(CoreValue::String)
@@ -228,7 +225,7 @@ fn infer_bytes(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx_core::Error> 
 }
 
 #[cfg(feature = "jiff")]
-fn decode_date(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx_core::Error> {
+fn decode_date(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx::Error> {
     row.try_get_unchecked::<time::Date, _>(i).map(|value| {
         CoreValue::Date(jiff::civil::Date::constant(
             value
@@ -242,7 +239,7 @@ fn decode_date(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx_core::Error> 
 }
 
 #[cfg(feature = "jiff")]
-fn decode_time(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx_core::Error> {
+fn decode_time(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx::Error> {
     row.try_get_unchecked::<time::Time, _>(i).map(|value| {
         CoreValue::Time(jiff::civil::Time::constant(
             value.hour() as i8,
@@ -254,7 +251,7 @@ fn decode_time(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx_core::Error> 
 }
 
 #[cfg(feature = "jiff")]
-fn decode_datetime(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx_core::Error> {
+fn decode_datetime(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx::Error> {
     row.try_get_unchecked::<time::PrimitiveDateTime, _>(i)
         .map(|value| {
             CoreValue::DateTime(jiff::civil::DateTime::constant(
@@ -273,37 +270,37 @@ fn decode_datetime(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx_core::Err
 }
 
 #[cfg(feature = "jiff")]
-fn infer_date(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx_core::Error> {
+fn infer_date(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx::Error> {
     decode_date(row, i)
 }
 
 #[cfg(not(feature = "jiff"))]
-fn infer_date(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx_core::Error> {
+fn infer_date(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx::Error> {
     decode_string(row, i, "DATE")
 }
 
 #[cfg(feature = "jiff")]
-fn infer_time(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx_core::Error> {
+fn infer_time(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx::Error> {
     decode_time(row, i)
 }
 
 #[cfg(not(feature = "jiff"))]
-fn infer_time(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx_core::Error> {
+fn infer_time(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx::Error> {
     decode_string(row, i, "TIME")
 }
 
 #[cfg(feature = "jiff")]
-fn infer_datetime(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx_core::Error> {
+fn infer_datetime(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx::Error> {
     decode_datetime(row, i)
 }
 
 #[cfg(not(feature = "jiff"))]
-fn infer_datetime(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx_core::Error> {
+fn infer_datetime(row: &MySqlRow, i: usize) -> Result<CoreValue, sqlx::Error> {
     decode_string(row, i, "DATETIME")
 }
 
 #[cfg(feature = "jiff")]
-fn jiff_date_to_time(value: jiff::civil::Date) -> Result<time::Date, sqlx_core::Error> {
+fn jiff_date_to_time(value: jiff::civil::Date) -> Result<time::Date, sqlx::Error> {
     time::Date::from_calendar_date(
         value.year().into(),
         time::Month::try_from(value.month() as u8).map_err(encode_error)?,
@@ -313,7 +310,7 @@ fn jiff_date_to_time(value: jiff::civil::Date) -> Result<time::Date, sqlx_core::
 }
 
 #[cfg(feature = "jiff")]
-fn jiff_time_to_time(value: jiff::civil::Time) -> Result<time::Time, sqlx_core::Error> {
+fn jiff_time_to_time(value: jiff::civil::Time) -> Result<time::Time, sqlx::Error> {
     time::Time::from_hms_nano(
         value.hour() as u8,
         value.minute() as u8,
@@ -326,7 +323,7 @@ fn jiff_time_to_time(value: jiff::civil::Time) -> Result<time::Time, sqlx_core::
 #[cfg(feature = "jiff")]
 fn jiff_datetime_to_time(
     value: jiff::civil::DateTime,
-) -> Result<time::PrimitiveDateTime, sqlx_core::Error> {
+) -> Result<time::PrimitiveDateTime, sqlx::Error> {
     Ok(time::PrimitiveDateTime::new(
         jiff_date_to_time(value.date())?,
         jiff_time_to_time(value.time())?,
@@ -334,8 +331,8 @@ fn jiff_datetime_to_time(
 }
 
 #[cfg(feature = "jiff")]
-fn encode_error(error: impl std::error::Error + Send + Sync + 'static) -> sqlx_core::Error {
-    sqlx_core::Error::Encode(Box::new(error))
+fn encode_error(error: impl std::error::Error + Send + Sync + 'static) -> sqlx::Error {
+    sqlx::Error::Encode(Box::new(error))
 }
 
 #[cfg(any(feature = "rust_decimal", feature = "bigdecimal"))]
