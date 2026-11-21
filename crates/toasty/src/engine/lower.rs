@@ -1624,17 +1624,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 // Expand decodes of embedded values into guarded comparisons so
                 // each cast operand can use the database's stored type.
                 if expr_is_enum_decode(other) {
-                    let comparison = stmt::Expr::binary_op(lhs.clone(), op, rhs.clone());
-                    let mut expanded_comparison = comparison.clone();
-                    Simplify::with_context(self.expr_cx, self.capability())
-                        .visit_expr_mut(&mut expanded_comparison);
-                    // Simplification also expands optional struct decodes.
-                    // Revisit only after it makes progress to prevent recursion.
-                    if expanded_comparison != comparison {
-                        self.visit_expr_mut(&mut expanded_comparison);
-                        return Some(expanded_comparison);
-                    }
-                    return None;
+                    return self.lower_expanded_decode_comparison(op, lhs, rhs);
                 }
 
                 let target_ty = self.capability().native_type_for(&expr_cast.ty);
@@ -1642,8 +1632,42 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 self.cast_expr(rhs, &target_ty);
                 None
             }
+            // An optional embedded value, such as an `Option<UserId>` foreign
+            // key, decodes through a `Match` on its null check. Compared to a
+            // lowered record, the match hides the record's casts from the
+            // rules above, so expand it first and lower each guarded arm.
+            // Enum decodes match on a discriminant instead and are left to
+            // simplification.
+            (decode, stmt::Expr::Record(_)) | (stmt::Expr::Record(_), decode)
+                if (op.is_eq() || op.is_ne()) && expr_is_optional_decode(decode) =>
+            {
+                self.lower_expanded_decode_comparison(op, lhs, rhs)
+            }
             _ => None,
         }
+    }
+
+    /// Expands a comparison against an embedded decode `Match` into guarded
+    /// comparisons via simplification, then lowers the result so each exposed
+    /// cast can use the database's stored type. Returns `None` when
+    /// simplification makes no progress.
+    fn lower_expanded_decode_comparison(
+        &mut self,
+        op: stmt::BinaryOp,
+        lhs: &stmt::Expr,
+        rhs: &stmt::Expr,
+    ) -> Option<stmt::Expr> {
+        let comparison = stmt::Expr::binary_op(lhs.clone(), op, rhs.clone());
+        let mut expanded_comparison = comparison.clone();
+        Simplify::with_context(self.expr_cx, self.capability())
+            .visit_expr_mut(&mut expanded_comparison);
+        // Simplification also expands optional struct decodes.
+        // Revisit only after it makes progress to prevent recursion.
+        if expanded_comparison != comparison {
+            self.visit_expr_mut(&mut expanded_comparison);
+            return Some(expanded_comparison);
+        }
+        None
     }
 
     /// Combines per-element comparisons of two record-shaped operands into a
@@ -2247,6 +2271,12 @@ fn expr_is_enum_decode(expr: &stmt::Expr) -> bool {
         stmt::Expr::Project(project) => expr_is_enum_decode(&project.base),
         _ => false,
     }
+}
+
+/// Whether an expression is the decode of an optional embedded value — a
+/// `Match` over a null check of its storage.
+fn expr_is_optional_decode(expr: &stmt::Expr) -> bool {
+    matches!(expr, stmt::Expr::Match(m) if matches!(*m.subject, stmt::Expr::IsNull(_)))
 }
 
 /// Collapse projections into a lowered record — an embed lowers to
