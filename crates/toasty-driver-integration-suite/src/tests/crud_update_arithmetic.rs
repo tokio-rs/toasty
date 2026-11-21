@@ -283,3 +283,38 @@ pub async fn increment_narrow_integer_column(t: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+#[driver_test]
+pub async fn increment_optional_integer_column(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Tally {
+        #[key]
+        id: uuid::Uuid,
+
+        count: Option<i64>,
+    }
+
+    let mut db = t.setup_db(models!(Tally)).await;
+    let mut tally = toasty::create!(Tally {
+        id: uuid::Uuid::new_v4(),
+        count: Some(10),
+    })
+    .exec(&mut db)
+    .await?;
+
+    tally
+        .update()
+        .count(toasty::stmt::increment())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(Tally::get_by_id(&mut db, &tally.id).await?.count, Some(11));
+
+    tally
+        .update()
+        .count(toasty::stmt::decrement())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(Tally::get_by_id(&mut db, &tally.id).await?.count, Some(10));
+
+    Ok(())
+}

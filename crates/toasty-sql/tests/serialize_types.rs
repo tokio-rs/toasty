@@ -149,7 +149,7 @@ fn boolean_mysql() {
 fn boolean_sqlite() {
     expect![[r#"
         CREATE TABLE "t" (
-            "id" BIGINT NOT NULL,
+            "id" INTEGER NOT NULL,
             "col" BOOLEAN NOT NULL,
             PRIMARY KEY ("id")
         );"#]]
@@ -183,11 +183,11 @@ fn integer_2_mysql_smallint() {
 }
 
 #[test]
-fn integer_2_sqlite_smallint() {
+fn integer_2_sqlite_integer() {
     expect![[r#"
         CREATE TABLE "t" (
-            "id" BIGINT NOT NULL,
-            "col" SMALLINT NOT NULL,
+            "id" INTEGER NOT NULL,
+            "col" INTEGER NOT NULL,
             PRIMARY KEY ("id")
         );"#]]
     .assert_eq(&render_type("sqlite", Type::Integer(2)).join("\n"));
@@ -219,7 +219,7 @@ fn integer_4_mysql_integer() {
 fn integer_4_sqlite_integer() {
     expect![[r#"
         CREATE TABLE "t" (
-            "id" BIGINT NOT NULL,
+            "id" INTEGER NOT NULL,
             "col" INTEGER NOT NULL,
             PRIMARY KEY ("id")
         );"#]]
@@ -249,11 +249,11 @@ fn integer_8_mysql_bigint() {
 }
 
 #[test]
-fn integer_8_sqlite_bigint() {
+fn integer_8_sqlite_integer() {
     expect![[r#"
         CREATE TABLE "t" (
-            "id" BIGINT NOT NULL,
-            "col" BIGINT NOT NULL,
+            "id" INTEGER NOT NULL,
+            "col" INTEGER NOT NULL,
             PRIMARY KEY ("id")
         );"#]]
     .assert_eq(&render_type("sqlite", Type::Integer(8)).join("\n"));
@@ -355,7 +355,7 @@ fn unsigned_integer_8_postgresql_promotes_to_bigint() {
 fn unsigned_integer_4_sqlite_integer() {
     expect![[r#"
         CREATE TABLE "t" (
-            "id" BIGINT NOT NULL,
+            "id" INTEGER NOT NULL,
             "col" INTEGER NOT NULL,
             PRIMARY KEY ("id")
         );"#]]
@@ -366,7 +366,7 @@ fn unsigned_integer_4_sqlite_integer() {
 fn unsigned_integer_8_sqlite_integer() {
     expect![[r#"
         CREATE TABLE "t" (
-            "id" BIGINT NOT NULL,
+            "id" INTEGER NOT NULL,
             "col" INTEGER NOT NULL,
             PRIMARY KEY ("id")
         );"#]]
@@ -425,7 +425,7 @@ fn float_8_mysql_double() {
 fn float_4_sqlite_real() {
     expect![[r#"
         CREATE TABLE "t" (
-            "id" BIGINT NOT NULL,
+            "id" INTEGER NOT NULL,
             "col" REAL NOT NULL,
             PRIMARY KEY ("id")
         );"#]]
@@ -436,7 +436,7 @@ fn float_4_sqlite_real() {
 fn float_8_sqlite_real() {
     expect![[r#"
         CREATE TABLE "t" (
-            "id" BIGINT NOT NULL,
+            "id" INTEGER NOT NULL,
             "col" REAL NOT NULL,
             PRIMARY KEY ("id")
         );"#]]
@@ -473,7 +473,7 @@ fn text_mysql() {
 fn text_sqlite() {
     expect![[r#"
         CREATE TABLE "t" (
-            "id" BIGINT NOT NULL,
+            "id" INTEGER NOT NULL,
             "col" TEXT NOT NULL,
             PRIMARY KEY ("id")
         );"#]]
@@ -506,7 +506,7 @@ fn varchar_mysql() {
 fn varchar_sqlite() {
     expect![[r#"
         CREATE TABLE "t" (
-            "id" BIGINT NOT NULL,
+            "id" INTEGER NOT NULL,
             "col" VARCHAR(255) NOT NULL,
             PRIMARY KEY ("id")
         );"#]]
@@ -664,7 +664,7 @@ fn blob_mysql_blob() {
 fn blob_sqlite_blob() {
     expect![[r#"
         CREATE TABLE "t" (
-            "id" BIGINT NOT NULL,
+            "id" INTEGER NOT NULL,
             "col" BLOB NOT NULL,
             PRIMARY KEY ("id")
         );"#]]
@@ -855,7 +855,7 @@ fn enum_sqlite_text_with_check() {
     let status = make_enum_type(None, &["pending", "active", "done"]);
     expect![[r#"
         CREATE TABLE "t" (
-            "id" BIGINT NOT NULL,
+            "id" INTEGER NOT NULL,
             "col" TEXT NOT NULL CHECK ("col" IN ('pending', 'active', 'done')),
             PRIMARY KEY ("id")
         );"#]]
@@ -903,7 +903,7 @@ fn list_mysql_json() {
 fn list_sqlite_text() {
     expect![[r#"
         CREATE TABLE "t" (
-            "id" BIGINT NOT NULL,
+            "id" INTEGER NOT NULL,
             "col" TEXT NOT NULL,
             PRIMARY KEY ("id")
         );"#]]
@@ -973,7 +973,7 @@ fn custom_pass_through_mysql() {
 fn custom_pass_through_sqlite() {
     expect![[r#"
         CREATE TABLE "t" (
-            "id" BIGINT NOT NULL,
+            "id" INTEGER NOT NULL,
             "col" ANY NOT NULL,
             PRIMARY KEY ("id")
         );"#]]
