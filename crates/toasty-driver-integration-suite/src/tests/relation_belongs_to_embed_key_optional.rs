@@ -57,3 +57,66 @@ pub async fn include_optional_belongs_to_with_embed_key(t: &mut Test) -> Result<
 
     Ok(())
 }
+
+/// Regression test for tokio-rs/toasty#1294: including an optional
+/// `belongs_to` whose key is a `Uuid` newtype failed once the foreign key was
+/// set, because the key column is cast to `Uuid` and the cast reached the SQL
+/// serializer.
+#[driver_test]
+pub async fn include_optional_belongs_to_with_uuid_newtype_key(t: &mut Test) -> Result<()> {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
+    struct UserId(uuid::Uuid);
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, toasty::Embed)]
+    struct ArticleId(uuid::Uuid);
+
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: UserId,
+
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Article {
+        #[key]
+        #[auto]
+        id: ArticleId,
+
+        #[index]
+        user_id: Option<UserId>,
+
+        #[belongs_to]
+        user: toasty::Deferred<Option<User>>,
+    }
+
+    let mut db = t.setup_db(models!(User, Article)).await;
+
+    let orphan = toasty::create!(Article {}).exec(&mut db).await?;
+    let orphan = Article::filter_by_id(orphan.id)
+        .include(Article::fields().user())
+        .get(&mut db)
+        .await?;
+    assert_none!(orphan.user.get().as_ref());
+
+    let user = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+    let article = toasty::create!(Article {
+        user_id: Some(user.id),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let article = Article::filter_by_id(article.id)
+        .include(Article::fields().user())
+        .get(&mut db)
+        .await?;
+    let included = article.user.get().as_ref().unwrap();
+    assert_eq!(included.id, user.id);
+    assert_eq!(included.name, "Alice");
+
+    Ok(())
+}
