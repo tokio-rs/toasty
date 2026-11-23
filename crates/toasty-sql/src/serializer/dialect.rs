@@ -6,9 +6,19 @@ use toasty_core::{
 };
 
 impl<'a> Serializer<'a> {
+    /// Creates a serializer for `dialect` with the standard `BEGIN` for
+    /// [`TransactionMode::Default`].
+    pub fn new(dialect: Dialect, schema: &'a db::Schema) -> Self {
+        Serializer {
+            schema,
+            dialect,
+            sqlite_default_begin: "BEGIN",
+        }
+    }
+
     /// Creates a serializer that emits SQLite SQL.
     pub fn sqlite(schema: &'a db::Schema) -> Self {
-        Self::sqlite_with_default_begin(schema, "BEGIN")
+        Self::new(Dialect::Sqlite, schema)
     }
 
     /// Creates a SQLite-dialect serializer with a custom SQL string for
@@ -34,29 +44,17 @@ impl<'a> Serializer<'a> {
 
     /// Creates a serializer that emits PostgreSQL SQL.
     pub fn postgresql(schema: &'a db::Schema) -> Self {
-        Serializer {
-            schema,
-            dialect: Dialect::Postgresql,
-            sqlite_default_begin: "BEGIN",
-        }
+        Self::new(Dialect::Postgresql, schema)
     }
 
     /// Creates a serializer that emits MySQL SQL.
     pub fn mysql(schema: &'a db::Schema) -> Self {
-        Serializer {
-            schema,
-            dialect: Dialect::Mysql,
-            sqlite_default_begin: "BEGIN",
-        }
+        Self::new(Dialect::Mysql, schema)
     }
 
     /// Creates a serializer that emits MariaDB SQL.
     pub fn mariadb(schema: &'a db::Schema) -> Self {
-        Serializer {
-            schema,
-            dialect: Dialect::MariaDb,
-            sqlite_default_begin: "BEGIN",
-        }
+        Self::new(Dialect::MariaDb, schema)
     }
 
     /// Returns `true` for both MySQL and MariaDB.

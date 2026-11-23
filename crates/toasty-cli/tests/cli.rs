@@ -1,0 +1,466 @@
+//! End-to-end tests for the `toasty` binary. Each test scaffolds a package
+//! that path-depends on the workspace's `toasty` and runs the binary against
+//! it; `CARGO_TARGET_DIR` is shared with the workspace so dependency builds
+//! are cached.
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output};
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+fn workspace_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf()
+}
+
+const MODEL: &str = r#"
+#[derive(Debug, toasty::Model)]
+pub struct User {
+    #[key]
+    #[auto]
+    pub id: i64,
+
+    #[unique]
+    pub email: String,
+}
+"#;
+
+/// Manifest for a package depending on the workspace's `toasty`; `extra` is
+/// spliced in after that dependency.
+fn manifest(name: &str, extra: &str) -> String {
+    format!(
+        r#"[package]
+name = "{name}"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+toasty = {{ path = {toasty_path:?} }}
+{extra}
+
+[workspace]
+
+# Match the Toasty workspace profile so shared dependency builds are reused.
+[profile.dev]
+debug = "line-tables-only"
+"#,
+        toasty_path = workspace_root().join("crates/toasty"),
+    )
+}
+
+/// Pins dependency versions to the workspace lockfile.
+fn copy_lockfile(dir: &Path) {
+    let _ = fs::copy(workspace_root().join("Cargo.lock"), dir.join("Cargo.lock"));
+}
+
+/// Scaffolds a bin or lib-only package using Toasty. Each gets a unique name:
+/// tests run in parallel in one `CARGO_TARGET_DIR`, so same-named packages
+/// would replace each other's artifact between building and running it.
+fn scaffold_project(dir: &Path, bin: bool) {
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    let name = format!("cli-e2e-{}", NEXT.fetch_add(1, Ordering::Relaxed));
+
+    fs::write(dir.join("Cargo.toml"), manifest(&name, "")).unwrap();
+    copy_lockfile(dir);
+
+    fs::create_dir_all(dir.join("src")).unwrap();
+    if bin {
+        fs::write(
+            dir.join("src/main.rs"),
+            format!("{MODEL}\nfn main() {{ panic!(\"user main must not run during schema extraction\"); }}"),
+        )
+        .unwrap();
+    } else {
+        fs::write(dir.join("src/lib.rs"), MODEL).unwrap();
+    }
+}
+
+fn toasty(project: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_toasty"))
+        .args(args)
+        .current_dir(project)
+        .env("CARGO_TARGET_DIR", workspace_root().join("target"))
+        .output()
+        .unwrap()
+}
+
+fn assert_success(output: &Output) -> String {
+    assert!(
+        output.status.success(),
+        "command failed\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+#[test]
+fn generate_and_apply_bin_package() {
+    let dir = tempfile::tempdir().unwrap();
+    scaffold_project(dir.path(), true);
+
+    let output = toasty(
+        dir.path(),
+        &[
+            "migrate", "generate", "--flavor", "sqlite", "--name", "init",
+        ],
+    );
+    let stdout = assert_success(&output);
+    assert!(stdout.contains("0000_init.sql"), "{stdout}");
+
+    let sql = fs::read_to_string(dir.path().join("toasty/migrations/0000_init.sql")).unwrap();
+    assert!(sql.contains("CREATE TABLE \"users\""), "{sql}");
+    assert!(
+        dir.path()
+            .join("toasty/snapshots/0000_snapshot.toml")
+            .is_file()
+    );
+    assert!(dir.path().join("toasty/history.toml").is_file());
+    assert!(dir.path().join("Toasty.toml").is_file());
+
+    // A second generate detects no schema changes.
+    let output = toasty(dir.path(), &["migrate", "generate", "--flavor", "sqlite"]);
+    let stdout = assert_success(&output);
+    assert!(stdout.contains("No migration needed"), "{stdout}");
+    assert!(
+        !dir.path()
+            .join("toasty/migrations/0001_migration.sql")
+            .exists()
+    );
+
+    // Apply the migration to a SQLite database, then confirm idempotency.
+    // `apply` must not recreate `Toasty.toml`; that would fail in a read-only
+    // checkout.
+    fs::remove_file(dir.path().join("Toasty.toml")).unwrap();
+    let url = format!("sqlite:{}", dir.path().join("app.db").display());
+    let output = toasty(dir.path(), &["migrate", "apply", "--url", &url]);
+    let stdout = assert_success(&output);
+    assert!(stdout.contains("Applied: 0000_init.sql"), "{stdout}");
+    assert!(dir.path().join("app.db").is_file());
+    assert!(!dir.path().join("Toasty.toml").exists());
+
+    let output = toasty(dir.path(), &["migrate", "apply", "--url", &url]);
+    let stdout = assert_success(&output);
+    assert!(stdout.contains("already applied"), "{stdout}");
+
+    // Progress goes to stderr, so `snapshot` stdout parses as TOML.
+    let output = toasty(dir.path(), &["migrate", "snapshot", "--flavor", "sqlite"]);
+    let stdout = assert_success(&output);
+    let snapshot: toml::Value = toml::from_str(&stdout)
+        .unwrap_or_else(|err| panic!("stdout is not valid TOML: {err}\n---\n{stdout}"));
+    let tables = snapshot["schema"]["tables"].as_array().unwrap();
+    assert_eq!(tables.len(), 1);
+    assert_eq!(tables[0]["name"].as_str(), Some("users"));
+}
+
+#[test]
+fn generate_lib_package_via_cdylib() {
+    let dir = tempfile::tempdir().unwrap();
+    scaffold_project(dir.path(), false);
+
+    // The constructor cannot see `Db::builder().table_name_prefix(..)`, so
+    // `Toasty.toml` carries the prefix, through `__load-cdylib` here.
+    fs::write(
+        dir.path().join("Toasty.toml"),
+        "[migration]\npath = \"toasty\"\nprefix_style = \"Sequential\"\n\
+         table_name_prefix = \"svc_\"\n",
+    )
+    .unwrap();
+
+    let output = toasty(
+        dir.path(),
+        &[
+            "migrate",
+            "generate",
+            "--flavor",
+            "postgresql",
+            "--name",
+            "init",
+        ],
+    );
+    let stdout = assert_success(&output);
+    assert!(stdout.contains("0000_init.sql"), "{stdout}");
+
+    let sql = fs::read_to_string(dir.path().join("toasty/migrations/0000_init.sql")).unwrap();
+    assert!(sql.contains("CREATE TABLE \"svc_users\""), "{sql}");
+    assert!(sql.contains("BIGINT"), "{sql}");
+}
+
+#[test]
+fn schema_is_extracted_through_a_transitive_toasty_dependency() {
+    // `server` reaches `toasty` only through `models`; the constructor is
+    // linked into the binary all the same.
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"models\", \"server\"]\nresolver = \"3\"\n\n\
+         [profile.dev]\ndebug = \"line-tables-only\"\n",
+    )
+    .unwrap();
+    copy_lockfile(root);
+
+    fs::create_dir_all(root.join("models/src")).unwrap();
+    let models_manifest = manifest("models", "");
+    fs::write(
+        root.join("models/Cargo.toml"),
+        // The member manifests must not each declare their own `[workspace]`.
+        models_manifest.replace("[workspace]\n", ""),
+    )
+    .unwrap();
+    fs::write(root.join("models/src/lib.rs"), MODEL).unwrap();
+
+    fs::create_dir_all(root.join("server/src")).unwrap();
+    fs::write(
+        root.join("server/Cargo.toml"),
+        "[package]\nname = \"server\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n\
+         [dependencies]\nmodels = { path = \"../models\" }\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("server/src/main.rs"),
+        "fn main() { let _ = std::any::type_name::<models::User>(); }\n",
+    )
+    .unwrap();
+
+    let output = toasty(
+        root,
+        &[
+            "-p", "server", "migrate", "generate", "--flavor", "sqlite", "--name", "init",
+        ],
+    );
+    assert_success(&output);
+
+    let sql = fs::read_to_string(root.join("server/toasty/migrations/0000_init.sql")).unwrap();
+    assert!(sql.contains("CREATE TABLE \"users\""), "{sql}");
+}
+
+#[test]
+fn a_package_without_toasty_is_never_executed() {
+    // Without `toasty` there is no dump constructor, so running the artifact
+    // would run the user's `main`. The CLI must refuse before building.
+    let dir = tempfile::tempdir().unwrap();
+    let marker = dir.path().join("main-ran");
+
+    fs::write(
+        dir.path().join("Cargo.toml"),
+        "[package]\nname = \"no-toasty\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n\
+         [dependencies]\n\n[workspace]\n\n[profile.dev]\ndebug = \"line-tables-only\"\n",
+    )
+    .unwrap();
+    copy_lockfile(dir.path());
+    fs::create_dir_all(dir.path().join("src")).unwrap();
+    fs::write(
+        dir.path().join("src/main.rs"),
+        format!(
+            "fn main() {{ std::fs::write({:?}, \"ran\").unwrap(); }}\n",
+            marker.display().to_string()
+        ),
+    )
+    .unwrap();
+
+    let output = toasty(
+        dir.path(),
+        &[
+            "migrate", "generate", "--flavor", "sqlite", "--name", "init",
+        ],
+    );
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("does not depend on `toasty`"), "{stderr}");
+    assert!(!marker.exists(), "the user's main() must not be executed");
+}
+
+#[test]
+fn a_build_dependency_on_toasty_does_not_count_as_linked() {
+    // A build-dependency is compiled for the host and never linked into the
+    // artifact, so the constructor is absent and `main` would run.
+    let dir = tempfile::tempdir().unwrap();
+    let marker = dir.path().join("main-ran");
+
+    fs::write(
+        dir.path().join("Cargo.toml"),
+        format!(
+            "[package]\nname = \"build-dep-toasty\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n\
+             [build-dependencies]\ntoasty = {{ path = {:?} }}\n\n[workspace]\n\n\
+             [profile.dev]\ndebug = \"line-tables-only\"\n",
+            workspace_root().join("crates/toasty"),
+        ),
+    )
+    .unwrap();
+    copy_lockfile(dir.path());
+    fs::write(
+        dir.path().join("build.rs"),
+        "fn main() { let _ = toasty::Db::builder(); }\n",
+    )
+    .unwrap();
+    fs::create_dir_all(dir.path().join("src")).unwrap();
+    fs::write(
+        dir.path().join("src/main.rs"),
+        format!(
+            "fn main() {{ std::fs::write({:?}, \"ran\").unwrap(); }}\n",
+            marker.display().to_string()
+        ),
+    )
+    .unwrap();
+
+    let output = toasty(
+        dir.path(),
+        &[
+            "migrate", "generate", "--flavor", "sqlite", "--name", "init",
+        ],
+    );
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("does not depend on `toasty`"), "{stderr}");
+    assert!(!marker.exists(), "the user's main() must not be executed");
+}
+
+#[test]
+fn the_package_in_the_current_directory_is_selected() {
+    // Without `-p`, the member the command runs from is the target, as with
+    // `cargo build`; the migration tree must land there, not at the root.
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"cli-e2e-cwd-a\", \"cli-e2e-cwd-b\"]\nresolver = \"3\"\n\n\
+         [profile.dev]\ndebug = \"line-tables-only\"\n",
+    )
+    .unwrap();
+    copy_lockfile(root);
+
+    for name in ["cli-e2e-cwd-a", "cli-e2e-cwd-b"] {
+        fs::create_dir_all(root.join(name).join("src")).unwrap();
+        fs::write(
+            root.join(name).join("Cargo.toml"),
+            // The member manifests must not each declare their own `[workspace]`.
+            manifest(name, "").replace("[workspace]\n", ""),
+        )
+        .unwrap();
+        fs::write(root.join(name).join("src/lib.rs"), MODEL).unwrap();
+    }
+
+    let output = toasty(
+        &root.join("cli-e2e-cwd-b"),
+        &[
+            "migrate", "generate", "--flavor", "sqlite", "--name", "init",
+        ],
+    );
+    assert_success(&output);
+
+    assert!(
+        root.join("cli-e2e-cwd-b/toasty/migrations/0000_init.sql")
+            .is_file()
+    );
+    assert!(!root.join("cli-e2e-cwd-a/toasty").exists());
+    assert!(!root.join("toasty").exists());
+}
+
+#[test]
+fn an_empty_schema_is_rejected_rather_than_dropping_every_table() {
+    // A bin that links `toasty` but never references the models dumps zero
+    // models. Generating from that writes a DROP for every existing table.
+    let dir = tempfile::tempdir().unwrap();
+    scaffold_project(dir.path(), false);
+
+    let output = toasty(
+        dir.path(),
+        &[
+            "migrate", "generate", "--flavor", "sqlite", "--name", "init",
+        ],
+    );
+    assert_success(&output);
+
+    fs::create_dir_all(dir.path().join("src/bin")).unwrap();
+    fs::write(
+        dir.path().join("src/bin/tool.rs"),
+        "fn main() { let _ = toasty::Db::builder(); }\n",
+    )
+    .unwrap();
+
+    let output = toasty(
+        dir.path(),
+        &[
+            "migrate", "generate", "--flavor", "sqlite", "--name", "oops",
+        ],
+    );
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("has no tables"), "{stderr}");
+    assert!(
+        !dir.path().join("toasty/migrations/0001_oops.sql").exists(),
+        "no migration should be written"
+    );
+}
+
+#[test]
+fn feature_selection_reaches_the_build() {
+    // With the feature off, the optional `toasty` is not in the build and
+    // extraction must be refused; with it on, the schema comes out.
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("Cargo.toml"),
+        format!(
+            r#"[package]
+name = "feature-gated"
+version = "0.0.0"
+edition = "2024"
+
+[features]
+db = ["dep:toasty"]
+
+[dependencies]
+toasty = {{ path = {toasty_path:?}, optional = true }}
+
+[workspace]
+
+[profile.dev]
+debug = "line-tables-only"
+"#,
+            toasty_path = workspace_root().join("crates/toasty"),
+        ),
+    )
+    .unwrap();
+    copy_lockfile(dir.path());
+
+    fs::create_dir_all(dir.path().join("src")).unwrap();
+    fs::write(
+        dir.path().join("src/main.rs"),
+        format!(
+            "#[cfg(feature = \"db\")]\n{MODEL}\n\
+             fn main() {{ panic!(\"user main must not run during schema extraction\"); }}"
+        ),
+    )
+    .unwrap();
+
+    let output = toasty(
+        dir.path(),
+        &[
+            "migrate", "generate", "--flavor", "sqlite", "--name", "init",
+        ],
+    );
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("does not depend on `toasty`"), "{stderr}");
+
+    let output = toasty(
+        dir.path(),
+        &[
+            "migrate", "generate", "--flavor", "sqlite", "--name", "init", "-F", "db",
+        ],
+    );
+    assert_success(&output);
+
+    let sql = fs::read_to_string(dir.path().join("toasty/migrations/0000_init.sql")).unwrap();
+    assert!(sql.contains("CREATE TABLE \"users\""), "{sql}");
+}

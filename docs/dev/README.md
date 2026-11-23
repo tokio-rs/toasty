@@ -35,6 +35,7 @@ Guide-level design documents for specific features. Use
 - [Option Values and Database Nulls](./design/option-semantics.md)
 - [`query!` Macro](./design/query-macro.md)
 - [Retry-Safe Recovery from Connection Loss](./design/retry-safe-recovery.md)
+- [Standalone `toasty` CLI](./design/standalone-cli.md)
 - [Static Assertions for `create!` Required Fields](./design/static-assertions-create-macro.md)
 
 ## Roadmap

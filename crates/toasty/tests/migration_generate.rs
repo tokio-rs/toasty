@@ -1,9 +1,9 @@
 #![cfg(feature = "migration")]
 
+use toasty::db::Capability;
 use toasty::migration;
 use toasty::schema::{db, diff};
 use toasty_core::stmt;
-use toasty_driver_sqlite::Sqlite;
 
 fn round_trip_snapshot(schema: db::Schema) -> (String, migration::Snapshot) {
     let dir = tempfile::tempdir().unwrap();
@@ -53,9 +53,8 @@ fn users_schema() -> db::Schema {
 fn generate_returns_none_for_empty_diff() {
     let schema = users_schema();
     let hints = diff::RenameHints::new();
-    let driver = Sqlite::in_memory();
 
-    let generated = migration::generate(&driver, &schema, &schema, &hints);
+    let generated = migration::generate(&Capability::SQLITE, &schema, &schema, &hints);
 
     assert!(generated.is_none());
 }
@@ -65,9 +64,8 @@ fn generate_returns_migration_and_next_snapshot() {
     let previous = db::Schema::default();
     let next = users_schema();
     let hints = diff::RenameHints::new();
-    let driver = Sqlite::in_memory();
 
-    let generated = migration::generate(&driver, &previous, &next, &hints).unwrap();
+    let generated = migration::generate(&Capability::SQLITE, &previous, &next, &hints).unwrap();
 
     assert_eq!(generated.snapshot.schema.tables[0].name, "users");
     let db::Migration::Sql(sql) = generated.migration;

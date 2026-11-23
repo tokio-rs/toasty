@@ -1,5 +1,5 @@
 //! service-ops (server binary): how you OPERATE a Toasty service — a pooled `Db`, structured
-//! tracing, and a sibling `migrate` binary for schema changes. Models live in `src/lib.rs`.
+//! tracing, and the standalone `toasty` CLI for schema changes. Models live in `src/lib.rs`.
 //!
 //! Run it (see each statement Toasty issues):
 //!   RUST_LOG=toasty=debug cargo run -p example-service-ops --bin server

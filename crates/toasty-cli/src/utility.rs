@@ -7,3 +7,11 @@ pub(crate) fn redact_url_password(url: &str) -> String {
         .map(|url| url.redact_password().into_owned())
         .unwrap_or_else(|_| url.to_string())
 }
+
+/// Connect to a database without any models registered; migration commands
+/// only need the driver's migration tracking table.
+pub(crate) async fn connect(url: &str) -> anyhow::Result<toasty::Db> {
+    toasty::Db::builder().connect(url).await.map_err(|err| {
+        anyhow::anyhow!("failed to connect to `{}`: {err}", redact_url_password(url))
+    })
+}
