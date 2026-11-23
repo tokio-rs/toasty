@@ -142,22 +142,25 @@
 <a href=#142 id=142 data-nosnippet>142</a></span><span class="kw">pub mod </span>schema;
 <a href=#143 id=143 data-nosnippet>143</a><span class="kw">pub use </span>schema::Deferred;
 <a href=#144 id=144 data-nosnippet>144</a>
-<a href=#145 id=145 data-nosnippet>145</a><span class="comment">// `Page` lives in `stmt`.
-<a href=#146 id=146 data-nosnippet>146</a>
-<a href=#147 id=147 data-nosnippet>147</a></span><span class="doccomment">/// Typed statement, expression, and query builder types.
-<a href=#148 id=148 data-nosnippet>148</a></span><span class="kw">pub mod </span>stmt;
-<a href=#149 id=149 data-nosnippet>149</a><span class="attr">#[cfg(feature = <span class="string">"serde"</span>)]
-<a href=#150 id=150 data-nosnippet>150</a></span><span class="kw">pub use </span>stmt::Json;
-<a href=#151 id=151 data-nosnippet>151</a><span class="kw">pub use </span>stmt::Statement;
-<a href=#152 id=152 data-nosnippet>152</a>
-<a href=#153 id=153 data-nosnippet>153</a><span class="doccomment">/// Raw SQL execution helpers.
-<a href=#154 id=154 data-nosnippet>154</a></span><span class="kw">pub mod </span>sql;
+<a href=#145 id=145 data-nosnippet>145</a><span class="attr">#[doc(hidden)]
+<a href=#146 id=146 data-nosnippet>146</a></span><span class="kw">pub mod </span>schema_dump;
+<a href=#147 id=147 data-nosnippet>147</a>
+<a href=#148 id=148 data-nosnippet>148</a><span class="comment">// `Page` lives in `stmt`.
+<a href=#149 id=149 data-nosnippet>149</a>
+<a href=#150 id=150 data-nosnippet>150</a></span><span class="doccomment">/// Typed statement, expression, and query builder types.
+<a href=#151 id=151 data-nosnippet>151</a></span><span class="kw">pub mod </span>stmt;
+<a href=#152 id=152 data-nosnippet>152</a><span class="attr">#[cfg(feature = <span class="string">"serde"</span>)]
+<a href=#153 id=153 data-nosnippet>153</a></span><span class="kw">pub use </span>stmt::Json;
+<a href=#154 id=154 data-nosnippet>154</a><span class="kw">pub use </span>stmt::Statement;
 <a href=#155 id=155 data-nosnippet>155</a>
-<a href=#156 id=156 data-nosnippet>156</a><span class="attr">#[cfg(feature = <span class="string">"migration"</span>)]
-<a href=#157 id=157 data-nosnippet>157</a></span><span class="kw">pub use </span>toasty_macros::embed_migrations;
-<a href=#158 id=158 data-nosnippet>158</a><span class="kw">pub use </span>toasty_macros::{Embed, Model, create, query, update};
-<a href=#159 id=159 data-nosnippet>159</a>
-<a href=#160 id=160 data-nosnippet>160</a><span class="kw">pub use </span>toasty_core::{Error, <span class="prelude-ty">Result</span>, schema::app::ModelSet};
-<a href=#161 id=161 data-nosnippet>161</a>
-<a href=#162 id=162 data-nosnippet>162</a><span class="kw">pub mod </span>codegen_support;
+<a href=#156 id=156 data-nosnippet>156</a><span class="doccomment">/// Raw SQL execution helpers.
+<a href=#157 id=157 data-nosnippet>157</a></span><span class="kw">pub mod </span>sql;
+<a href=#158 id=158 data-nosnippet>158</a>
+<a href=#159 id=159 data-nosnippet>159</a><span class="attr">#[cfg(feature = <span class="string">"migration"</span>)]
+<a href=#160 id=160 data-nosnippet>160</a></span><span class="kw">pub use </span>toasty_macros::embed_migrations;
+<a href=#161 id=161 data-nosnippet>161</a><span class="kw">pub use </span>toasty_macros::{Embed, Model, create, query, update};
+<a href=#162 id=162 data-nosnippet>162</a>
+<a href=#163 id=163 data-nosnippet>163</a><span class="kw">pub use </span>toasty_core::{Error, <span class="prelude-ty">Result</span>, schema::app::ModelSet};
+<a href=#164 id=164 data-nosnippet>164</a>
+<a href=#165 id=165 data-nosnippet>165</a><span class="kw">pub mod </span>codegen_support;
 </code></pre></div></section></main></body></html>

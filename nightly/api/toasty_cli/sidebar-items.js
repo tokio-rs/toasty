@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["MigrationPrefixStyle"],"struct":["ApplyCommand","Config","DropCommand","GenerateCommand","MigrationCommand","MigrationConfig","ResetCommand","SnapshotCommand","ToastyCli"]};
+window.SIDEBAR_ITEMS = {"enum":["Flavor","MigrationPrefixStyle"],"fn":["run","run_from"],"struct":["Config","Features","MigrationConfig","Project"]};

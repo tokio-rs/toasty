@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-0c307976.js";
+            window.path_to_searchindex_js = "searchindex-c4bb540b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -498,9 +498,10 @@ On first run, <code>push_schema</code> issues <code>CreateTable</code> for each 
 tables plus one auxiliary table per unique index — with the GSIs and
 attribute definitions filled in from the model. Tables are created
 with on-demand billing.</p>
-<p><code>generate_migration</code> and <code>apply_migration</code> are not implemented and
-will panic if called. The driver does not change column types, add
-GSIs, or rename attributes on an existing table — DynamoDB itself
+<p>The <code>toasty</code> CLI does not generate migrations for DynamoDB, and the
+driver’s <code>apply_migration</code> panics if called. The driver does not
+change column types, add GSIs, or rename attributes on an existing
+table — DynamoDB itself
 treats most of those as expensive or impossible operations, and Toasty
 does not paper over the difference.</p>
 <p>The practical upshot: model evolution on DynamoDB is a manual process

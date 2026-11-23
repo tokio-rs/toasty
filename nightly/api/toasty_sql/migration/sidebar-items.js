@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["MigrationStatement"]};
+window.SIDEBAR_ITEMS = {"fn":["generate_migration"],"struct":["MigrationStatement"]};
