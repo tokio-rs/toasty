@@ -10,9 +10,18 @@ impl Simplify<'_> {
         }
 
         if self.stmt_query_is_empty(stmt) {
-            stmt.body = stmt::ExprSet::Values(Default::default());
             stmt.order_by = None;
             stmt.limit = None;
+
+            match &mut stmt.body {
+                // `COUNT(*)` still yields a row over no input, and sub-statement
+                // args read columns of this query's source. Keep the select so
+                // the planner can fold it to a constant.
+                stmt::ExprSet::Select(select) if returning_needs_select(&select.returning) => {
+                    select.filter.set(false);
+                }
+                body => *body = stmt::ExprSet::Values(Default::default()),
+            }
         }
     }
 
@@ -82,4 +91,16 @@ impl Simplify<'_> {
             _ => false,
         }
     }
+}
+
+fn returning_needs_select(returning: &stmt::Returning) -> bool {
+    let mut needs_select = false;
+    stmt::visit::for_each_expr(returning, |expr| {
+        needs_select |= matches!(
+            expr,
+            stmt::Expr::Arg(_)
+                | stmt::Expr::Func(stmt::ExprFunc::Count(stmt::FuncCount { arg: None, .. }))
+        );
+    });
+    needs_select
 }

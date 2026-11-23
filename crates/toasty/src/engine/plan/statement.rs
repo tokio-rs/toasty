@@ -945,6 +945,28 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             );
         }
 
+        // A select whose filter is `false` matches no rows, so it needs no
+        // database round trip. `COUNT(*)` over no rows is a single row of zero.
+        if let Some(query) = stmt.as_query()
+            && let stmt::ExprSet::Select(select) = &query.body
+            && select.filter.is_false()
+        {
+            let rows = if self.load_data.select_items.contains(&SelectItem::CountStar) {
+                vec![stmt::Value::record_from_vec(vec![0u64.into()])]
+            } else {
+                vec![]
+            };
+
+            return Some(
+                self.insert_const(
+                    rows,
+                    self.load_data
+                        .select_items
+                        .infer_record_list_ty(&self.planner.engine.expr_cx_for(stmt)),
+                ),
+            );
+        }
+
         if stmt.assignments().map(|a| a.is_empty()).unwrap_or(false) {
             if returning.is_some() {
                 return Some(self.insert_const(
