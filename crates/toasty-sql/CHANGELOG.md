@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.11.0...toasty-sql-v0.12.0) - 2026-11-23
+
+### Added
+
+- *(cli)* [**breaking**] ship toasty-cli as a standalone binary ([#1157](https://github.com/tokio-rs/toasty/pull/1157))
+
+### Fixed
+
+- *(sqlite)* store auto-increment integer keys at their full width ([#1339](https://github.com/tokio-rs/toasty/pull/1339))
+
+### Other
+
+- bind PostgreSQL batch inserts as unnest arrays ([#1103](https://github.com/tokio-rs/toasty/pull/1103))
 ## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.10.0...toasty-sql-v0.11.0) - 2026-09-24
 
 ### Added
