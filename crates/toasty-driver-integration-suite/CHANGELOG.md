@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.11.0...toasty-driver-integration-suite-v0.12.0) - 2026-11-23
+
+### Added
+
+- *(cli)* [**breaking**] ship toasty-cli as a standalone binary ([#1157](https://github.com/tokio-rs/toasty/pull/1157))
+- support numeric updates on optional fields ([#1323](https://github.com/tokio-rs/toasty/pull/1323))
+- support offset in includes ([#1123](https://github.com/tokio-rs/toasty/pull/1123))
+- support limit in includes ([#1122](https://github.com/tokio-rs/toasty/pull/1122))
+- let a read-only plan run without interactive transactions ([#1302](https://github.com/tokio-rs/toasty/pull/1302))
+
+### Fixed
+
+- *(engine)* collapse embedded field projection when lowering order by ([#1341](https://github.com/tokio-rs/toasty/pull/1341))
+- *(sqlite)* store auto-increment integer keys at their full width ([#1339](https://github.com/tokio-rs/toasty/pull/1339))
+- support tuple projections up to 16 fields in select ([#1296](https://github.com/tokio-rs/toasty/pull/1296))
+- implement IntoExpr<List<T>> for &Vec<U> ([#1290](https://github.com/tokio-rs/toasty/pull/1290))
+- *(db)* worker-gone channel errors return connection_lost, never panic ([#1244](https://github.com/tokio-rs/toasty/pull/1244))
+- *(engine)* handle unsupported OR index filters without panicking ([#1288](https://github.com/tokio-rs/toasty/pull/1288))
+- *(engine)* retain key lookups with additional key predicates ([#1284](https://github.com/tokio-rs/toasty/pull/1284))
+- *(engine)* bind subquery inputs in key-value filters ([#1282](https://github.com/tokio-rs/toasty/pull/1282))
+- *(engine)* exclude absent keys from relation membership ([#1271](https://github.com/tokio-rs/toasty/pull/1271))
+
+### Other
+
+- bind PostgreSQL batch inserts as unnest arrays ([#1103](https://github.com/tokio-rs/toasty/pull/1103))
+- cover eager belongs_to create via foreign key
 ## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.10.0...toasty-driver-integration-suite-v0.11.0) - 2026-09-24
 
 ### Added

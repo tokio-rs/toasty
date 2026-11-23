@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-turso-v0.11.0...toasty-driver-turso-v0.12.0) - 2026-11-23
+
+### Added
+
+- *(cli)* [**breaking**] ship toasty-cli as a standalone binary ([#1157](https://github.com/tokio-rs/toasty/pull/1157))
+
+### Fixed
+
+- *(turso)* allow deferred default transactions on libSQL Cloud ([#1278](https://github.com/tokio-rs/toasty/pull/1278))
 ## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-turso-v0.10.0...toasty-driver-turso-v0.11.0) - 2026-09-24
 
 ### Added

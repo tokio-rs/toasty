@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.11.0...toasty-v0.12.0) - 2026-11-23
+
+### Added
+
+- *(cli)* [**breaking**] ship toasty-cli as a standalone binary ([#1157](https://github.com/tokio-rs/toasty/pull/1157))
+- support numeric updates on optional fields ([#1323](https://github.com/tokio-rs/toasty/pull/1323))
+- support offset in includes ([#1123](https://github.com/tokio-rs/toasty/pull/1123))
+- support limit in includes ([#1122](https://github.com/tokio-rs/toasty/pull/1122))
+- let a read-only plan run without interactive transactions ([#1302](https://github.com/tokio-rs/toasty/pull/1302))
+
+### Fixed
+
+- *(engine)* collapse embedded field projection when lowering order by ([#1341](https://github.com/tokio-rs/toasty/pull/1341))
+- *(macros)* avoid underscore-item lints in generated field checks ([#1319](https://github.com/tokio-rs/toasty/pull/1319))
+- *(core)* split migration breakpoints regardless of line ending ([#1311](https://github.com/tokio-rs/toasty/pull/1311))
+- add `Deferred::try_get` ([#1310](https://github.com/tokio-rs/toasty/pull/1310))
+- support tuple projections up to 16 fields in select ([#1296](https://github.com/tokio-rs/toasty/pull/1296))
+- implement IntoExpr<List<T>> for &Vec<U> ([#1290](https://github.com/tokio-rs/toasty/pull/1290))
+- *(db)* worker-gone channel errors return connection_lost, never panic ([#1244](https://github.com/tokio-rs/toasty/pull/1244))
+- *(engine)* handle unsupported OR index filters without panicking ([#1288](https://github.com/tokio-rs/toasty/pull/1288))
+- *(engine)* retain key lookups with additional key predicates ([#1284](https://github.com/tokio-rs/toasty/pull/1284))
+- *(engine)* bind subquery inputs in key-value filters ([#1282](https://github.com/tokio-rs/toasty/pull/1282))
+- *(engine)* exclude absent keys from relation membership ([#1271](https://github.com/tokio-rs/toasty/pull/1271))
+- *(macros)* reject mismatched belongs_to key types in embedded enums ([#1277](https://github.com/tokio-rs/toasty/pull/1277))
+
+### Other
+
+- bind PostgreSQL batch inserts as unnest arrays ([#1103](https://github.com/tokio-rs/toasty/pull/1103))
+- *(engine)* store back-ref column on parent references ([#1283](https://github.com/tokio-rs/toasty/pull/1283))
 ## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.10.0...toasty-v0.11.0) - 2026-09-24
 
 ### Added

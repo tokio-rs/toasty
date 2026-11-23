@@ -5146,7 +5146,7 @@ dependencies = [
 
 [[package]]
 name = "toasty"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "assert-struct",
  "async-trait",
@@ -5184,7 +5184,7 @@ dependencies = [
 
 [[package]]
 name = "toasty-cli"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "cargo_metadata",
@@ -5206,7 +5206,7 @@ dependencies = [
 
 [[package]]
 name = "toasty-core"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "assert-struct",
  "async-trait",
@@ -5232,7 +5232,7 @@ dependencies = [
 
 [[package]]
 name = "toasty-driver-dynamodb"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "async-trait",
  "aws-config",
@@ -5248,7 +5248,7 @@ dependencies = [
 
 [[package]]
 name = "toasty-driver-integration-suite"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "assert-struct",
  "async-trait",
@@ -5269,7 +5269,7 @@ dependencies = [
 
 [[package]]
 name = "toasty-driver-integration-suite-macros"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "hashbrown 0.17.2",
  "proc-macro2",
@@ -5279,7 +5279,7 @@ dependencies = [
 
 [[package]]
 name = "toasty-driver-mysql"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "async-trait",
  "bigdecimal",
@@ -5296,7 +5296,7 @@ dependencies = [
 
 [[package]]
 name = "toasty-driver-postgresql"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "async-trait",
  "bigdecimal",
@@ -5322,7 +5322,7 @@ dependencies = [
 
 [[package]]
 name = "toasty-driver-sqlite"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "async-trait",
  "indexmap",
@@ -5336,7 +5336,7 @@ dependencies = [
 
 [[package]]
 name = "toasty-driver-turso"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "async-trait",
  "reqwest",
@@ -5353,7 +5353,7 @@ dependencies = [
 
 [[package]]
 name = "toasty-macros"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "heck",
  "indexmap",
@@ -5369,7 +5369,7 @@ dependencies = [
 
 [[package]]
 name = "toasty-sql"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "bigdecimal",
  "expect-test",
