@@ -1668,7 +1668,7 @@ dependencies = [
 name = "example-cms-article-fields"
 version = "0.1.0"
 dependencies = [
- "jiff",
+ "jiff 1.0.3",
  "serde",
  "toasty",
  "tokio",
@@ -2605,8 +2605,22 @@ version = "0.2.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "175dc66334db3b9ab9985bf8b61cfed50dc16d20964bb47f9e479adcae984a7f"
 dependencies = [
- "jiff-core",
- "jiff-static",
+ "jiff-core 0.1.8",
+ "jiff-static 0.2.46",
+ "log",
+ "portable-atomic",
+ "portable-atomic-util",
+ "serde_core",
+]
+
+[[package]]
+name = "jiff"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "107f2e89536b6818514025f6787b0d94d819e54fe3b40365275fc753de485b3f"
+dependencies = [
+ "jiff-core 1.0.2",
+ "jiff-static 1.0.3",
  "jiff-tzdb-platform",
  "log",
  "portable-atomic",
@@ -2625,28 +2639,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "jiff-core"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d44c923edf2bf456a982253f1a9ee1f6e89e421dffd0065d9b9a581da0def58f"
+dependencies = [
+ "log",
+]
+
+[[package]]
 name = "jiff-static"
 version = "0.2.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7b1af7547d47354bc438d797e3854601bde8f8d185780c5ba4ab27afa54f1ba"
 dependencies = [
- "jiff-core",
+ "jiff-core 0.1.8",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
 ]
 
 [[package]]
-name = "jiff-tzdb"
-version = "0.1.10"
+name = "jiff-static"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0980fca2cc272465bd60e82397607ba9f33add9e48defd77923301bbd03808f2"
+checksum = "4996f71e569e3a3e32b925c28ef8f0027dc30bb1d594b33eeda409eea185f5c8"
+dependencies = [
+ "jiff-core 1.0.2",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.10",
+]
+
+[[package]]
+name = "jiff-tzdb"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12e71a1b68a875a44a33bb7a1dd84392cb77145a3367a552a3cfe6a4f5cf3afc"
 
 [[package]]
 name = "jiff-tzdb-platform"
-version = "0.1.3"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "875a5a69ac2bab1a891711cf5eccbec1ce0341ea805560dcd90b7a2e925132e8"
+checksum = "dc65b284afcfa8f6cf189c7274c805505314a7ab975c60e1f548bff56525420e"
 dependencies = [
  "jiff-tzdb",
 ]
@@ -3437,7 +3472,7 @@ dependencies = [
  "array-init",
  "bytes",
  "fallible-iterator 0.2.0",
- "jiff",
+ "jiff 0.2.46",
  "postgres-protocol",
  "uuid",
 ]
@@ -4998,7 +5033,7 @@ dependencies = [
  "aws-sdk-dynamodb",
  "bigdecimal",
  "hashbrown 0.17.2",
- "jiff",
+ "jiff 1.0.3",
  "pulldown-cmark",
  "reqwest",
  "rust_decimal",
@@ -5158,7 +5193,7 @@ dependencies = [
  "index_vec",
  "indexmap",
  "inventory",
- "jiff",
+ "jiff 1.0.3",
  "linktime",
  "proptest",
  "rust_decimal",
@@ -5192,7 +5227,7 @@ dependencies = [
  "console",
  "dialoguer",
  "hashbrown 0.17.2",
- "jiff",
+ "jiff 1.0.3",
  "libloading 0.9.1",
  "rand 0.10.4",
  "serde",
@@ -5218,7 +5253,7 @@ dependencies = [
  "hashbrown 0.17.2",
  "heck",
  "indexmap",
- "jiff",
+ "jiff 1.0.3",
  "macaddr",
  "percent-encoding",
  "pretty_assertions",
@@ -5254,7 +5289,7 @@ dependencies = [
  "async-trait",
  "bigdecimal",
  "hashbrown 0.17.2",
- "jiff",
+ "jiff 1.0.3",
  "rand 0.10.4",
  "rust_decimal",
  "serde",
@@ -5283,7 +5318,7 @@ version = "0.11.0"
 dependencies = [
  "async-trait",
  "bigdecimal",
- "jiff",
+ "jiff 1.0.3",
  "rust_decimal",
  "sqlx",
  "time",
@@ -5302,7 +5337,7 @@ dependencies = [
  "bigdecimal",
  "fallible-iterator 0.2.0",
  "hashbrown 0.17.2",
- "jiff",
+ "jiff 1.0.3",
  "lru 0.18.5",
  "postgres-protocol",
  "postgres-types",
@@ -5357,7 +5392,7 @@ version = "0.11.0"
 dependencies = [
  "heck",
  "indexmap",
- "jiff",
+ "jiff 1.0.3",
  "pluralizer",
  "proc-macro2",
  "quote",
@@ -5373,7 +5408,7 @@ version = "0.11.0"
 dependencies = [
  "bigdecimal",
  "expect-test",
- "jiff",
+ "jiff 1.0.3",
  "rust_decimal",
  "serde",
  "serde_json",
