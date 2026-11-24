@@ -90,6 +90,7 @@ the entry lands here.
 
 ## Data Modification
 
+- Bounded deletes ([design](design/bounded-deletes.md), [roadmap](roadmap/bounded-deletes.md))
 - Upsert ([#422])
 - Mutation result metadata — affected row counts and "matched but unchanged" detection
 - Bulk insert / update
